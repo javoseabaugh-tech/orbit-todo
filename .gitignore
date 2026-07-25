@@ -4,3 +4,4 @@ dist/
 .firebase/
 firestore.indexes.json
 firestore.rules
+*.zip
