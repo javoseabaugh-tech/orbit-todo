@@ -7,6 +7,7 @@ import {
   Plus, Briefcase, User, Calendar, Check, Trash2,
   GripVertical, Inbox, X, MessageCircleMore, UserPlus, Clock, Pencil, LogOut,
   ChevronDown, Search, Tag, Settings, Repeat, FolderKanban,
+  Moon,
 } from "lucide-react";
 import { auth, googleProvider, db } from "./firebase";
 import BrainDumpButton from "./BrainDump";
@@ -18,6 +19,7 @@ import BudgetGate from "./BudgetGate";
 import { suggestCategory } from "./gemini";
 import { getMyNotifyConfig, saveMyNotifyConfig } from "./notifyConfig";
 import { createBudgetAccessRequest, watchMyPendingBudgetRequest } from "./budgetAccessRequests";
+import Nightly from "./Nightly";
 
 // Warm editorial palette. Keys stay the same (blue/green/orange/yellow) even
 // though the actual colors are now plum/sage/clay/ochre — existing saved
@@ -624,6 +626,9 @@ function TodoApp({ user, access }) {
   if (page === "access") {
     return <AccessScreen db={db} currentRole={access?.role} onClose={() => setPage("main")} />;
   }
+if (page === "nightly") {
+    return <Nightly uid={uid} onBack={() => setPage("main")} />;
+  }
 
   return (
     <div style={{
@@ -659,6 +664,19 @@ function TodoApp({ user, access }) {
                 $
               </button>
             )}
+            <button
+              onClick={() => setPage("nightly")}
+              title="Nightly Routine"
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 24, height: 24, borderRadius: "50%", marginLeft: 4,
+                border: `1px solid ${theme.borderSoft2}`,
+                background: theme.paleYellowBg, color: theme.goldText,
+                cursor: "pointer", padding: 0,
+              }}
+            >
+              <Moon size={13} />
+            </button>
             {access?.role === "guardian" && access?.budgetShared === true && (
               <button
                 onClick={() => setPage("sharedBudget")}
