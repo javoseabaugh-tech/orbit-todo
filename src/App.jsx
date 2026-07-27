@@ -1,3 +1,5 @@
+import PaletteMenu from "./PaletteMenu";
+import SwipeToDelete from "./SwipeToDelete";
 import { useEffect, useRef, useState } from "react";
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import {
@@ -845,11 +847,11 @@ if (page === "nightly") {
                       <Plus size={18} />
                     </button>
                   </div>
-                  <div style={{ display: "flex", gap: 10, marginTop: 10, paddingTop: 10, borderTop: "1px solid #F6EFE4", alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: 10, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${theme.dividerSoft}`, alignItems: "center" }}>
                     <Calendar size={14} color={theme.textFaint} style={{ cursor: "pointer" }} onClick={() => draftDueRef.current?.showPicker?.()} />
                     <input ref={draftDueRef} type="date" value={draftDue} onChange={(e) => setDraftDue(e.target.value)} style={{ border: "none", fontSize: 13, color: theme.textSecondary, background: "transparent" }} />
                   </div>
-                  <div style={{ display: "flex", gap: 6, marginTop: 10, paddingTop: 10, borderTop: "1px solid #F6EFE4", alignItems: "center", flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: 6, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${theme.dividerSoft}`, alignItems: "center", flexWrap: "wrap" }}>
                     <Repeat size={14} color={theme.textFaint} />
                     {["none", "daily", "weekly", "monthly", "custom"].map((opt) => {
                       const active = opt === "none" ? !draftRecurrence : draftRecurrence?.type === opt;
@@ -891,7 +893,7 @@ if (page === "nightly") {
                       </span>
                     )}
                   </div>
-                  <div style={{ paddingTop: 10, marginTop: 10, borderTop: "1px solid #F6EFE4" }}>
+                  <div style={{ paddingTop: 10, marginTop: 10, borderTop: `1px solid ${theme.dividerSoft}` }}>
                     <CategoryPicker
                       categories={currentCategories}
                       recent={recentCategories(4)}
@@ -1027,7 +1029,7 @@ if (page === "nightly") {
                 style={{ width: "100%", border: "none", fontSize: 15, padding: "8px 4px", color: theme.textPrimary, background: "transparent", resize: "none", fontFamily: "inherit" }}
               />
 
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingTop: 10, borderTop: "1px solid #F6EFE4", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingTop: 10, borderTop: `1px solid ${theme.dividerSoft}`, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginRight: 4 }}>
                   <Calendar size={14} color={theme.textFaint} style={{ cursor: "pointer" }} onClick={() => thoughtDueRef.current?.showPicker?.()} />
                   <input
@@ -1143,7 +1145,7 @@ if (page === "nightly") {
           </>
         )}
         {isWorkbench && (
-          <Workbench uid={uid} categories={ownCategories} todos={ownTodos} />
+          <Workbench uid={uid} categories={ownCategories} todos={ownTodos} sharedUid={sharingWork ? ownerUid : null} sharedCategoryId={access?.sharedWorkCategoryId} sharedCategories={sharedCategories} />
         )}
       </div>
     </div>
@@ -1205,7 +1207,7 @@ function UserMenu({ user, access, pendingBudgetRequest, onRequestBudgetAccess })
       </button>
       {open && (
         <div style={{ position: "absolute", right: 0, top: 42, background: theme.cardBg, borderRadius: 12, border: `1px solid ${theme.borderSoft}`, boxShadow: "0 4px 16px rgba(58,44,30,0.1)", padding: 8, minWidth: 180, zIndex: 10 }}>
-          <div style={{ padding: "6px 10px 10px", fontSize: 13, color: theme.textSecondary, fontWeight: 700, borderBottom: "1px solid #F6EFE4", marginBottom: 6 }}>
+          <div style={{ padding: "6px 10px 10px", fontSize: 13, color: theme.textSecondary, fontWeight: 700, borderBottom: `1px solid ${theme.dividerSoft}`, marginBottom: 6 }}>
             {user.displayName || user.email}
           </div>
           <button
@@ -1221,6 +1223,7 @@ function UserMenu({ user, access, pendingBudgetRequest, onRequestBudgetAccess })
           >
             Notification settings
           </button>
+          <PaletteMenu />
           {access?.role === "guardian" && access?.budgetShared !== true && (
             <button
               onClick={() => { onRequestBudgetAccess(); setOpen(false); }}
@@ -1385,77 +1388,6 @@ function GroupList({ groups, kind, dragOverZone, setDragOverZone, onDrop, onDele
   );
 }
 
-function SwipeToDelete({ onDelete, onSwipeRight, children }) {
-  const [dragX, setDragX] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const startX = useRef(0);
-  const active = useRef(false);
-  const THRESHOLD = 130;
-
-  function onPointerDown(e) {
-    startX.current = e.clientX;
-    active.current = true;
-    setDragging(true);
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
-  }
-
-  function onPointerMove(e) {
-    if (!active.current) return;
-    const delta = e.clientX - startX.current;
-    setDragX(onSwipeRight ? delta : Math.min(0, delta));
-  }
-
-  function finish() {
-    if (!active.current) return;
-    active.current = false;
-    setDragging(false);
-    if (dragX < -THRESHOLD) {
-      const allowed = onDelete();
-      if (allowed === false) {
-        setDragX(0);
-      } else {
-        setDragX(-500);
-      }
-    } else if (onSwipeRight && dragX > THRESHOLD) {
-      setDragX(0);
-      onSwipeRight();
-    } else {
-      setDragX(0);
-    }
-  }
-
-  return (
-    <div style={{ position: "relative", borderRadius: 14, overflow: "hidden" }}>
-      <div style={{
-        position: "absolute", inset: 0, background: theme.accentRed, borderRadius: 14,
-        display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 22,
-      }}>
-        <Trash2 size={18} color={theme.cardBg} />
-      </div>
-      {onSwipeRight && (
-        <div style={{
-          position: "absolute", inset: 0, background: theme.goldDark || "#c9a06a", borderRadius: 14,
-          display: "flex", alignItems: "center", justifyContent: "flex-start", paddingLeft: 22,
-        }}>
-          <Clock size={18} color={theme.cardBg} />
-        </div>
-      )}
-      <div
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={finish}
-        onPointerCancel={finish}
-        style={{
-          transform: `translateX(${dragX}px)`,
-          transition: dragging ? "none" : "transform 0.2s ease",
-          touchAction: "pan-y",
-        }}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
 
 function TaskCard({ text, due, done, categoryId, categories, onToggle, onRemove, onEdit, onDragStart, badge, highlighted, accentColor, hideTrash }) {
   const [editing, setEditing] = useState(false);
