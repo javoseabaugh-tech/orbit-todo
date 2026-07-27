@@ -1,0 +1,137 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function myAccess() {
+      return get(/databases/$(database)/documents/access/$(request.auth.token.email)).data;
+    }
+
+    function ownerUid() {
+      return get(/databases/$(database)/documents/meta/owner).data.uid;
+    }
+    match /users/{userId}/todos/{todoId} {
+      allow read, write: if request.auth != null && (
+        request.auth.uid == userId ||
+        (myAccess().sharedWorkAccess == true && userId == ownerUid())
+      );
+    }
+    match /users/{userId}/categories/{catId} {
+      allow read, write: if request.auth != null && (
+        request.auth.uid == userId ||
+        (myAccess().sharedWorkAccess == true && userId == ownerUid())
+      );
+    }
+
+    // Workbench projects — the owner's become readable to anyone with shared
+    // Work access, matching how todos and categories already work. Category
+    // scoping is applied in the client, not here. Writes stay with the owner.
+    match /users/{userId}/workbench/{projectId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == userId ||
+        (myAccess().sharedWorkAccess == true && userId == ownerUid())
+      );
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Milestones — same read rule. Someone with shared access may flip the
+    // `done` field and nothing else; creating and deleting stay owner-only.
+    // affectedKeys().hasOnly(["done"]) is what enforces "complete but not
+    // delete, and no editing the text either".
+    match /users/{userId}/workbench/{projectId}/milestones/{milestoneId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == userId ||
+        (myAccess().sharedWorkAccess == true && userId == ownerUid())
+      );
+      allow create, delete: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && (
+        request.auth.uid == userId ||
+        (myAccess().sharedWorkAccess == true
+          && userId == ownerUid()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["done"]))
+      );
+    }
+
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Private per-person budget (guardians' own separate budget/vault) —
+    // only that exact person can ever read or write their own private budget.
+    match /personalBudgets/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    // Shared household budget — visible to the owner, anyone with the
+    // "household" role, or a "guardian" whose budgetShared flag is on.
+    match /households/{householdId} {
+      allow read, write: if request.auth != null && (
+        myAccess().role == "owner" ||
+        myAccess().role == "household" ||
+        (myAccess().role == "guardian" && myAccess().budgetShared == true)
+      );
+    }
+
+    // Access list — who's allowed into the app and what they're permitted.
+    // Anyone signed in can read their own record. Only the owner can add,
+    // remove, or change someone's role. The "household" role (Amon) can
+    // flip just the budgetShared flag on a guardian's record and nothing
+    // else — approving/revoking shared-budget access is their only
+    // management power.
+    match /access/{docId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && myAccess().role == "owner";
+      allow update: if request.auth != null && (
+        myAccess().role == "owner" ||
+        (myAccess().role == "household"
+          && resource.data.role == "guardian"
+          && request.resource.data.email == resource.data.email
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.sharedWorkAccess == resource.data.sharedWorkAccess) ||
+        (docId == request.auth.token.email
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["uid"]))
+      );
+      allow delete: if request.auth != null && myAccess().role == "owner";
+    }
+
+    // Each person's own Telegram bot token + chat ID for personal
+    // notifications (e.g. shared budget access requests). Deliberately
+    // separate from the widely-readable `access` collection — a bot token
+    // is a credential, so only its owner can ever read or write it. The
+    // Cloudflare Worker reads across everyone's docs via its Admin token,
+    // independent of this rule.
+    match /notifyConfig/{email} {
+      allow read, write: if request.auth != null && request.auth.token.email == email;
+    }
+
+    // Owner-adjustable default window for how long a shared budget access
+    // request waits before auto-granting if nobody denies it.
+    match /meta/budgetAccessWindow {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && myAccess().role == "owner";
+    }
+
+    // Guardians' "Request shared budget access" flow — an alternate path
+    // to the same `budgetShared` flag the owner/household can already
+    // toggle by hand. The Cloudflare Worker acts with a Google
+    // service-account token against the Firestore REST API, authorized by
+    // project IAM rather than these rules, so it can still write
+    // notification bookkeeping and flip `budgetShared` on auto-grant
+    // regardless of what's allowed below — these rules only govern the two
+    // web clients (the requester, and owner/household reviewing/denying).
+    match /budgetAccessRequests/{requestId} {
+      allow read: if request.auth != null && (
+        resource.data.requesterEmail == request.auth.token.email ||
+        myAccess().role == "owner" ||
+        myAccess().role == "household"
+      );
+      allow create: if request.auth != null &&
+        myAccess().role == "guardian" &&
+        request.resource.data.requesterEmail == request.auth.token.email &&
+        request.resource.data.status == "pending";
+      allow update: if request.auth != null &&
+        (myAccess().role == "owner" || myAccess().role == "household") &&
+        resource.data.status == "pending" &&
+        request.resource.data.status == "denied" &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "decidedBy", "decidedAction", "decidedAt"]);
+      allow delete: if false;
+    }
+  }
+}

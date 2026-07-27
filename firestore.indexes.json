@@ -1,0 +1,23 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "todos",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "notified", "order": "ASCENDING" },
+        { "fieldPath": "timeSensitive", "order": "ASCENDING" },
+        { "fieldPath": "notifyAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "todos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "notified", "order": "ASCENDING" },
+        { "fieldPath": "timeSensitive", "order": "ASCENDING" },
+        { "fieldPath": "notifyAt", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
