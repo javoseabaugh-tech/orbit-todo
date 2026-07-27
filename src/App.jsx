@@ -6,13 +6,14 @@ import {
 import {
   Plus, Briefcase, User, Calendar, Check, Trash2,
   GripVertical, Inbox, X, MessageCircleMore, UserPlus, Clock, Pencil, LogOut,
-  ChevronDown, Search, Tag, Settings,
+  ChevronDown, Search, Tag, Settings, Repeat, FolderKanban,
 } from "lucide-react";
 import { auth, googleProvider, db } from "./firebase";
 import BrainDumpButton from "./BrainDump";
 import orbitIcon from "./assets/orbit-icon.png";
 import Budget from "./Budget";
 import AccessScreen from "./AccessScreen";
+import Workbench from "./Workbench";
 import BudgetGate from "./BudgetGate";
 import { suggestCategory } from "./gemini";
 import { getMyNotifyConfig, saveMyNotifyConfig } from "./notifyConfig";
@@ -224,6 +225,8 @@ function TodoApp({ user, access }) {
   const [activeList, setActiveList] = useState("work");
   const [categoryFilter, setCategoryFilter] = useState([]); // array of category ids; empty = show all
   const [showAddPanel, setShowAddPanel] = useState(false);
+  const [settingTimeFor, setSettingTimeFor] = useState(null);
+  const [draftTimeValue, setDraftTimeValue] = useState("");
   const [pendingBudgetRequest, setPendingBudgetRequest] = useState(null);
   useEffect(() => {
     if (access?.role !== "guardian") return;
@@ -239,6 +242,7 @@ function TodoApp({ user, access }) {
   const [draftDue, setDraftDue] = useState("");
   const draftDueRef = useRef(null);
   const [draftCategoryId, setDraftCategoryId] = useState(null);
+  const [draftRecurrence, setDraftRecurrence] = useState(null);
   const [newCatName, setNewCatName] = useState("");
   const [showNewCat, setShowNewCat] = useState(false);
   const [showMoreCats, setShowMoreCats] = useState(false);
@@ -260,6 +264,7 @@ function TodoApp({ user, access }) {
     work: { label: "Work", icon: Briefcase, color: PALETTE.blue },
     personal: { label: "Personal", icon: User, color: PALETTE.green },
     thoughts: { label: "Thoughts", icon: MessageCircleMore, color: PALETTE.yellow },
+    workbench: { label: "Workbench", icon: FolderKanban, color: PALETTE.orange },
   };
 
   // ---------- Work / Personal ----------
@@ -337,6 +342,15 @@ function TodoApp({ user, access }) {
     }));
   }
 
+  function computeNextDue(currentDue, recurrence) {
+    const base = currentDue ? new Date(currentDue + "T00:00:00") : new Date();
+    if (recurrence.type === "daily") base.setDate(base.getDate() + 1);
+    else if (recurrence.type === "weekly") base.setDate(base.getDate() + 7);
+    else if (recurrence.type === "monthly") base.setMonth(base.getMonth() + 1);
+    else if (recurrence.type === "custom") base.setDate(base.getDate() + (recurrence.intervalDays || 1));
+    return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
+  }
+
   async function addTodo() {
     const text = draft.trim();
     if (!text) return;
@@ -351,11 +365,17 @@ function TodoApp({ user, access }) {
         categoryId: finalCategoryId,
         due: draftDue || null,
         done: false,
+        recurrence: draftRecurrence
+  ? draftRecurrence.type === "custom"
+    ? { type: "custom", intervalDays: Number(draftRecurrence.intervalDays) || 1 }
+    : draftRecurrence
+  : null,
         createdAt: serverTimestamp(),
       });
       setDraft("");
       setDraftDue("");
       setDraftCategoryId(null);
+      setDraftRecurrence(null);
       setShowAddPanel(false);
     } catch (err) {
       alert("Error saving: " + err.message);
@@ -364,36 +384,68 @@ function TodoApp({ user, access }) {
 
   async function toggleDone(todo) {
     const targetUid = todo.isShared ? ownerUid : uid;
-    await updateDoc(doc(db, "users", targetUid, "todos", todo.id), { done: !todo.done });
+    const nowDone = !todo.done;
+    await updateDoc(doc(db, "users", targetUid, "todos", todo.id), { done: nowDone });
+    if (nowDone && todo.recurrence) {
+      await addDoc(collection(db, "users", targetUid, "todos"), {
+        list: todo.list,
+        text: todo.text,
+        categoryId: todo.categoryId || null,
+        due: computeNextDue(todo.due, todo.recurrence),
+        done: false,
+        recurrence: todo.recurrence,
+        createdAt: serverTimestamp(),
+      });
+    }
+    if (todo.workbenchProjectId && todo.workbenchMilestoneId) {
+      await updateDoc(doc(db, "users", targetUid, "workbench", todo.workbenchProjectId, "milestones", todo.workbenchMilestoneId), { done: nowDone });
+    }
   }
 
-  async function removeTodo(todoId) {
+  function removeTodo(todoId) {
     const todo = currentTodos.find(t => t.id === todoId);
-    if (!todo) return;
+    if (!todo) return false;
 
     if (todo.isShared) {
       alert("Only the Owner can delete shared tasks.");
-      
-      // THE SNAP-BACK TRICK: 
-      // We temporarily tell the app the panel is open/closed 
-      // This forces a UI "re-paint" that snaps the swipe back
-      setShowAddPanel(prev => !prev);
-      setTimeout(() => setShowAddPanel(prev => !prev), 10); 
-      
-      return;
+      return false;
     }
 
-    try {
-      await deleteDoc(doc(db, "users", uid, "todos", todoId));
-    } catch (err) {
+    deleteDoc(doc(db, "users", uid, "todos", todoId)).catch((err) => {
       console.error("Delete failed:", err);
-    }
+    });
+    return true;
   }
 
   async function editTodo(id, text, due, categoryId) {
     const todo = currentTodos.find(t => t.id === id);
     const targetUid = todo?.isShared ? ownerUid : uid;
     await updateDoc(doc(db, "users", targetUid, "todos", id), { text, due, categoryId: categoryId ?? null });
+  }
+
+  async function setTimeSensitive(todo, timeValue) {
+    if (!timeValue) return;
+    const targetUid = todo.isShared ? ownerUid : uid;
+    const now = new Date();
+    const baseDate = todo.due || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const notifyAt = `${baseDate}T${timeValue}:00`;
+    await updateDoc(doc(db, "users", targetUid, "todos", todo.id), {
+      timeSensitive: true,
+      notifyAt,
+      notified: false,
+    });
+    setSettingTimeFor(null);
+    setDraftTimeValue("");
+  }
+  async function clearTimeSensitive(todo) {
+    const targetUid = todo.isShared ? ownerUid : uid;
+    await updateDoc(doc(db, "users", targetUid, "todos", todo.id), {
+      timeSensitive: false,
+      notifyAt: null,
+      notified: false,
+    });
+    setSettingTimeFor(null);
+    setDraftTimeValue("");
   }
 
 
@@ -549,6 +601,7 @@ function TodoApp({ user, access }) {
   ];
 
   const isThoughts = activeList === "thoughts";
+  const isWorkbench = activeList === "workbench";
 
   if (page === "budget") {
     const budgetDocRef = (access?.role === "guardian" || access?.role === "assistant")
@@ -651,7 +704,7 @@ function TodoApp({ user, access }) {
         </div>
 
         {/* List switcher */}
-        <div style={{ display: "flex", gap: 8, background: theme.borderSoft, padding: 6, borderRadius: 16, marginBottom: 16 }}>
+        <div style={{ display: "flex", gap: 8, background: theme.borderSoft, padding: 6, borderRadius: 16, marginBottom: 16, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
           {Object.entries(listMeta).map(([key, meta]) => {
             const Icon = meta.icon;
             const active = activeList === key;
@@ -660,9 +713,9 @@ function TodoApp({ user, access }) {
                 key={key}
                 onClick={() => setActiveList(key)}
                 style={{
-                  flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  padding: "10px 10px", borderRadius: 12, border: "none", cursor: "pointer",
-                  fontWeight: 700, fontSize: 14, transition: "all 0.15s ease",
+                  flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  padding: "10px 14px", borderRadius: 12, border: "none", cursor: "pointer",
+                  fontWeight: 700, fontSize: 13, transition: "all 0.15s ease", whiteSpace: "nowrap",
                   background: active ? theme.cardBg : "transparent",
                   color: active ? meta.color.text : theme.textMuted,
                   boxShadow: active ? "0 1px 3px rgba(58,44,30,0.08)" : "none",
@@ -681,7 +734,7 @@ function TodoApp({ user, access }) {
             onResult={handleBrainDumpResult}
           />
         </div>
-        {!isThoughts && (
+        {!isThoughts && !isWorkbench && (
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
             <button
               onClick={() => setShowManageCats(true)}
@@ -725,9 +778,9 @@ function TodoApp({ user, access }) {
         )}
         </div>
 
-        {!isThoughts && (
+        {!isThoughts && !isWorkbench && (
           <>
-            {!isThoughts && (
+            {!isThoughts && !isWorkbench && (
               <button
                 onClick={() => setShowAddPanel(true)}
                 style={{
@@ -778,6 +831,48 @@ function TodoApp({ user, access }) {
                     <Calendar size={14} color={theme.textFaint} style={{ cursor: "pointer" }} onClick={() => draftDueRef.current?.showPicker?.()} />
                     <input ref={draftDueRef} type="date" value={draftDue} onChange={(e) => setDraftDue(e.target.value)} style={{ border: "none", fontSize: 13, color: theme.textSecondary, background: "transparent" }} />
                   </div>
+                  <div style={{ display: "flex", gap: 6, marginTop: 10, paddingTop: 10, borderTop: "1px solid #F6EFE4", alignItems: "center", flexWrap: "wrap" }}>
+                    <Repeat size={14} color={theme.textFaint} />
+                    {["none", "daily", "weekly", "monthly", "custom"].map((opt) => {
+                      const active = opt === "none" ? !draftRecurrence : draftRecurrence?.type === opt;
+                      return (
+                        <button
+                          key={opt}
+                          onClick={() => setDraftRecurrence(
+  opt === "none"
+    ? null
+    : opt === "custom"
+      ? { type: "custom", intervalDays: draftRecurrence?.intervalDays || 2 }
+      : { type: opt }
+)}
+                        style={{
+                              padding: "4px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                            border: active ? `1px solid ${theme.accentPlum}` : `1px solid ${theme.border}`,
+                            background: active ? theme.oldPlumBg : "transparent",
+                            color: active ? theme.accentPlum : theme.textMuted,
+                          }}
+                        >
+                          {opt === "none" ? "No repeat" : opt.charAt(0).toUpperCase() + opt.slice(1)}
+                        </button>
+                      );
+                    })}
+                    {draftRecurrence?.type === "custom" && (
+                      <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: theme.textMuted }}>
+                        every
+                        <input
+                          type="number"
+                          min="1"
+                          value={draftRecurrence.intervalDays ?? ""}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            setDraftRecurrence({ type: "custom", intervalDays: raw === "" ? "" : parseInt(raw, 10) });
+                        }}
+                          style={{ width: 40, border: `1px solid ${theme.border}`, borderRadius: 6, padding: "2px 4px", fontSize: 12 }}
+                        />
+                        days
+                      </span>
+                    )}
+                  </div>
                   <div style={{ paddingTop: 10, marginTop: 10, borderTop: "1px solid #F6EFE4" }}>
                     <CategoryPicker
                       categories={currentCategories}
@@ -805,8 +900,41 @@ function TodoApp({ user, access }) {
               {sortedTodos.map((todo) => {
                 const overdue = isOverdue(todo.due, todo.done);
                 const category = currentCategories.find((c) => c.id === todo.categoryId);
+                if (settingTimeFor === todo.id) {
+                  return (
+                    <div key={todo.id} style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 14, padding: 12, display: "flex", alignItems: "center", gap: 10 }}>
+                      <Clock size={16} color={theme.goldDark} style={{ flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, color: theme.textPrimary, flex: 1, minWidth: 0 }} className="truncate">{todo.text}</span>
+                      <input
+                        type="time"
+                        autoFocus
+                        value={draftTimeValue}
+                        onChange={(e) => setDraftTimeValue(e.target.value)}
+                        style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: "6px 8px", fontSize: 13 }}
+                      />
+                      <button
+                        onClick={() => setTimeSensitive(todo, draftTimeValue)}
+                        disabled={!draftTimeValue}
+                        style={{ background: theme.goldDark, color: theme.cardBg, borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 700, cursor: draftTimeValue ? "pointer" : "default", opacity: draftTimeValue ? 1 : 0.5 }}
+                      >
+                        Set
+                      </button>
+                      {todo.timeSensitive && (
+                        <button
+                          onClick={() => clearTimeSensitive(todo)}
+                          style={{ color: theme.accentRed, fontSize: 12, fontWeight: 700, padding: "6px 8px" }}
+                        >
+                          Remove
+                        </button>
+                      )}
+                      <button onClick={() => { setSettingTimeFor(null); setDraftTimeValue(""); }} style={{ color: theme.textMuted, padding: 4 }}>
+                        <X size={16} />
+                      </button>
+                    </div>
+                  );
+                }
                 return (
-                  <SwipeToDelete key={todo.id} onDelete={() => removeTodo(todo.id)}>
+                  <SwipeToDelete key={todo.id} onDelete={() => removeTodo(todo.id)} onSwipeRight={() => { setSettingTimeFor(todo.id); setDraftTimeValue(todo.notifyAt ? todo.notifyAt.slice(11, 16) : ""); }}>
                     <TaskCard
                       highlighted={overdue}
                       accentColor={listMeta[activeList].color}
@@ -825,6 +953,23 @@ function TodoApp({ user, access }) {
                             <Badge warn={overdue} icon={Calendar}>
                               {overdue ? `Overdue · ${fmtDate(todo.due)}` : fmtDate(todo.due)}
                             </Badge>
+                          )}
+                          {todo.timeSensitive && todo.notifyAt && (
+                            <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: theme.paleYellowBg2, color: theme.goldText, display: "flex", alignItems: "center", gap: 3 }}>
+                              <Clock size={11} />
+                              {(() => {
+                            const [h, m] = todo.notifyAt.slice(11, 16).split(":").map(Number);
+                            const ampm = h >= 12 ? "pm" : "am";
+                            const h12 = h % 12 || 12;
+                            return `${h12}:${String(m).padStart(2, "0")}${ampm}`;
+                          })()}
+                            </span>
+                          )}
+                          {todo.recurrence && (
+                            <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: theme.oldGreenBg, color: theme.oldGreenText, display: "flex", alignItems: "center", gap: 3 }}>
+                              <Repeat size={11} />
+                              {todo.recurrence.type}
+                            </span>
                           )}
                           {category && (
                             <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: PALETTE[category.color].bg, color: PALETTE[category.color].text }}>
@@ -979,6 +1124,9 @@ function TodoApp({ user, access }) {
             )}
           </>
         )}
+        {isWorkbench && (
+          <Workbench uid={uid} categories={ownCategories} todos={ownTodos} />
+        )}
       </div>
     </div>
   );
@@ -989,19 +1137,36 @@ function TodoApp({ user, access }) {
 function UserMenu({ user, access, pendingBudgetRequest, onRequestBudgetAccess }) {
   const [open, setOpen] = useState(false);
   const [showNotify, setShowNotify] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
   const [botToken, setBotToken] = useState("");
   const [chatId, setChatId] = useState("");
   const [notifySaved, setNotifySaved] = useState(false);
   useEffect(() => {
     if (showNotify) {
+      const saved = localStorage.getItem("orbitWizardProgress_" + user.email);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setWizardStep(parsed.wizardStep || 1);
+          setBotToken((parsed.botToken || "").match(/\d+:[A-Za-z0-9_-]+/) ? parsed.botToken.match(/\d+:[A-Za-z0-9_-]+/)[0] : (parsed.botToken || ""));
+          setChatId(parsed.chatId || "");
+          return;
+        } catch (e) {}
+      }
       getMyNotifyConfig(user.email).then((cfg) => {
-        setBotToken(cfg.telegramBotToken || "");
+        setBotToken((cfg.telegramBotToken || "").match(/\d+:[A-Za-z0-9_-]+/) ? cfg.telegramBotToken.match(/\d+:[A-Za-z0-9_-]+/)[0] : (cfg.telegramBotToken || ""));
         setChatId(cfg.telegramChatId || "");
       });
     }
   }, [showNotify]);
+  useEffect(() => {
+    if (showNotify) {
+      localStorage.setItem("orbitWizardProgress_" + user.email, JSON.stringify({ wizardStep, botToken, chatId }));
+    }
+  }, [showNotify, wizardStep, botToken, chatId]);
   async function handleSaveNotify() {
     await saveMyNotifyConfig(user.email, { telegramBotToken: botToken, telegramChatId: chatId });
+    localStorage.removeItem("orbitWizardProgress_" + user.email);
     setNotifySaved(true);
     setTimeout(() => setNotifySaved(false), 2000);
   }
@@ -1055,28 +1220,95 @@ function UserMenu({ user, access, pendingBudgetRequest, onRequestBudgetAccess })
         </div>
       )}
       {showNotify && (
-        <div onClick={() => setShowNotify(false)} style={{ position: "fixed", inset: 0, background: "rgba(43,36,32,0.35)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: theme.cardBg, borderRadius: 16, padding: 20, width: 320, maxWidth: "90vw" }}>
-            <h3 style={{ margin: "0 0 4px", fontFamily: "'Fraunces', Georgia, serif", fontSize: 17, color: theme.textPrimary }}>Notification settings</h3>
-            <p style={{ fontSize: 12, color: theme.textMuted, margin: "0 0 14px" }}>Your own Telegram bot, for alerts like budget access requests.</p>
-            <input
-              placeholder="Bot token (from BotFather)"
-              value={botToken}
-              onChange={(e) => setBotToken(e.target.value)}
-              style={{ width: "100%", boxSizing: "border-box", border: "1px solid #E6DACB", borderRadius: 8, padding: "8px 10px", fontSize: 13, marginBottom: 8 }}
-            />
-            <input
-              placeholder="Chat ID"
-              value={chatId}
-              onChange={(e) => setChatId(e.target.value)}
-              style={{ width: "100%", boxSizing: "border-box", border: "1px solid #E6DACB", borderRadius: 8, padding: "8px 10px", fontSize: 13, marginBottom: 12 }}
-            />
-            <button
-              onClick={handleSaveNotify}
-              style={{ width: "100%", border: "none", background: theme.accentPlum, color: theme.cardBg, fontSize: 13, fontWeight: 700, padding: "9px 10px", borderRadius: 8, cursor: "pointer" }}
-            >
-              {notifySaved ? "Saved!" : "Save"}
-            </button>
+        <div onClick={() => { setShowNotify(false); setWizardStep(1); }} style={{ position: "fixed", inset: 0, background: "rgba(43,36,32,0.35)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: theme.cardBg, borderRadius: 16, padding: 20, width: 340, maxWidth: "90vw" }}>
+            <h3 style={{ margin: "0 0 4px", fontFamily: "'Fraunces', Georgia, serif", fontSize: 17, color: theme.textPrimary }}>Connect Telegram</h3>
+            <p style={{ fontSize: 11, color: theme.textFaint, margin: "0 0 16px" }}>Step {wizardStep} of 3</p>
+
+            {wizardStep === 1 && (
+              <>
+                <p style={{ fontSize: 13, color: theme.textSecondary, margin: "0 0 10px", lineHeight: 1.5 }}>
+                  First, create your own personal bot - this takes about a minute.
+                </p>
+                <ol style={{ fontSize: 13, color: theme.textSecondary, margin: "0 0 14px", paddingLeft: 18, lineHeight: 1.7 }}>
+                  <li>Open Telegram and search for <strong>@BotFather</strong></li>
+                  <li>Send the message <strong>/newbot</strong></li>
+                  <li>Give it any name and username it asks for</li>
+                  <li>BotFather will reply with a long token, copy it</li>
+                </ol>
+                <input
+                  placeholder="Paste your bot token here"
+                  value={botToken}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const match = raw.match(/\d+:[A-Za-z0-9_-]+/);
+                    setBotToken(match ? match[0] : raw);
+                  }}
+                  style={{ width: "100%", boxSizing: "border-box", border: "1px solid #E6DACB", borderRadius: 8, padding: "8px 10px", fontSize: 13, marginBottom: 14 }}
+                />
+                <button
+                  onClick={async () => {
+                    const webhookUrl = `https://orbit-telegram-webhook.javoseabaugh.workers.dev/${botToken.trim()}`;
+                    try {
+                      await fetch(`https://api.telegram.org/bot${botToken.trim()}/setWebhook?url=${encodeURIComponent(webhookUrl)}`);
+                    } catch (e) {}
+                    setWizardStep(2);
+                  }}
+                  disabled={!botToken.trim()}
+                  style={{ width: "100%", border: "none", background: theme.accentPlum, color: theme.cardBg, fontSize: 13, fontWeight: 700, padding: "9px 10px", borderRadius: 8, cursor: botToken.trim() ? "pointer" : "default", opacity: botToken.trim() ? 1 : 0.5 }}
+                >
+                  Next
+                </button>
+              </>
+            )}
+
+            {wizardStep === 2 && (
+              <>
+                <p style={{ fontSize: 13, color: theme.textSecondary, margin: "0 0 10px", lineHeight: 1.5 }}>
+                  Now let's find your Chat ID - this tells your bot who to message.
+                </p>
+                <ol style={{ fontSize: 13, color: theme.textSecondary, margin: "0 0 14px", paddingLeft: 18, lineHeight: 1.7 }}>
+                  <li>Open a chat with the bot you just created</li>
+                  <li>Send it any message, like "hi"</li>
+                  <li>It will reply instantly with your Chat ID</li>
+                </ol>
+                <input
+                  placeholder="Paste your Chat ID here"
+                  value={chatId}
+                  onChange={(e) => setChatId(e.target.value)}
+                  style={{ width: "100%", boxSizing: "border-box", border: "1px solid #E6DACB", borderRadius: 8, padding: "8px 10px", fontSize: 13, marginBottom: 14 }}
+                />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={() => setWizardStep(1)}
+                    style={{ flex: 1, border: `1px solid ${theme.border}`, background: "transparent", color: theme.textSecondary, fontSize: 13, fontWeight: 700, padding: "9px 10px", borderRadius: 8, cursor: "pointer" }}
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={async () => { await handleSaveNotify(); setWizardStep(3); }}
+                    disabled={!chatId.trim()}
+                    style={{ flex: 1, border: "none", background: theme.accentPlum, color: theme.cardBg, fontSize: 13, fontWeight: 700, padding: "9px 10px", borderRadius: 8, cursor: chatId.trim() ? "pointer" : "default", opacity: chatId.trim() ? 1 : 0.5 }}
+                  >
+                    Save
+                  </button>
+                </div>
+              </>
+            )}
+
+            {wizardStep === 3 && (
+              <>
+                <p style={{ fontSize: 13, color: theme.textSecondary, margin: "0 0 16px", lineHeight: 1.5 }}>
+                  All set! You will now get Orbit notifications through your own Telegram bot.
+                </p>
+                <button
+                  onClick={() => { setShowNotify(false); setWizardStep(1); }}
+                  style={{ width: "100%", border: "none", background: theme.accentPlum, color: theme.cardBg, fontSize: 13, fontWeight: 700, padding: "9px 10px", borderRadius: 8, cursor: "pointer" }}
+                >
+                  Done
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1135,7 +1367,7 @@ function GroupList({ groups, kind, dragOverZone, setDragOverZone, onDrop, onDele
   );
 }
 
-function SwipeToDelete({ onDelete, children }) {
+function SwipeToDelete({ onDelete, onSwipeRight, children }) {
   const [dragX, setDragX] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startX = useRef(0);
@@ -1152,7 +1384,7 @@ function SwipeToDelete({ onDelete, children }) {
   function onPointerMove(e) {
     if (!active.current) return;
     const delta = e.clientX - startX.current;
-    setDragX(Math.min(0, delta));
+    setDragX(onSwipeRight ? delta : Math.min(0, delta));
   }
 
   function finish() {
@@ -1160,8 +1392,15 @@ function SwipeToDelete({ onDelete, children }) {
     active.current = false;
     setDragging(false);
     if (dragX < -THRESHOLD) {
-      setDragX(-500);
-      setTimeout(onDelete, 160);
+      const allowed = onDelete();
+      if (allowed === false) {
+        setDragX(0);
+      } else {
+        setDragX(-500);
+      }
+    } else if (onSwipeRight && dragX > THRESHOLD) {
+      setDragX(0);
+      onSwipeRight();
     } else {
       setDragX(0);
     }
@@ -1175,6 +1414,14 @@ function SwipeToDelete({ onDelete, children }) {
       }}>
         <Trash2 size={18} color={theme.cardBg} />
       </div>
+      {onSwipeRight && (
+        <div style={{
+          position: "absolute", inset: 0, background: theme.goldDark || "#c9a06a", borderRadius: 14,
+          display: "flex", alignItems: "center", justifyContent: "flex-start", paddingLeft: 22,
+        }}>
+          <Clock size={18} color={theme.cardBg} />
+        </div>
+      )}
       <div
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}

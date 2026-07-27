@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import { useRef, useState } from "react";
 import { Sparkles, AlertCircle, Keyboard, Paperclip, ArrowUp, X } from "lucide-react";
 import { parseBrainDump, parseBrainDumpImage } from "./gemini";
