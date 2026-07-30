@@ -1,5 +1,5 @@
 import PaletteMenu from "./PaletteMenu";
-import SwipeToDelete from "./SwipeToDelete";
+import SwipeToDelete, { HOVER_CAPABLE } from "./SwipeToDelete";
 import { useEffect, useRef, useState } from "react";
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import {
@@ -9,11 +9,10 @@ import {
   Plus, Briefcase, User, Calendar, Check, Trash2,
   GripVertical, Inbox, X, MessageCircleMore, UserPlus, Clock, Pencil, LogOut,
   ChevronDown, Search, Tag, Settings, Repeat, FolderKanban,
-  Moon, Eye, EyeOff,
+  Moon, Eye, EyeOff, Wallet, Users,
 } from "lucide-react";
 import { auth, googleProvider, db } from "./firebase";
 import BrainDumpButton from "./BrainDump";
-import orbitIcon from "./assets/orbit-icon.png";
 import Budget from "./Budget";
 import AccessScreen from "./AccessScreen";
 import Workbench from "./Workbench";
@@ -23,19 +22,207 @@ import { getMyNotifyConfig, saveMyNotifyConfig } from "./notifyConfig";
 import { createBudgetAccessRequest, watchMyPendingBudgetRequest } from "./budgetAccessRequests";
 import Nightly from "./Nightly";
 
-// Warm editorial palette. Keys stay the same (blue/green/orange/yellow) even
-// though the actual colors are now plum/sage/clay/ochre — existing saved
-// categories and people reference these keys directly in Firestore, so
-// renaming the keys would silently break their colors.
-import { PALETTE, theme } from "./theme";
+// Liquid-glass theme layer. The category keys stay blue/green/orange/yellow —
+// every saved category and person in Firestore references those keys directly,
+// so they now index four hues spread around the active theme instead of the
+// old fixed plum/sage/clay/ochre swatches.
+import { PALETTE, theme, glass, SPRING, EASE_OUT, applyThemeVars, prefersDark } from "./theme";
 const PALETTE_ORDER = ["blue", "green", "orange", "yellow"];
 const UNSORTED = "__unsorted__";
 const STALE_DAYS = 7;
+
+// ---------- Design tokens ----------
+const DISPLAY = "'Bricolage Grotesque', system-ui, sans-serif";
+const MONO = "'Geist Mono', ui-monospace, monospace";
+
+// Titles: Bricolage 600 with the tight tracking from the design tokens.
+function display(size, letterSpacing = "-.02em") {
+  return { fontFamily: DISPLAY, fontSize: size, fontWeight: 600, letterSpacing };
+}
+
+// Tint helper — every accent tint in the design is a percentage of a theme
+// colour over transparency, which keeps them legible in both light and dark.
+function mix(color, pct, over = "transparent") {
+  return `color-mix(in oklab, ${color} ${pct}%, ${over})`;
+}
+
+// Desktop is 1100px and up: three columns, no swipe, explicit row buttons.
+const DESKTOP_QUERY = "(min-width: 1100px)";
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== "undefined" && !!window.matchMedia && window.matchMedia(DESKTOP_QUERY).matches
+  );
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const mq = window.matchMedia(DESKTOP_QUERY);
+    const onChange = (e) => setIsDesktop(e.matches);
+    setIsDesktop(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return isDesktop;
+}
+
+const GLOBAL_CSS = `
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  input:focus, textarea:focus, select:focus { outline: none; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+    outline: 2px solid var(--ac); outline-offset: 2px;
+  }
+  input::placeholder, textarea::placeholder { color: var(--tx4); }
+  ::selection { background: var(--acs); color: var(--tx); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--gb); border-radius: 99px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  @keyframes drift1 { 0%,100% { transform: translate3d(0,0,0) scale(1) } 33% { transform: translate3d(9vw,7vh,0) scale(1.18) } 66% { transform: translate3d(-6vw,11vh,0) scale(.9) } }
+  @keyframes drift2 { 0%,100% { transform: translate3d(0,0,0) scale(1.05) } 33% { transform: translate3d(-11vw,-6vh,0) scale(.88) } 66% { transform: translate3d(7vw,-10vh,0) scale(1.2) } }
+  @keyframes drift3 { 0%,100% { transform: translate3d(0,0,0) scale(.95) } 50% { transform: translate3d(-8vw,-12vh,0) scale(1.25) } }
+  @keyframes screenIn { from { opacity: 0; transform: translateY(14px) scale(.985) } to { opacity: 1; transform: none } }
+  @keyframes rowIn { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+  @keyframes sheetIn { from { transform: translateY(102%) } to { transform: translateY(0) } }
+  @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes popIn { from { opacity: 0; transform: translateY(-6px) scale(.94) } to { opacity: 1; transform: none } }
+  @keyframes burst { 0% { opacity: .9; transform: scale(.4) } 100% { opacity: 0; transform: scale(2.6) } }
+  @keyframes tick { 0% { transform: scale(.2) rotate(-25deg); opacity: 0 } 55% { transform: scale(1.3) rotate(6deg); opacity: 1 } 100% { transform: scale(1) rotate(0) } }
+  @keyframes shimmer { 0% { transform: translateX(-120%) } 100% { transform: translateX(320%) } }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  @keyframes glowPulse { 0%,100% { opacity: .35 } 50% { opacity: .85 } }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+      transition-duration: .01ms !important;
+    }
+  }
+`;
+
+// The drifting colour field every glass surface is frosted over. Fixed and
+// pointer-transparent, so it never participates in layout or hit testing.
+function GlassBackdrop() {
+  const blobs = [
+    { style: { top: "-18vh", left: "-12vw", width: "62vw", height: "62vw" }, color: theme.blobs[0], blur: 90, anim: "drift1 26s", opacity: theme.blobOpacity },
+    { style: { top: "20vh", right: "-16vw", width: "56vw", height: "56vw" }, color: theme.blobs[1], blur: 100, anim: "drift2 32s", opacity: theme.blobOpacity },
+    { style: { bottom: "-22vh", left: "22vw", width: "52vw", height: "52vw" }, color: theme.blobs[2], blur: 96, anim: "drift3 38s", opacity: Math.max(0, theme.blobOpacity - 0.13) },
+  ];
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", overflow: "hidden",
+        background: `radial-gradient(140% 90% at 50% 0%, ${theme.gradA}, ${theme.gradB} 70%)`,
+      }}
+    >
+      {blobs.map((b, i) => (
+        <div
+          key={i}
+          style={{
+            position: "absolute", borderRadius: "50%", ...b.style,
+            background: b.color, filter: `blur(${b.blur}px)`, opacity: b.opacity,
+            animation: `${b.anim} ease-in-out infinite`,
+          }}
+        />
+      ))}
+      <div style={{
+        position: "absolute", inset: 0, opacity: prefersDark ? 0.035 : 0.02, mixBlendMode: "overlay",
+        backgroundImage:
+          "repeating-linear-gradient(0deg,rgba(255,255,255,.5) 0 1px,transparent 1px 3px)," +
+          "repeating-linear-gradient(90deg,rgba(0,0,0,.5) 0 1px,transparent 1px 3px)",
+      }} />
+    </div>
+  );
+}
+
+// New Orbit mark: accent-gradient disc, tilted orbit ring, satellite dot.
+function OrbitMark({ size = 26 }) {
+  const gid = `orbit-mark-${size}`;
+  return (
+    <svg
+      width={size} height={size} viewBox="0 0 48 48" aria-hidden="true"
+      style={{ flexShrink: 0, filter: `drop-shadow(0 4px 14px ${mix(theme.accentPlum, 45)})` }}
+    >
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor={theme.accent2} />
+          <stop offset="1" stopColor={theme.accentPlum} />
+        </linearGradient>
+      </defs>
+      <ellipse cx="24" cy="24" rx="21" ry="9.5" fill="none" stroke={`url(#${gid})`} strokeWidth="2.6" opacity="0.55" transform="rotate(-28 24 24)" />
+      <circle cx="24" cy="24" r="9" fill={`url(#${gid})`} />
+      <circle cx="24" cy="24" r="9" fill="none" stroke="rgba(255,255,255,.45)" strokeWidth="1" />
+      <circle cx="41.5" cy="15.5" r="3.4" fill={theme.accent2} />
+    </svg>
+  );
+}
+
+// 34px glass squircle used for every top-bar destination.
+function ChromeButton({ title, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        width: 34, height: 34, borderRadius: 12, flexShrink: 0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        color: theme.textSecondary, background: theme.glassFill,
+        border: `1px solid ${theme.glassBorder}`,
+        backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
+        boxShadow: `inset 0 1px 0 ${theme.glassSpec}`,
+        cursor: "pointer", transition: `transform .3s ${SPRING}`,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// Accent-filled when on, plain glass when off — tabs, filters, toggles.
+function pillStyle(on) {
+  return {
+    display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 999,
+    fontSize: 12.5, fontWeight: 500, whiteSpace: "nowrap", cursor: "pointer",
+    color: on ? theme.accentPlum : theme.textMuted,
+    background: on ? theme.accentSoft : theme.inputBg,
+    border: `1px solid ${on ? theme.accentPlum : theme.glassBorder2}`,
+    backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
+    transition: `all .25s ${SPRING}`,
+  };
+}
+
+// Accent-gradient button, dimmed to plain glass until it has something to do.
+function accentButtonStyle(enabled) {
+  return {
+    color: enabled ? theme.accentInk : theme.textFainter,
+    background: enabled ? `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})` : theme.inputBg,
+    boxShadow: enabled ? `0 8px 22px -10px ${theme.accentPlum}` : "none",
+    border: "none", cursor: enabled ? "pointer" : "default",
+    transition: `all .3s ${SPRING}`,
+  };
+}
 
 function fmtDate(d) {
   const date = new Date(d + "T00:00:00");
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
+
+// "2026-07-30T14:30:00" -> "2:30pm"
+function fmtTime(notifyAt) {
+  const [h, m] = notifyAt.slice(11, 16).split(":").map(Number);
+  const ampm = h >= 12 ? "pm" : "am";
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")}${ampm}`;
+}
+
+// Shared field chrome for inputs, selects and textareas.
+function fieldStyle() {
+  return {
+    width: "100%", padding: "11px 13px", borderRadius: 14, fontSize: 13.5,
+    color: theme.textPrimary, background: theme.inputBg,
+    border: `1px solid ${theme.glassBorder2}`,
+  };
+}
+
+const quietButtonStyle = {
+  border: "none", background: "transparent", color: theme.textFainter,
+  fontSize: 11.5, fontWeight: 500, cursor: "pointer", padding: "3px 7px", borderRadius: 8,
+};
 
 function isOverdue(dueDate, done) {
   if (!dueDate || done) return false;
@@ -156,15 +343,37 @@ export default function App() {
     };
   }, []);
 
-  if (user === undefined) return <CenteredScreen>Loading…</CenteredScreen>;
-  if (user === null) return <SignInScreen blocked={blocked} />;
-  return <TodoApp user={user} access={access} />;
+  // Theme tokens are published as CSS custom properties on <html> so the
+  // global stylesheet (placeholders, selection, scrollbars) can reference them
+  // without importing `theme`. The body colours match so overscroll doesn't
+  // flash white on iOS.
+  useEffect(() => {
+    applyThemeVars(document.documentElement);
+    document.documentElement.style.setProperty("--gl2", theme.inputBg);
+    document.body.style.background = theme.gradB;
+    document.body.style.color = theme.textPrimary;
+  }, []);
+
+  let screen;
+  if (user === undefined) screen = <CenteredScreen>Loading…</CenteredScreen>;
+  else if (user === null) screen = <SignInScreen blocked={blocked} />;
+  else screen = <TodoApp user={user} access={access} />;
+
+  return (
+    <>
+      <style>{GLOBAL_CSS}</style>
+      {screen}
+    </>
+  );
 }
 
 function CenteredScreen({ children }) {
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: theme.gradB, color: theme.textMuted, fontFamily: "'Inter', -apple-system, sans-serif" }}>
-      {children}
+    <div style={{ position: "relative", minHeight: "100vh", fontFamily: "'Geist', system-ui, sans-serif" }}>
+      <GlassBackdrop />
+      <div style={{ position: "relative", zIndex: 1, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: theme.textMuted, fontSize: 14 }}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -183,27 +392,43 @@ function SignInScreen({ blocked }) {
   }
 
   return (
-    <div style={{
-      minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-      background: `radial-gradient(circle at 50% 0%, ${theme.gradA} 0%, ${theme.gradB} 50%, ${theme.gradC} 100%)`,
-      fontFamily: "'Inter', -apple-system, sans-serif",
-    }}>
-      <div style={{ background: theme.cardBg, borderRadius: 22, padding: "44px 36px 36px", boxShadow: "0 8px 30px rgba(58,44,30,0.08)", border: "1px solid #EFE6D9", textAlign: "center", maxWidth: 360 }}>
-        <img src={orbitIcon} alt="Orbit" style={{ width: 68, height: 68, marginBottom: 14, filter: "drop-shadow(0 2px 6px rgba(185,133,43,0.25))" }} />
-        <h1 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 26, fontWeight: 600, color: theme.textPrimary, marginBottom: 6, letterSpacing: "-0.01em" }}>Orbit</h1>
-        <p style={{ fontSize: 14, color: theme.textMuted, marginBottom: 26 }}>Management for work, life, and thoughts.</p>
-        <button
-          onClick={handleSignIn}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 10, width: "100%",
-            padding: "12px 16px", borderRadius: 12, border: "1px solid #E6DACB", background: theme.cardBg,
-            fontSize: 14, fontWeight: 700, color: theme.textPrimary, cursor: "pointer",
-          }}
-        >
-          <GoogleIcon />
-          Sign in with Google
-        </button>
-        {error && <p style={{ color: theme.oldOrangeText, fontSize: 12, marginTop: 12 }}>{error}</p>}
+    <div style={{ position: "relative", minHeight: "100vh", color: theme.textPrimary, fontFamily: "'Geist', system-ui, sans-serif" }}>
+      <GlassBackdrop />
+      <div style={{
+        position: "relative", zIndex: 1, minHeight: "100vh",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 28,
+        animation: `screenIn .5s ${EASE_OUT}`,
+      }}>
+        <div style={{
+          ...glass.raised, width: "100%", maxWidth: 380, padding: "38px 30px 30px",
+          borderRadius: 32, textAlign: "center",
+        }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+            <OrbitMark size={62} />
+          </div>
+          <h1 style={{ ...display(34, "-.03em"), margin: "0 0 8px", lineHeight: 1 }}>Orbit</h1>
+          <p style={{ margin: "0 0 28px", fontSize: 14.5, color: theme.textMuted, lineHeight: 1.5 }}>
+            Everything you're carrying — work, life and the things still on your mind.
+          </p>
+          <button
+            onClick={handleSignIn}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 10, width: "100%",
+              padding: "14px 18px", borderRadius: 16, fontSize: 14.5, fontWeight: 600,
+              color: theme.textPrimary, background: theme.glassHigh,
+              border: `1px solid ${theme.glassBorder}`,
+              backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+              boxShadow: `inset 0 1px 0 ${theme.glassSpec}`, cursor: "pointer",
+            }}
+          >
+            <GoogleIcon />
+            Sign in with Google
+          </button>
+          {error && <p style={{ color: theme.accentRed, fontSize: 12.5, margin: "14px 0 0" }}>{error}</p>}
+          <p style={{ margin: "16px 0 0", fontSize: 11.5, color: theme.textFainter }}>
+            Orbit is private. Only invited accounts can sign in.
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -244,8 +469,8 @@ function TodoApp({ user, access }) {
   const thoughts = useUserCollection(uid, "thoughts");
   const people = useUserCollection(uid, "people");
 
+  const isDesktop = useIsDesktop();
   const [activeList, setActiveList] = useState("work");
-  const [categoryFilter, setCategoryFilter] = useState([]); // array of category ids; empty = show all
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [addTarget, setAddTarget] = useState("work"); // which list the open add panel writes to
   const [settingTimeFor, setSettingTimeFor] = useState(null);
@@ -269,14 +494,12 @@ function TodoApp({ user, access }) {
   const [newCatName, setNewCatName] = useState("");
   const [showNewCat, setShowNewCat] = useState(false);
   const [showMoreCats, setShowMoreCats] = useState(false);
-  const [showManageCats, setShowManageCats] = useState(false);
   const [showManagePeople, setShowManagePeople] = useState(false);
 
-  // ---------- Desktop side-by-side layout (>=900px, CSS-driven) ----------
+  // ---------- Layout (>=1100px = desktop columns) ----------
   // Which column last had a click — used as the target for the shared "+"
-  // button. Independent per-column category filters and manage-categories
-  // modal target, since each column filters on its own. Workbench has no
-  // entry in desktopCategoryFilters since it doesn't use category chips.
+  // button. Category filters are per-list on both layouts: filtering Work must
+  // never affect Personal. Workbench has no entry since it doesn't use chips.
   const [focusedColumn, setFocusedColumn] = useState("work");
   const [desktopCategoryFilters, setDesktopCategoryFilters] = useState({ work: [], personal: [] });
   const [desktopManageCatsFor, setDesktopManageCatsFor] = useState(null);
@@ -312,7 +535,7 @@ function TodoApp({ user, access }) {
     work: { label: "Work", icon: Briefcase, color: PALETTE.blue },
     personal: { label: "Personal", icon: User, color: PALETTE.green },
     thoughts: { label: "Thoughts", icon: MessageCircleMore, color: PALETTE.yellow },
-    workbench: { label: "Workbench", icon: FolderKanban, color: PALETTE.orange },
+    workbench: { label: "Projects", icon: FolderKanban, color: PALETTE.orange },
   };
 
   // ---------- Work / Personal ----------
@@ -342,15 +565,18 @@ function TodoApp({ user, access }) {
     return hideFutureTodos ? items.filter((t) => !isFutureDate(t.due)) : items;
   }
 
-  const activeUid = uidForList(activeList);
+  // Both layouts now render lists through renderTodoColumn, so a todo has to
+  // be findable regardless of which list is on screen.
+  function findTodo(id) {
+    const own = ownTodos.find((t) => t.id === id);
+    if (own) return own;
+    const shared = sharedTodos.find((t) => t.id === id);
+    return shared ? { ...shared, isShared: true } : null;
+  }
+
   const currentTodos = todosForList(activeList);
   const currentCategories = categoriesForList(activeList);
   const activeCount = currentTodos.filter((t) => !t.done).length;
-
-  // Date-filtered view respecting the hide-future-todos toggle. Overdue and
-  // undated todos are never hidden by this — only due dates strictly after
-  // today. Category chips and the rendered list both derive from this.
-  const dateFilteredTodos = dateFilterList(currentTodos);
 
   // Suggest an existing category as the user types a new task, debounced
   // so it doesn't fire on every keystroke. Never overrides a category the
@@ -484,7 +710,7 @@ function TodoApp({ user, access }) {
   }
 
   function removeTodo(todoId) {
-    const todo = currentTodos.find(t => t.id === todoId);
+    const todo = findTodo(todoId);
     if (!todo) return false;
 
     if (todo.isShared) {
@@ -499,7 +725,7 @@ function TodoApp({ user, access }) {
   }
 
   async function editTodo(id, text, due, categoryId) {
-    const todo = currentTodos.find(t => t.id === id);
+    const todo = findTodo(id);
     const targetUid = todo?.isShared ? ownerUid : uid;
     await updateDoc(doc(db, "users", targetUid, "todos", id), { text, due, categoryId: categoryId ?? null });
   }
@@ -708,11 +934,6 @@ function TodoApp({ user, access }) {
     });
   }
 
-  const filteredTodos = categoryFilter.length === 0
-    ? dateFilteredTodos
-    : dateFilteredTodos.filter((t) => categoryFilter.includes(t.categoryId));
-  const sortedTodos = sortTodosFlat(filteredTodos);
-
   // Recently used = categories whose most recently created todo is newest.
   // Categories never used sink to the end.
   function recentCategoriesForList(listKey, limit) {
@@ -727,9 +948,6 @@ function TodoApp({ user, access }) {
     return [...listCats]
       .sort((a, b) => (lastUsed[b.id] || -1) - (lastUsed[a.id] || -1))
       .slice(0, limit);
-  }
-  function recentCategories(limit) {
-    return recentCategoriesForList(activeList, limit);
   }
 
   function sortByDue(items) {
@@ -768,13 +986,13 @@ function TodoApp({ user, access }) {
   const isThoughts = activeList === "thoughts";
   const isWorkbench = activeList === "workbench";
 
-  // Renders one desktop column (Work or Personal) — independent category
-  // filter, independent list, but shares toggleDone/removeTodo/editTodo/
-  // setTimeSensitive with the mobile view since those operate on a single
-  // todo object and don't depend on activeList.
+  // Renders one list of todos — a glass column on desktop, the page body on
+  // mobile. Category filters, sorting and the empty state are per-list; the
+  // per-todo callbacks are shared with every other surface.
   function renderTodoColumn(listKey) {
     const meta = listMeta[listKey];
     const Icon = meta.icon;
+    const accent = meta.color.dot;
     const colTodos = todosForList(listKey);
     const colCategories = categoriesForList(listKey);
     const colDateFiltered = dateFilterList(colTodos);
@@ -785,6 +1003,9 @@ function TodoApp({ user, access }) {
     const colSorted = sortTodosFlat(colFiltered);
     const colActiveCount = colTodos.filter((t) => !t.done).length;
     const focused = focusedColumn === listKey;
+    const chipCategories = colCategories.filter((cat) =>
+      colDateFiltered.some((t) => t.categoryId === cat.id && !t.done)
+    );
 
     function setColFilter(updater) {
       setDesktopCategoryFilters((prev) => ({ ...prev, [listKey]: updater(prev[listKey] || []) }));
@@ -793,28 +1014,42 @@ function TodoApp({ user, access }) {
     return (
       <div
         key={listKey}
-        onClick={() => setFocusedColumn(listKey)}
-        style={{
-          flex: 1, minWidth: 0, background: theme.cardBg, borderRadius: 18,
-          border: focused ? `2px solid ${meta.color.dot}` : "2px solid transparent",
-          padding: 14, transition: "border-color 0.15s ease",
-        }}
+        onClick={isDesktop ? () => setFocusedColumn(listKey) : undefined}
+        style={isDesktop ? {
+          ...glass.panel, flex: "1 1 0", minWidth: 0, padding: 16, borderRadius: 26,
+          border: `1px solid ${focused ? accent : theme.glassBorder}`,
+          boxShadow: focused
+            ? `inset 0 1px 0 ${theme.glassSpec}, 0 0 0 3px ${mix(accent, 22)}, 0 18px 44px -26px ${theme.glassShadow}`
+            : `inset 0 1px 0 ${theme.glassSpec}, 0 18px 44px -26px ${theme.glassShadow}`,
+          transition: "border-color .3s ease, box-shadow .3s ease",
+        } : { minWidth: 0 }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <Icon size={16} color={meta.color.text} />
-          <span style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600, fontSize: 15, color: theme.textPrimary }}>{meta.label}</span>
-          <span style={{ fontSize: 12, color: theme.textFaint, marginLeft: "auto" }}>{colActiveCount} left</span>
-          <button
-            onClick={(e) => { e.stopPropagation(); setDesktopManageCatsFor(listKey); }}
-            style={{ border: "none", background: "transparent", color: theme.textFaint, fontSize: 11, fontWeight: 600, cursor: "pointer", padding: 4 }}
-          >
-            Categories
-          </button>
-        </div>
-        {colCategories.filter((cat) => colDateFiltered.some((t) => t.categoryId === cat.id && !t.done)).length > 0 && (
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-            {colCategories.filter((cat) => colDateFiltered.some((t) => t.categoryId === cat.id && !t.done)).map((cat) => {
-              const chipActive = colFilter.includes(cat.id);
+        {isDesktop ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
+            <Icon size={15} color={accent} />
+            <span style={display(16)}>{meta.label}</span>
+            <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: 11.5, color: theme.textFainter }}>
+              {colActiveCount} left
+            </span>
+            <button
+              onClick={(e) => { e.stopPropagation(); setDesktopManageCatsFor(listKey); }}
+              style={quietButtonStyle}
+            >
+              Categories
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+            <button onClick={() => setDesktopManageCatsFor(listKey)} style={quietButtonStyle}>
+              Manage categories
+            </button>
+          </div>
+        )}
+
+        {chipCategories.length > 0 && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+            {chipCategories.map((cat) => {
+              const on = colFilter.includes(cat.id);
               const palette = PALETTE[cat.color] || PALETTE.blue;
               return (
                 <button
@@ -824,12 +1059,16 @@ function TodoApp({ user, access }) {
                     setColFilter((prev) => prev.includes(cat.id) ? prev.filter((id) => id !== cat.id) : [...prev, cat.id]);
                   }}
                   style={{
-                    padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                    border: chipActive ? `1px solid ${palette.dot}` : "1px solid #E6DACB",
-                    background: chipActive ? palette.bg : "transparent",
-                    color: chipActive ? palette.text : theme.textFaint,
+                    display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 999,
+                    fontSize: 12.5, fontWeight: 500, cursor: "pointer",
+                    color: on ? palette.text : theme.textMuted,
+                    background: on ? palette.bg : theme.inputBg,
+                    border: `1px solid ${on ? palette.dot : theme.glassBorder2}`,
+                    backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
+                    transition: `all .25s ${SPRING}`,
                   }}
                 >
+                  <span style={{ width: 6, height: 6, borderRadius: 99, flexShrink: 0, background: palette.dot }} />
                   {cat.name}
                 </button>
               );
@@ -837,110 +1076,115 @@ function TodoApp({ user, access }) {
             {colFilter.length > 0 && (
               <button
                 onClick={(e) => { e.stopPropagation(); setColFilter(() => []); }}
-                style={{ padding: "3px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600, cursor: "pointer", border: "none", background: "transparent", color: theme.oldOrangeText }}
+                style={{ padding: "5px 12px", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "none", background: "transparent", color: theme.accentRed }}
               >
                 Clear
               </button>
             )}
           </div>
         )}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
           {colSorted.length === 0 && (
-            <div style={{ fontSize: 13, color: theme.textFainter, padding: "20px 10px", border: "1px dashed #E6DACB", borderRadius: 14, textAlign: "center" }}>
-              Nothing here.
+            <div style={{ padding: "34px 16px", borderRadius: 20, border: `1px dashed ${theme.glassBorder2}`, textAlign: "center", fontSize: 13, color: theme.textFainter }}>
+              {colFilter.length ? "Nothing matches those filters." : "Nothing here yet — tap + to add the first thing."}
             </div>
           )}
-          {colSorted.map((todo) => {
-            const overdue = isOverdue(todo.due, todo.done);
-            const category = colCategories.find((c) => c.id === todo.categoryId);
-            if (settingTimeFor === todo.id) {
-              return (
-                <div key={todo.id} style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 14, padding: 12, display: "flex", alignItems: "center", gap: 10 }}>
-                  <Clock size={16} color={theme.goldDark} style={{ flexShrink: 0 }} />
-                  <span style={{ fontSize: 13, color: theme.textPrimary, flex: 1, minWidth: 0 }} className="truncate">{todo.text}</span>
-                  <input
-                    type="time"
-                    autoFocus
-                    value={draftTimeValue}
-                    onChange={(e) => setDraftTimeValue(e.target.value)}
-                    style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: "6px 8px", fontSize: 13 }}
-                  />
-                  <button
-                    onClick={() => setTimeSensitive(todo, draftTimeValue)}
-                    disabled={!draftTimeValue}
-                    style={{ background: theme.goldDark, color: theme.cardBg, borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 700, cursor: draftTimeValue ? "pointer" : "default", opacity: draftTimeValue ? 1 : 0.5 }}
-                  >
-                    Set
-                  </button>
-                  {todo.timeSensitive && (
-                    <button
-                      onClick={() => clearTimeSensitive(todo)}
-                      style={{ color: theme.accentRed, fontSize: 12, fontWeight: 700, padding: "6px 8px" }}
-                    >
-                      Remove
-                    </button>
-                  )}
-                  <button onClick={() => { setSettingTimeFor(null); setDraftTimeValue(""); }} style={{ color: theme.textMuted, padding: 4 }}>
-                    <X size={16} />
-                  </button>
-                </div>
-              );
-            }
-            return (
-              <SwipeToDelete key={todo.id} reordering={todoDragState?.id === todo.id} onDelete={() => removeTodo(todo.id)} onSwipeRight={() => { setSettingTimeFor(todo.id); setDraftTimeValue(todo.notifyAt ? todo.notifyAt.slice(11, 16) : ""); }}>
-                <TaskCard
-                  highlighted={overdue}
-                  accentColor={meta.color}
-                  done={todo.done}
-                  text={todo.text}
-                  due={todo.due}
-                  categoryId={todo.categoryId || null}
-                  categories={colCategories}
-                  todoId={todo.id}
-                  onReorderPointerDown={(e) => startTodoReorderDrag(e, todo, colSorted)}
-                  isDragging={todoDragState?.id === todo.id}
-                  dragDeltaY={todoDragState?.id === todo.id ? todoDragState.deltaY : 0}
-                  isDropTarget={!!todoDragState && todoDragState.overId === todo.id && todoDragState.id !== todo.id}
-                  hideTrash
-                  onToggle={() => toggleDone(todo)}
-                  onRemove={() => removeTodo(todo.id)}
-                  onEdit={(text, due, categoryId) => editTodo(todo.id, text, due, categoryId)}
-                  badge={
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                      {todo.due && (
-                        <Badge warn={overdue} icon={Calendar}>
-                          {overdue ? `Overdue · ${fmtDate(todo.due)}` : fmtDate(todo.due)}
-                        </Badge>
-                      )}
-                      {todo.timeSensitive && todo.notifyAt && (
-                        <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: theme.paleYellowBg2, color: theme.goldText, display: "flex", alignItems: "center", gap: 3 }}>
-                          <Clock size={11} />
-                          {(() => {
-                            const [h, m] = todo.notifyAt.slice(11, 16).split(":").map(Number);
-                            const ampm = h >= 12 ? "pm" : "am";
-                            const h12 = h % 12 || 12;
-                            return `${h12}:${String(m).padStart(2, "0")}${ampm}`;
-                          })()}
-                        </span>
-                      )}
-                      {todo.recurrence && (
-                        <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: theme.oldGreenBg, color: theme.oldGreenText, display: "flex", alignItems: "center", gap: 3 }}>
-                          <Repeat size={11} />
-                          {todo.recurrence.type}
-                        </span>
-                      )}
-                      {category && (
-                        <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: PALETTE[category.color].bg, color: PALETTE[category.color].text }}>
-                          {category.name}
-                        </span>
-                      )}
-                    </div>
-                  }
-                />
-              </SwipeToDelete>
-            );
-          })}
+          {colSorted.map((todo, idx) => renderTodoRow(todo, colCategories, colSorted, idx))}
         </div>
+      </div>
+    );
+  }
+
+  function openReminder(todo) {
+    setSettingTimeFor(todo.id);
+    setDraftTimeValue(todo.notifyAt ? todo.notifyAt.slice(11, 16) : "");
+  }
+
+  // One row: either the inline reminder-time editor or the task card. Swipe is
+  // mobile-only — on desktop the same two actions are explicit row buttons.
+  function renderTodoRow(todo, colCategories, colSorted, idx) {
+    const overdue = isOverdue(todo.due, todo.done);
+    const category = colCategories.find((c) => c.id === todo.categoryId);
+    const slotStyle = { animation: `rowIn .4s ${EASE_OUT} ${Math.min(idx, 12) * 0.035}s both` };
+
+    if (settingTimeFor === todo.id) {
+      return (
+        <div
+          key={todo.id}
+          style={{ ...glass.card, ...slotStyle, borderRadius: 22, padding: "12px 13px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}
+        >
+          <Clock size={16} color={theme.goldDot} style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 13.5, color: theme.textPrimary, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {todo.text}
+          </span>
+          <input
+            type="time"
+            autoFocus
+            value={draftTimeValue}
+            onChange={(e) => setDraftTimeValue(e.target.value)}
+            style={{ ...fieldStyle(), width: "auto", fontFamily: MONO }}
+          />
+          <button
+            onClick={() => setTimeSensitive(todo, draftTimeValue)}
+            disabled={!draftTimeValue}
+            style={{ ...accentButtonStyle(!!draftTimeValue), padding: "8px 15px", borderRadius: 12, fontSize: 12.5, fontWeight: 600 }}
+          >
+            Set
+          </button>
+          {todo.timeSensitive && (
+            <button
+              onClick={() => clearTimeSensitive(todo)}
+              style={{ color: theme.accentRed, fontSize: 12, fontWeight: 600, padding: "6px 8px", border: "none", background: "transparent", cursor: "pointer" }}
+            >
+              Remove
+            </button>
+          )}
+          <button
+            onClick={() => { setSettingTimeFor(null); setDraftTimeValue(""); }}
+            style={{ color: theme.textFainter, padding: 4, border: "none", background: "transparent", cursor: "pointer", display: "flex" }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      );
+    }
+
+    const card = (
+      <TaskCard
+        highlighted={overdue}
+        done={todo.done}
+        text={todo.text}
+        due={todo.due}
+        categoryId={todo.categoryId || null}
+        categories={colCategories}
+        todoId={todo.id}
+        showHandle={!isDesktop}
+        onReorderPointerDown={(e) => startTodoReorderDrag(e, todo, colSorted)}
+        isDragging={todoDragState?.id === todo.id}
+        dragDeltaY={todoDragState?.id === todo.id ? todoDragState.deltaY : 0}
+        isDropTarget={!!todoDragState && todoDragState.overId === todo.id && todoDragState.id !== todo.id}
+        showRowButtons={showRowButtons}
+        remindActive={!!todo.timeSensitive}
+        onRemind={() => openReminder(todo)}
+        onToggle={() => toggleDone(todo)}
+        onRemove={() => removeTodo(todo.id)}
+        onEdit={(text, due, categoryId) => editTodo(todo.id, text, due, categoryId)}
+        badge={<TaskBadges todo={todo} overdue={overdue} category={category} />}
+      />
+    );
+
+    return (
+      <div key={todo.id} style={slotStyle}>
+        {isDesktop ? card : (
+          <SwipeToDelete
+            reordering={todoDragState?.id === todo.id}
+            onDelete={() => removeTodo(todo.id)}
+            onSwipeRight={() => openReminder(todo)}
+          >
+            {card}
+          </SwipeToDelete>
+        )}
       </div>
     );
   }
@@ -970,350 +1214,117 @@ if (page === "nightly") {
     return <Nightly uid={uid} onBack={() => setPage("main")} />;
   }
 
+  const openThoughts = thoughts.filter((t) => !t.done).length;
+  const pageTitle = isThoughts ? "Clear your head" : isWorkbench ? "Projects" : "Today's focus";
+  const pageSub = isThoughts
+    ? `${openThoughts} thing${openThoughts === 1 ? "" : "s"} still on your mind`
+    : isWorkbench && !isDesktop
+      ? "Milestones, deadlines and what's next"
+      : isDesktop
+        ? "Click a column to focus it — that's where + adds"
+        : `${activeCount} ${activeCount === 1 ? "task" : "tasks"} left in ${listMeta[activeList].label.toLowerCase()}`;
+  const showHideFuture = isDesktop || (!isThoughts && !isWorkbench);
+  const showFab = isDesktop
+    ? focusedColumn !== "workbench" && !showThoughtsPanel
+    : activeList === "work" || activeList === "personal";
+  const addAccent = listMeta[addTarget] ? listMeta[addTarget].label : "Work";
+
   return (
-    <div style={{
-      minHeight: "100vh",
-      background: `radial-gradient(circle at 15% 0%, ${theme.gradA} 0%, ${theme.gradB} 45%, ${theme.gradC} 100%)`,
-      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-    }}>
-      <style>{`
-        * { box-sizing: border-box; }
-        input:focus, textarea:focus, button:focus-visible { outline: 2px solid #2E7BFA; outline-offset: 2px; }
-        input::placeholder, textarea::placeholder { color: #A89A8C; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-        .orbit-desktop-only, .orbit-desktop-columns, .orbit-desktop-fab { display: none; }
-        @media (min-width: 900px) {
-          .orbit-mobile-only { display: none; }
-          .orbit-desktop-only { display: block; }
-          .orbit-desktop-columns { display: flex; }
-          .orbit-desktop-fab { display: flex; }
-        }
-      .orbit-page-container { max-width: 680px; margin: 0 auto; padding: 24px 18px 64px; }
-        @media (min-width: 900px) {
-          .orbit-page-container { max-width: 1360px; }
-        }
-      `}</style>
+    <div style={{ position: "relative", minHeight: "100vh", color: theme.textPrimary, fontFamily: "'Geist', system-ui, sans-serif" }}>
+      <GlassBackdrop />
 
-      <div className="orbit-page-container">
-        <div style={{ position: "sticky", top: 0, zIndex: 20, background: theme.gradB, marginLeft: -18, marginRight: -18, paddingLeft: 18, paddingRight: 18, paddingTop: 24, marginTop: -24, paddingBottom: 8 }}>
-        {/* Brand row */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <img src={orbitIcon} alt="" style={{ width: 28, height: 28 }} />
-            <span style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 14, fontWeight: 600, letterSpacing: "0.06em", color: theme.accentPlum, textTransform: "uppercase" }}>Orbit</span>
-            {true && (
-              <button
-                onClick={() => setPage("budget")}
-                title="Budget"
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 24, height: 24, borderRadius: "50%", marginLeft: 4,
-                  border: "1px solid #D6DECD", background: theme.oldGreenBg, color: theme.oldGreenText,
-                  fontSize: 13, fontWeight: 800, cursor: "pointer", padding: 0,
-                }}
-              >
-                $
-              </button>
-            )}
-            <button
-              onClick={() => setPage("nightly")}
-              title="Nightly Routine"
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 24, height: 24, borderRadius: "50%", marginLeft: 4,
-                border: `1px solid ${theme.borderSoft2}`,
-                background: theme.paleYellowBg, color: theme.goldText,
-                cursor: "pointer", padding: 0,
-              }}
-            >
-              <Moon size={13} />
-            </button>
-            {access?.role === "guardian" && access?.budgetShared === true && (
-              <button
-                onClick={() => setPage("sharedBudget")}
-                title="Shared Budget"
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 24, height: 24, borderRadius: "50%", marginLeft: 4,
-                  border: "1px solid #3D3229", background: theme.textPrimary, color: theme.cardBg,
-                  fontSize: 13, fontWeight: 800, cursor: "pointer", padding: 0,
-                }}
-              >
-                $
-              </button>
-            )}
-            {(access?.role === "owner" || access?.role === "household") && (
-              <button
-                onClick={() => setPage("access")}
-                title="Access"
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 24, height: 24, borderRadius: "50%", marginLeft: 4,
-                  border: "1px solid #E8DFD3", background: theme.oldPlumBg, color: theme.accentPlum,
-                  cursor: "pointer", padding: 0,
-                }}
-              >
-                <Settings size={13} />
-              </button>
-            )}
-          </div>
-          <UserMenu user={user} access={access} pendingBudgetRequest={pendingBudgetRequest} onRequestBudgetAccess={handleRequestBudgetAccess} />
-        </div>
+      <div style={{ position: "relative", zIndex: 1, display: "flex", justifyContent: "center" }}>
+        <div style={{ width: "100%", maxWidth: isDesktop ? 1400 : 430, minHeight: "100vh", animation: `screenIn .45s ${EASE_OUT}` }}>
 
-        {/* Header */}
-        <div className="orbit-mobile-only" style={{ marginBottom: 18 }}>
-          <h1 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 30, fontWeight: 600, letterSpacing: "-0.01em", color: theme.textPrimary, margin: 0 }}>
-            {isThoughts ? "Clear Your Head" : "Today's Focus"}
-          </h1>
-          <p style={{ color: theme.textMuted, fontSize: 14, marginTop: 4 }}>
-            {isThoughts
-              ? `${thoughts.filter((t) => !t.done).length} thing${thoughts.filter((t) => !t.done).length === 1 ? "" : "s"} still on your mind`
-              : `${activeCount} ${activeCount === 1 ? "task" : "tasks"} left in ${listMeta[activeList].label.toLowerCase()}`}
-          </p>
-        </div>
-        <div className="orbit-desktop-only" style={{ marginBottom: 18 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <h1 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 30, fontWeight: 600, letterSpacing: "-0.01em", color: theme.textPrimary, margin: 0 }}>
-              Today's Focus
-            </h1>
-            <button
-              onClick={toggleHideFutureTodos}
-              title={hideFutureTodos ? "Showing today & overdue only — click to show all dates" : "Showing all dates — click to hide future todos"}
-              style={{
-                display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
-                border: hideFutureTodos ? `1px solid ${theme.accentPlum}` : "1px solid #E6DACB",
-                background: hideFutureTodos ? theme.oldPlumBg : theme.cardBg,
-                color: hideFutureTodos ? theme.accentPlum : theme.textFaint,
-                fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "6px 12px", borderRadius: 999,
-              }}
-            >
-              {hideFutureTodos ? <EyeOff size={13} /> : <Eye size={13} />}
-              {hideFutureTodos ? "Today only" : "All dates"}
-            </button>
-          </div>
-          <p style={{ color: theme.textMuted, fontSize: 14, marginTop: 4 }}>
-            Click a column to focus it — that's where the + button adds
-          </p>
-        </div>
-
-        {/* Mobile: single active list with tab switcher. Hidden on desktop
-            (>=900px) via the .orbit-mobile-only CSS rule below, replaced
-            there by the side-by-side columns. */}
-        <div className="orbit-mobile-only">
-        {/* List switcher */}
-        <div style={{ display: "flex", gap: 8, background: theme.borderSoft, padding: 6, borderRadius: 16, marginBottom: 16, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-          {Object.entries(listMeta).map(([key, meta]) => {
-            const Icon = meta.icon;
-            const active = activeList === key;
-            return (
-              <button
-                key={key}
-                onClick={() => setActiveList(key)}
-                style={{
-                  flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                  padding: "10px 14px", borderRadius: 12, border: "none", cursor: "pointer",
-                  fontWeight: 700, fontSize: 13, transition: "all 0.15s ease", whiteSpace: "nowrap",
-                  background: active ? theme.cardBg : "transparent",
-                  color: active ? meta.color.text : theme.textMuted,
-                  boxShadow: active ? "0 1px 3px rgba(58,44,30,0.08)" : "none",
-                }}
-              >
-                <Icon size={16} />
-                {meta.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <div style={{ marginBottom: 14 }}>
-          <BrainDumpButton
-            knownPeopleNames={people.map((p) => p.name)}
-            onResult={handleBrainDumpResult}
-          />
-        </div>
-        {!isThoughts && !isWorkbench && (
-          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <button
-              onClick={toggleHideFutureTodos}
-              title={hideFutureTodos ? "Showing today & overdue only — tap to show all dates" : "Showing all dates — tap to hide future todos"}
-              style={{
-                display: "flex", alignItems: "center", gap: 5,
-                border: hideFutureTodos ? `1px solid ${theme.accentPlum}` : "1px solid transparent",
-                background: hideFutureTodos ? theme.oldPlumBg : "transparent",
-                color: hideFutureTodos ? theme.accentPlum : theme.textFaint,
-                fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "4px 10px", borderRadius: 999,
-              }}
-            >
-              {hideFutureTodos ? <EyeOff size={13} /> : <Eye size={13} />}
-              {hideFutureTodos ? "Today only" : "All dates"}
-            </button>
-            <button
-              onClick={() => setShowManageCats(true)}
-              style={{ border: "none", background: "transparent", color: theme.textFaint, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 4 }}
-            >
-              Manage categories
-            </button>
-          </div>
-        )}
-        {!isThoughts && currentCategories.filter((cat) => dateFilteredTodos.some((t) => t.categoryId === cat.id && !t.done)).length > 0 && (
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-            {currentCategories.filter((cat) => dateFilteredTodos.some((t) => t.categoryId === cat.id && !t.done)).map((cat) => {
-              const active = categoryFilter.includes(cat.id);
-              const palette = PALETTE[cat.color] || PALETTE.blue;
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => setCategoryFilter((prev) =>
-                    prev.includes(cat.id) ? prev.filter((id) => id !== cat.id) : [...prev, cat.id]
-                  )}
-                  style={{
-                    padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                    border: active ? `1px solid ${palette.dot}` : "1px solid #E6DACB",
-                    background: active ? palette.bg : "transparent",
-                    color: active ? palette.text : theme.textFaint,
-                  }}
-                >
-                    {cat.name}
-                </button>
-              );
-            })}
-            {categoryFilter.length > 0 && (
-              <button
-                onClick={() => setCategoryFilter([])}
-                style={{ padding: "4px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", background: "transparent", color: theme.oldOrangeText }}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        )}
-        </div>
-        </div>
-
-        <div className="orbit-mobile-only">
-        {!isThoughts && !isWorkbench && (
-          <>
-            {!isThoughts && !isWorkbench && (
-              <button
-                onClick={() => { setAddTarget(activeList); setShowAddPanel(true); }}
-                style={{
-                  position: "fixed", bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28,
-                  border: "none", background: listMeta[activeList].color.dot, color: theme.cardBg,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  boxShadow: "0 4px 12px rgba(58,44,30,0.25)", cursor: "pointer", zIndex: 40,
-                }}
-              >
-                <Plus size={26} />
-              </button>
-            )}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {sortedTodos.length === 0 && (
-                <div style={{ fontSize: 13, color: theme.textFainter, padding: "24px 12px", border: "1px dashed #E6DACB", borderRadius: 14, textAlign: "center" }}>
-                  Nothing here yet — add your first task above.
-                </div>
+          {/* Top bar — logo and wordmark left, destinations and account right */}
+          <div style={{
+            ...glass.bar,
+            position: "sticky", top: 0, zIndex: 30,
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+            padding: isDesktop ? "16px 28px" : "14px 18px",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+              <OrbitMark size={26} />
+              <span style={display(17)}>Orbit</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
+              <ChromeButton title="Budget" onClick={() => setPage("budget")}>
+                <Wallet size={16} />
+              </ChromeButton>
+              <ChromeButton title="Nightly Routine" onClick={() => setPage("nightly")}>
+                <Moon size={16} />
+              </ChromeButton>
+              {access?.role === "guardian" && access?.budgetShared === true && (
+                <ChromeButton title="Shared Budget" onClick={() => setPage("sharedBudget")}>
+                  <Users size={16} />
+                </ChromeButton>
               )}
-              {sortedTodos.map((todo) => {
-                const overdue = isOverdue(todo.due, todo.done);
-                const category = currentCategories.find((c) => c.id === todo.categoryId);
-                if (settingTimeFor === todo.id) {
-                  return (
-                    <div key={todo.id} style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 14, padding: 12, display: "flex", alignItems: "center", gap: 10 }}>
-                      <Clock size={16} color={theme.goldDark} style={{ flexShrink: 0 }} />
-                      <span style={{ fontSize: 13, color: theme.textPrimary, flex: 1, minWidth: 0 }} className="truncate">{todo.text}</span>
-                      <input
-                        type="time"
-                        autoFocus
-                        value={draftTimeValue}
-                        onChange={(e) => setDraftTimeValue(e.target.value)}
-                        style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: "6px 8px", fontSize: 13 }}
-                      />
-                      <button
-                        onClick={() => setTimeSensitive(todo, draftTimeValue)}
-                        disabled={!draftTimeValue}
-                        style={{ background: theme.goldDark, color: theme.cardBg, borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 700, cursor: draftTimeValue ? "pointer" : "default", opacity: draftTimeValue ? 1 : 0.5 }}
-                      >
-                        Set
-                      </button>
-                      {todo.timeSensitive && (
-                        <button
-                          onClick={() => clearTimeSensitive(todo)}
-                          style={{ color: theme.accentRed, fontSize: 12, fontWeight: 700, padding: "6px 8px" }}
-                        >
-                          Remove
-                        </button>
-                      )}
-                      <button onClick={() => { setSettingTimeFor(null); setDraftTimeValue(""); }} style={{ color: theme.textMuted, padding: 4 }}>
-                        <X size={16} />
-                      </button>
-                    </div>
-                  );
-                }
-                return (
-                  <SwipeToDelete key={todo.id} reordering={todoDragState?.id === todo.id} onDelete={() => removeTodo(todo.id)} onSwipeRight={() => { setSettingTimeFor(todo.id); setDraftTimeValue(todo.notifyAt ? todo.notifyAt.slice(11, 16) : ""); }}>
-                    <TaskCard
-                      highlighted={overdue}
-                      accentColor={listMeta[activeList].color}
-                      done={todo.done}
-                      text={todo.text}
-                      due={todo.due}
-                      categoryId={todo.categoryId || null}
-                      categories={currentCategories}
-                      todoId={todo.id}
-                      onReorderPointerDown={(e) => startTodoReorderDrag(e, todo, sortedTodos)}
-                      isDragging={todoDragState?.id === todo.id}
-                      dragDeltaY={todoDragState?.id === todo.id ? todoDragState.deltaY : 0}
-                      isDropTarget={!!todoDragState && todoDragState.overId === todo.id && todoDragState.id !== todo.id}
-                      hideTrash
-                      onToggle={() => toggleDone(todo)}
-                      onRemove={() => removeTodo(todo.id)}
-                      onEdit={(text, due, categoryId) => editTodo(todo.id, text, due, categoryId)}
-                      badge={
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                          {todo.due && (
-                            <Badge warn={overdue} icon={Calendar}>
-                              {overdue ? `Overdue · ${fmtDate(todo.due)}` : fmtDate(todo.due)}
-                            </Badge>
-                          )}
-                          {todo.timeSensitive && todo.notifyAt && (
-                            <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: theme.paleYellowBg2, color: theme.goldText, display: "flex", alignItems: "center", gap: 3 }}>
-                              <Clock size={11} />
-                              {(() => {
-                            const [h, m] = todo.notifyAt.slice(11, 16).split(":").map(Number);
-                            const ampm = h >= 12 ? "pm" : "am";
-                            const h12 = h % 12 || 12;
-                            return `${h12}:${String(m).padStart(2, "0")}${ampm}`;
-                          })()}
-                            </span>
-                          )}
-                          {todo.recurrence && (
-                            <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: theme.oldGreenBg, color: theme.oldGreenText, display: "flex", alignItems: "center", gap: 3 }}>
-                              <Repeat size={11} />
-                              {todo.recurrence.type}
-                            </span>
-                          )}
-                          {category && (
-                            <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: PALETTE[category.color].bg, color: PALETTE[category.color].text }}>
-                              {category.name}
-                            </span>
-                          )}
-                        </div>
-                      }
-                    />
-                  </SwipeToDelete>
-                );
-              })}
+              {(access?.role === "owner" || access?.role === "household") && (
+                <ChromeButton title="Access" onClick={() => setPage("access")}>
+                  <Settings size={16} />
+                </ChromeButton>
+              )}
+              <UserMenu
+                user={user}
+                access={access}
+                isDesktop={isDesktop}
+                pendingBudgetRequest={pendingBudgetRequest}
+                onRequestBudgetAccess={handleRequestBudgetAccess}
+              />
+            </div>
+          </div>
+
+          <div style={{ padding: isDesktop ? "26px 28px 120px" : "22px 18px 130px" }}>
+
+            {/* Page title + live subtitle + the All dates / Today only pill */}
+            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
+              <div style={{ minWidth: 0 }}>
+                <h1 style={{ margin: 0, fontFamily: DISPLAY, fontSize: "clamp(30px,6vw,42px)", fontWeight: 600, letterSpacing: "-.035em", lineHeight: 1.02 }}>
+                  {pageTitle}
+                </h1>
+                <p style={{ margin: "7px 0 0", fontSize: 14, color: theme.textMuted, lineHeight: 1.4 }}>{pageSub}</p>
+              </div>
+              {showHideFuture && (
+                <button
+                  onClick={toggleHideFutureTodos}
+                  title={hideFutureTodos ? "Showing today & overdue only — tap to show all dates" : "Showing all dates — tap to hide future todos"}
+                  style={{ ...pillStyle(hideFutureTodos), padding: "8px 14px" }}
+                >
+                  {hideFutureTodos ? <EyeOff size={13} /> : <Eye size={13} />}
+                  {hideFutureTodos ? "Today only" : "All dates"}
+                </button>
+              )}
             </div>
 
-            {showManageCats && (
-              <ManageCategoriesModal
-                categories={currentCategories}
-                onClose={() => setShowManageCats(false)}
-                onDelete={deleteCategory}
+            {/* Ask Star */}
+            <div style={{ marginBottom: 18 }}>
+              <BrainDumpButton
+                knownPeopleNames={people.map((p) => p.name)}
+                onResult={handleBrainDumpResult}
               />
-            )}
-          </>
-        )}
+            </div>
 
+            {isDesktop ? (
+              <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+                {renderTodoColumn("work")}
+                {renderTodoColumn("personal")}
+                <div
+                  onClick={() => setFocusedColumn("workbench")}
+                  style={{
+                    ...glass.panel, flex: "1 1 0", minWidth: 0, padding: 16, borderRadius: 26,
+                    border: `1px solid ${focusedColumn === "workbench" ? PALETTE.orange.dot : theme.glassBorder}`,
+                    boxShadow: focusedColumn === "workbench"
+                      ? `inset 0 1px 0 ${theme.glassSpec}, 0 0 0 3px ${mix(PALETTE.orange.dot, 22)}, 0 18px 44px -26px ${theme.glassShadow}`
+                      : `inset 0 1px 0 ${theme.glassSpec}, 0 18px 44px -26px ${theme.glassShadow}`,
+                    transition: "border-color .3s ease, box-shadow .3s ease",
+                  }}
+                >
+                  <Workbench uid={uid} categories={ownCategories} todos={ownTodos} sharedUid={sharingWork ? ownerUid : null} sharedCategoryId={access?.sharedWorkCategoryId} sharedCategories={sharedCategories} />
+                </div>
+              </div>
+            ) : (
+              <>
+                {(activeList === "work" || activeList === "personal") && renderTodoColumn(activeList)}
         {isThoughts && (
           <>
             {/* Thought capture card */}
@@ -1409,7 +1420,7 @@ if (page === "nightly") {
                   <TaskCard
                     key={thought.id}
                     highlighted={overdue || stale}
-                    accentColor={PALETTE.yellow}
+                    tone="gold"
                     done={thought.done}
                     text={thought.text}
                     due={thought.due}
@@ -1444,190 +1455,233 @@ if (page === "nightly") {
             )}
           </>
         )}
-        {isWorkbench && (
-          <Workbench uid={uid} categories={ownCategories} todos={ownTodos} sharedUid={sharingWork ? ownerUid : null} sharedCategoryId={access?.sharedWorkCategoryId} sharedCategories={sharedCategories} />
-        )}
+                {isWorkbench && (
+                  <Workbench uid={uid} categories={ownCategories} todos={ownTodos} sharedUid={sharingWork ? ownerUid : null} sharedCategoryId={access?.sharedWorkCategoryId} sharedCategories={sharedCategories} />
+                )}
+              </>
+            )}
+          </div>
         </div>
-        {/* end orbit-mobile-only */}
+      </div>
 
-        {/* Add-task panel: shared between the mobile FAB and the desktop
-            focused-column FAB. Writes to whichever list `addTarget` names. */}
-        {showAddPanel && (
-          <div
-            onClick={() => setShowAddPanel(false)}
-            style={{ position: "fixed", inset: 0, background: "rgba(43,36,32,0.35)", zIndex: 49 }}
-          >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                position: "fixed", left: 0, right: 0, bottom: 0, background: theme.cardBg,
-                borderRadius: "20px 20px 0 0", padding: 18, boxShadow: "0 -4px 20px rgba(58,44,30,0.15)",
-                zIndex: 50, maxWidth: 680, margin: "0 auto",
-              }}
-            >
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <input
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") { addTodo(); setShowAddPanel(false); } }}
-                  placeholder={`Add a ${listMeta[addTarget].label.toLowerCase()} task...`}
-                  style={{ flex: 1, border: "none", fontSize: 15, padding: "8px 4px", color: theme.textPrimary, background: "transparent" }}
-                  autoFocus
-                />
+      {/* Floating glass tab bar — the four lists, mobile only */}
+      {!isDesktop && (
+        <div style={{
+          position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 40,
+          display: "flex", justifyContent: "center", pointerEvents: "none",
+          padding: "0 14px 18px", paddingBottom: "calc(18px + env(safe-area-inset-bottom))",
+        }}>
+          <div style={{ ...glass.raised, display: "flex", alignItems: "center", gap: 3, padding: 6, borderRadius: 26, pointerEvents: "auto" }}>
+            {Object.entries(listMeta).map(([key, meta]) => {
+              const Icon = meta.icon;
+              const on = activeList === key;
+              return (
                 <button
-                  onClick={() => { addTodo(); setShowAddPanel(false); }}
-                  disabled={!draft.trim()}
+                  key={key}
+                  onClick={() => setActiveList(key)}
                   style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 10, border: "none",
-                    background: draft.trim() ? listMeta[addTarget].color.dot : theme.border, color: theme.cardBg,
-                    cursor: draft.trim() ? "pointer" : "default", transition: "background 0.15s ease", flexShrink: 0,
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
+                    minWidth: 74, padding: "9px 8px 8px", borderRadius: 20, border: "none", cursor: "pointer",
+                    color: on ? theme.accentInk : theme.textMuted,
+                    background: on ? `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})` : "transparent",
+                    boxShadow: on ? `0 8px 20px -8px ${theme.accentPlum}` : "none",
+                    transition: `all .38s ${SPRING}`,
                   }}
                 >
-                  <Plus size={18} />
+                  <Icon size={18} />
+                  <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: ".01em" }}>{meta.label}</span>
                 </button>
-              </div>
-              <div style={{ display: "flex", gap: 10, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${theme.dividerSoft}`, alignItems: "center" }}>
-                <Calendar size={14} color={theme.textFaint} style={{ cursor: "pointer" }} onClick={() => draftDueRef.current?.showPicker?.()} />
-                <input ref={draftDueRef} type="date" value={draftDue} onChange={(e) => setDraftDue(e.target.value)} style={{ border: "none", fontSize: 13, color: theme.textSecondary, background: "transparent" }} />
-              </div>
-              <div style={{ display: "flex", gap: 6, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${theme.dividerSoft}`, alignItems: "center", flexWrap: "wrap" }}>
-                <Repeat size={14} color={theme.textFaint} />
-                {["none", "daily", "weekly", "monthly", "custom"].map((opt) => {
-                  const active = opt === "none" ? !draftRecurrence : draftRecurrence?.type === opt;
-                  return (
-                    <button
-                      key={opt}
-                      onClick={() => setDraftRecurrence(
-  opt === "none"
-    ? null
-    : opt === "custom"
-      ? { type: "custom", intervalDays: draftRecurrence?.intervalDays || 2 }
-      : { type: opt }
-)}
-                    style={{
-                          padding: "4px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                        border: active ? `1px solid ${theme.accentPlum}` : `1px solid ${theme.border}`,
-                        background: active ? theme.oldPlumBg : "transparent",
-                        color: active ? theme.accentPlum : theme.textMuted,
-                      }}
-                    >
-                      {opt === "none" ? "No repeat" : opt.charAt(0).toUpperCase() + opt.slice(1)}
-                    </button>
-                  );
-                })}
-                {draftRecurrence?.type === "custom" && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: theme.textMuted }}>
-                    every
-                    <input
-                      type="number"
-                      min="1"
-                      value={draftRecurrence.intervalDays ?? ""}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        setDraftRecurrence({ type: "custom", intervalDays: raw === "" ? "" : parseInt(raw, 10) });
-                    }}
-                      style={{ width: 40, border: `1px solid ${theme.border}`, borderRadius: 6, padding: "2px 4px", fontSize: 12 }}
-                    />
-                    days
-                  </span>
-                )}
-              </div>
-              <div style={{ paddingTop: 10, marginTop: 10, borderTop: `1px solid ${theme.dividerSoft}` }}>
-                <CategoryPicker
-                  categories={categoriesForList(addTarget)}
-                  recent={recentCategoriesForList(addTarget, 4)}
-                  selectedId={draftCategoryId}
-                  onSelect={setDraftCategoryId}
-                  showMore={showMoreCats}
-                  setShowMore={setShowMoreCats}
-                  showNewCat={showNewCat}
-                  setShowNewCat={setShowNewCat}
-                  newCatName={newCatName}
-                  setNewCatName={setNewCatName}
-                  onCreateCategory={addCategoryAndSelect}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Desktop (>=900px): Work/Personal/Workbench side by side. Each
-            column has its own category filter; clicking a column focuses it
-            (border highlight) as the target for the shared + button below. */}
-        <div className="orbit-desktop-columns" style={{ gap: 16, alignItems: "flex-start" }}>
-          {renderTodoColumn("work")}
-          {renderTodoColumn("personal")}
-          <div
-            onClick={() => setFocusedColumn("workbench")}
-            style={{
-              flex: 1, minWidth: 0, background: theme.cardBg, borderRadius: 18,
-              border: focusedColumn === "workbench" ? `2px solid ${PALETTE.orange.dot}` : "2px solid transparent",
-              padding: 14, transition: "border-color 0.15s ease",
-            }}
-          >
-            <Workbench uid={uid} categories={ownCategories} todos={ownTodos} sharedUid={sharingWork ? ownerUid : null} sharedCategoryId={access?.sharedWorkCategoryId} sharedCategories={sharedCategories} />
+              );
+            })}
           </div>
         </div>
+      )}
 
-        {desktopManageCatsFor && (
-          <div className="orbit-desktop-only">
-            <ManageCategoriesModal
-              categories={categoriesForList(desktopManageCatsFor)}
-              onClose={() => setDesktopManageCatsFor(null)}
-              onDelete={(catId) => deleteCategoryFromList(desktopManageCatsFor, catId)}
-            />
-          </div>
-        )}
-
-        {/* Desktop-only floating buttons: Thoughts toggle above, shared +
-            below (hidden while Workbench is focused, since it has its own
-            add-project flow). */}
+      {/* Desktop-only Thoughts drawer toggle */}
+      {isDesktop && (
         <button
-          className="orbit-desktop-fab"
           onClick={() => setShowThoughtsPanel((v) => !v)}
           title="Thoughts"
           style={{
-            position: "fixed", bottom: 90, right: 24, width: 52, height: 52, borderRadius: 26,
-            border: "none", background: showThoughtsPanel ? PALETTE.yellow.dot : theme.cardBg,
-            color: showThoughtsPanel ? theme.cardBg : PALETTE.yellow.text,
-            alignItems: "center", justifyContent: "center",
-            boxShadow: "0 4px 12px rgba(58,44,30,0.2)", cursor: "pointer", zIndex: 41,
+            position: "fixed", right: 30, bottom: 100, width: 52, height: 52, borderRadius: 20, zIndex: 45,
+            display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${theme.glassBorder}`,
+            cursor: "pointer",
+            color: showThoughtsPanel ? theme.accentInk : theme.textSecondary,
+            background: showThoughtsPanel
+              ? `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})`
+              : `linear-gradient(157deg, ${theme.glassHigh}, ${theme.glassFill})`,
+            backdropFilter: "blur(22px) saturate(180%)", WebkitBackdropFilter: "blur(22px) saturate(180%)",
+            boxShadow: showThoughtsPanel
+              ? `0 12px 30px -10px ${theme.accentPlum}`
+              : `inset 0 1px 0 ${theme.glassSpec}, 0 12px 32px -18px ${theme.glassShadow}`,
+            transition: `all .38s ${SPRING}`,
           }}
         >
-          <MessageCircleMore size={22} />
+          <MessageCircleMore size={21} />
         </button>
-        {focusedColumn !== "workbench" && (
-          <button
-            className="orbit-desktop-fab"
-            onClick={() => { setAddTarget(focusedColumn); setShowAddPanel(true); }}
+      )}
+
+      {/* + FAB — adds to the active tab (mobile) or the focused column */}
+      {showFab && (
+        <button
+          onClick={() => { setAddTarget(isDesktop ? focusedColumn : activeList); setShowAddPanel(true); }}
+          title="Add a task"
+          style={{
+            position: "fixed", right: isDesktop ? 30 : 20, bottom: isDesktop ? 30 : 100,
+            width: 58, height: 58, borderRadius: 22, zIndex: 45, border: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
+            color: theme.accentInk,
+            background: `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})`,
+            boxShadow: `0 14px 34px -10px ${theme.accentPlum}, inset 0 1px 0 rgba(255,255,255,.4)`,
+            transition: `transform .4s ${SPRING}`,
+          }}
+        >
+          <span style={{ position: "absolute", inset: 0, borderRadius: "inherit", background: "linear-gradient(150deg,rgba(255,255,255,.4),transparent 55%)", pointerEvents: "none" }} />
+          <Plus size={25} />
+        </button>
+      )}
+
+      {/* Add-task sheet: shared between the mobile FAB and the desktop
+          focused-column FAB. Writes to whichever list `addTarget` names. */}
+      {showAddPanel && (
+        <div
+          onClick={() => setShowAddPanel(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 80, background: theme.scrim,
+            backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+            animation: "fadeIn .22s ease", display: "flex", alignItems: "flex-end", justifyContent: "center",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
             style={{
-              position: "fixed", bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28,
-              border: "none", background: listMeta[focusedColumn].color.dot, color: theme.cardBg,
-              alignItems: "center", justifyContent: "center",
-              boxShadow: "0 4px 12px rgba(58,44,30,0.25)", cursor: "pointer", zIndex: 40,
+              ...glass.sheet, width: "100%", maxWidth: 640, margin: "0 10px 10px", padding: 20,
+              borderRadius: 30, animation: `sheetIn .42s ${EASE_OUT}`,
+              paddingBottom: "calc(20px + env(safe-area-inset-bottom))",
             }}
           >
-            <Plus size={26} />
-          </button>
-        )}
+            <div style={{ width: 38, height: 4, borderRadius: 99, background: theme.glassBorder, margin: "-6px auto 16px" }} />
 
-        {showThoughtsPanel && (
-          <div
-            className="orbit-desktop-only"
-            onClick={() => setShowThoughtsPanel(false)}
-            style={{ position: "fixed", inset: 0, background: "rgba(43,36,32,0.35)", zIndex: 59 }}
-          >
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") addTodo(); }}
+                placeholder={`Add to ${addAccent}…`}
+                autoFocus
+                style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", fontSize: 17, fontWeight: 500, color: theme.textPrimary, padding: "4px 2px" }}
+              />
+              <button
+                onClick={addTodo}
+                disabled={!draft.trim()}
+                style={{
+                  ...accentButtonStyle(!!draft.trim()),
+                  width: 40, height: 40, borderRadius: 14, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <Plus size={19} />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, paddingTop: 13, borderTop: `1px solid ${theme.glassBorder2}`, flexWrap: "wrap" }}>
+              <span
+                onClick={() => draftDueRef.current?.showPicker?.()}
+                style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 13px", borderRadius: 999, fontSize: 12.5, color: theme.textMuted, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`, cursor: "pointer" }}
+              >
+                <Calendar size={13} />
+                <input
+                  ref={draftDueRef}
+                  type="date"
+                  value={draftDue}
+                  onChange={(e) => setDraftDue(e.target.value)}
+                  style={{ border: "none", background: "transparent", fontFamily: MONO, fontSize: 12.5, color: theme.textSecondary, padding: 0 }}
+                />
+              </span>
+              <Repeat size={14} color={theme.textFainter} style={{ marginLeft: 4 }} />
+              {["none", "daily", "weekly", "monthly", "custom"].map((opt) => {
+                const on = opt === "none" ? !draftRecurrence : draftRecurrence?.type === opt;
+                return (
+                  <button
+                    key={opt}
+                    onClick={() => setDraftRecurrence(
+                      opt === "none"
+                        ? null
+                        : opt === "custom"
+                          ? { type: "custom", intervalDays: draftRecurrence?.intervalDays || 2 }
+                          : { type: opt }
+                    )}
+                    style={{ ...pillStyle(on), padding: "6px 13px", fontSize: 12 }}
+                  >
+                    {opt === "none" ? "No repeat" : opt.charAt(0).toUpperCase() + opt.slice(1)}
+                  </button>
+                );
+              })}
+              {draftRecurrence?.type === "custom" && (
+                <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: theme.textMuted }}>
+                  every
+                  <input
+                    type="number"
+                    min="1"
+                    value={draftRecurrence.intervalDays ?? ""}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      setDraftRecurrence({ type: "custom", intervalDays: raw === "" ? "" : parseInt(raw, 10) });
+                    }}
+                    style={{ ...fieldStyle(), width: 54, padding: "6px 9px", fontFamily: MONO, fontSize: 12 }}
+                  />
+                  days
+                </span>
+              )}
+            </div>
+
+            <div style={{ marginTop: 14, paddingTop: 13, borderTop: `1px solid ${theme.glassBorder2}` }}>
+              <CategoryPicker
+                categories={categoriesForList(addTarget)}
+                recent={recentCategoriesForList(addTarget, 4)}
+                selectedId={draftCategoryId}
+                onSelect={setDraftCategoryId}
+                showMore={showMoreCats}
+                setShowMore={setShowMoreCats}
+                showNewCat={showNewCat}
+                setShowNewCat={setShowNewCat}
+                newCatName={newCatName}
+                setNewCatName={setNewCatName}
+                onCreateCategory={addCategoryAndSelect}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {desktopManageCatsFor && (
+        <ManageCategoriesModal
+          categories={categoriesForList(desktopManageCatsFor)}
+          onClose={() => setDesktopManageCatsFor(null)}
+          onDelete={(catId) => deleteCategoryFromList(desktopManageCatsFor, catId)}
+        />
+      )}
+
+      {isDesktop && showThoughtsPanel && (
+        <div
+          onClick={() => setShowThoughtsPanel(false)}
+          style={{ position: "fixed", inset: 0, background: theme.scrim, zIndex: 59, animation: "fadeIn .2s ease" }}
+        >
             <div
               onClick={(e) => e.stopPropagation()}
               style={{
-                position: "fixed", top: 0, right: 0, bottom: 0, width: 420, maxWidth: "90vw",
-                background: theme.gradB, boxShadow: "-4px 0 20px rgba(58,44,30,0.15)",
-                zIndex: 60, padding: "24px 18px", overflowY: "auto",
+                position: "fixed", top: 0, right: 0, bottom: 0, width: 460, maxWidth: "92vw",
+                zIndex: 60, padding: "26px 22px 40px", overflowY: "auto",
+                background: `linear-gradient(200deg, ${theme.glassHigh}, ${theme.glassFill})`,
+                backdropFilter: "blur(34px) saturate(200%)", WebkitBackdropFilter: "blur(34px) saturate(200%)",
+                borderLeft: `1px solid ${theme.glassBorder}`,
+                boxShadow: `-24px 0 70px -30px ${theme.glassShadow}`,
+                animation: `screenIn .4s ${EASE_OUT}`,
               }}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 20, fontWeight: 600, color: theme.textPrimary, margin: 0 }}>Clear Your Head</h2>
-                <button onClick={() => setShowThoughtsPanel(false)} style={{ border: "none", background: "transparent", color: theme.textFaint, cursor: "pointer", padding: 4 }}>
+                <h2 style={{ ...display(24, "-.03em"), margin: 0 }}>Clear your head</h2>
+                <button onClick={() => setShowThoughtsPanel(false)} style={{ border: "none", background: "transparent", color: theme.textFainter, cursor: "pointer", padding: 4, display: "flex" }}>
                   <X size={20} />
                 </button>
               </div>
@@ -1724,7 +1778,7 @@ if (page === "nightly") {
                     <TaskCard
                       key={thought.id}
                       highlighted={overdue || stale}
-                      accentColor={PALETTE.yellow}
+                      tone="gold"
                       done={thought.done}
                       text={thought.text}
                       due={thought.due}
@@ -1760,14 +1814,36 @@ if (page === "nightly") {
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 }
 
 // ---------- Shared subcomponents ----------
 
-function UserMenu({ user, access, pendingBudgetRequest, onRequestBudgetAccess }) {
+// One row of the raised-glass user menu.
+function MenuRow({ onClick, icon: Icon, color, children }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        width: "100%", display: "flex", alignItems: "center", gap: 9,
+        padding: "9px 11px", borderRadius: 12, border: "none", cursor: "pointer",
+        fontSize: 13, fontWeight: 500, textAlign: "left",
+        color: color || theme.textSecondary,
+        background: hover ? theme.inputBg : "transparent",
+        transition: "background .2s ease",
+      }}
+    >
+      {Icon && <Icon size={15} />}
+      {children}
+    </button>
+  );
+}
+
+function UserMenu({ user, access, isDesktop, pendingBudgetRequest, onRequestBudgetAccess }) {
   const [open, setOpen] = useState(false);
   const [showNotify, setShowNotify] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
@@ -1811,60 +1887,82 @@ function UserMenu({ user, access, pendingBudgetRequest, onRequestBudgetAccess })
         title={user.displayName || user.email}
       >
         {user.photoURL ? (
-          <img src={user.photoURL} alt="" style={{ width: 34, height: 34, borderRadius: "50%", border: `2px solid ${theme.cardBg}`, boxShadow: "0 1px 3px rgba(58,44,30,0.15)" }} />
+          <img
+            src={user.photoURL}
+            alt=""
+            style={{ width: 34, height: 34, borderRadius: "50%", boxShadow: `0 0 0 1.5px ${theme.glassBorder}, 0 4px 14px -6px ${theme.accentPlum}` }}
+          />
         ) : (
-          <div style={{ width: 34, height: 34, borderRadius: "50%", background: PALETTE.blue.dot, color: theme.cardBg, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13 }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 13, fontWeight: 600, color: theme.accentInk,
+            background: `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})`,
+            boxShadow: `0 0 0 1.5px ${theme.glassBorder}, 0 4px 14px -6px ${theme.accentPlum}`,
+          }}>
             {(user.displayName || user.email || "?")[0].toUpperCase()}
           </div>
         )}
       </button>
       {open && (
-        <div style={{ position: "absolute", right: 0, top: 42, background: theme.cardBg, borderRadius: 12, border: `1px solid ${theme.borderSoft}`, boxShadow: "0 4px 16px rgba(58,44,30,0.1)", padding: 8, minWidth: 180, zIndex: 10 }}>
-          <div style={{ padding: "6px 10px 10px", fontSize: 13, color: theme.textSecondary, fontWeight: 700, borderBottom: `1px solid ${theme.dividerSoft}`, marginBottom: 6 }}>
-            {user.displayName || user.email}
+        <div style={{
+          ...glass.raised, position: "absolute", right: 0, top: isDesktop ? 46 : 44,
+          width: 246, padding: 8, borderRadius: 22, zIndex: 70, animation: `popIn .3s ${SPRING}`,
+        }}>
+          <div style={{ padding: "4px 10px 11px", borderBottom: `1px solid ${theme.glassBorder2}`, marginBottom: 7 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: theme.textPrimary, overflow: "hidden", textOverflow: "ellipsis" }}>
+              {user.displayName || user.email}
+            </div>
+            {access?.role && (
+              <div style={{ fontSize: 11.5, color: theme.textFainter, marginTop: 2, textTransform: "capitalize" }}>{access.role}</div>
+            )}
           </div>
-          <button
-            onClick={() => signOut(auth)}
-            style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, border: "none", background: "transparent", color: theme.accentRed, fontSize: 13, fontWeight: 700, padding: "8px 10px", borderRadius: 8, cursor: "pointer" }}
-          >
-            <LogOut size={14} />
-            Sign out
-          </button>
-          <button
-            onClick={() => { setShowNotify(true); setOpen(false); }}
-            style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, border: "none", background: "transparent", color: theme.textSecondary, fontSize: 13, fontWeight: 700, padding: "8px 10px", borderRadius: 8, cursor: "pointer" }}
-          >
-            Notification settings
-          </button>
           <PaletteMenu />
+          <MenuRow onClick={() => { setShowNotify(true); setOpen(false); }} icon={MessageCircleMore}>
+            Notifications
+          </MenuRow>
           {access?.role === "guardian" && access?.budgetShared !== true && (
-            <button
-              onClick={() => { onRequestBudgetAccess(); setOpen(false); }}
-              disabled={!!pendingBudgetRequest}
-              style={{
-                width: "100%", display: "flex", alignItems: "center", gap: 8, border: "none", background: "transparent",
-                color: pendingBudgetRequest ? theme.accentPlum : theme.textSecondary,
-                fontSize: 13, fontWeight: 700, padding: "8px 10px", borderRadius: 8,
-                cursor: pendingBudgetRequest ? "default" : "pointer",
-              }}
+            <MenuRow
+              onClick={() => { if (!pendingBudgetRequest) { onRequestBudgetAccess(); setOpen(false); } }}
+              icon={Wallet}
+              color={pendingBudgetRequest ? theme.accentPlum : undefined}
             >
-              {pendingBudgetRequest ? "Budget request pending" : "Request shared budget access"}
-            </button>
+              {pendingBudgetRequest ? "Budget request pending" : "Request shared budget"}
+            </MenuRow>
           )}
+          <MenuRow onClick={() => signOut(auth)} icon={LogOut} color={theme.accentRed}>
+            Sign out
+          </MenuRow>
         </div>
       )}
       {showNotify && (
-        <div onClick={() => { setShowNotify(false); setWizardStep(1); }} style={{ position: "fixed", inset: 0, background: "rgba(43,36,32,0.35)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: theme.cardBg, borderRadius: 16, padding: 20, width: 340, maxWidth: "90vw" }}>
-            <h3 style={{ margin: "0 0 4px", fontFamily: "'Fraunces', Georgia, serif", fontSize: 17, color: theme.textPrimary }}>Connect Telegram</h3>
-            <p style={{ fontSize: 11, color: theme.textFaint, margin: "0 0 16px" }}>Step {wizardStep} of 3</p>
+        <div
+          onClick={() => { setShowNotify(false); setWizardStep(1); }}
+          style={{ position: "fixed", inset: 0, background: theme.scrim, backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "fadeIn .2s ease" }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ ...glass.raised, borderRadius: 28, padding: 22, width: 380, maxWidth: "92vw", animation: `popIn .3s ${SPRING}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 4 }}>
+              <span style={{
+                width: 36, height: 36, borderRadius: 13, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                color: theme.accentInk, background: `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})`,
+                boxShadow: `0 8px 20px -8px ${theme.accentPlum}`,
+              }}>
+                <MessageCircleMore size={17} />
+              </span>
+              <h3 style={{ ...display(20), margin: 0, flex: 1, color: theme.textPrimary }}>Connect Telegram</h3>
+              <button onClick={() => { setShowNotify(false); setWizardStep(1); }} style={{ border: "none", background: "transparent", color: theme.textFainter, cursor: "pointer", padding: 5, display: "flex" }}>
+                <X size={18} />
+              </button>
+            </div>
+            <p style={{ margin: "0 0 18px", fontSize: 11.5, fontFamily: MONO, color: theme.textFainter, letterSpacing: ".04em" }}>
+              Step {wizardStep} of 3
+            </p>
 
             {wizardStep === 1 && (
               <>
-                <p style={{ fontSize: 13, color: theme.textSecondary, margin: "0 0 10px", lineHeight: 1.5 }}>
+                <p style={{ fontSize: 13.5, color: theme.textSecondary, margin: "0 0 12px", lineHeight: 1.55 }}>
                   First, create your own personal bot - this takes about a minute.
                 </p>
-                <ol style={{ fontSize: 13, color: theme.textSecondary, margin: "0 0 14px", paddingLeft: 18, lineHeight: 1.7 }}>
+                <ol style={{ fontSize: 13, color: theme.textSecondary, margin: "0 0 16px", paddingLeft: 20, lineHeight: 1.85 }}>
                   <li>Open Telegram and search for <strong>@BotFather</strong></li>
                   <li>Send the message <strong>/newbot</strong></li>
                   <li>Give it any name and username it asks for</li>
@@ -1878,7 +1976,7 @@ function UserMenu({ user, access, pendingBudgetRequest, onRequestBudgetAccess })
                     const match = raw.match(/\d+:[A-Za-z0-9_-]+/);
                     setBotToken(match ? match[0] : raw);
                   }}
-                  style={{ width: "100%", boxSizing: "border-box", border: "1px solid #E6DACB", borderRadius: 8, padding: "8px 10px", fontSize: 13, marginBottom: 14 }}
+                  style={{ ...fieldStyle(), fontFamily: MONO, fontSize: 12.5, marginBottom: 14 }}
                 />
                 <button
                   onClick={async () => {
@@ -1889,7 +1987,7 @@ function UserMenu({ user, access, pendingBudgetRequest, onRequestBudgetAccess })
                     setWizardStep(2);
                   }}
                   disabled={!botToken.trim()}
-                  style={{ width: "100%", border: "none", background: theme.accentPlum, color: theme.cardBg, fontSize: 13, fontWeight: 700, padding: "9px 10px", borderRadius: 8, cursor: botToken.trim() ? "pointer" : "default", opacity: botToken.trim() ? 1 : 0.5 }}
+                  style={{ ...accentButtonStyle(!!botToken.trim()), width: "100%", fontSize: 13, fontWeight: 600, padding: "12px 10px", borderRadius: 14 }}
                 >
                   Next
                 </button>
@@ -1898,10 +1996,10 @@ function UserMenu({ user, access, pendingBudgetRequest, onRequestBudgetAccess })
 
             {wizardStep === 2 && (
               <>
-                <p style={{ fontSize: 13, color: theme.textSecondary, margin: "0 0 10px", lineHeight: 1.5 }}>
+                <p style={{ fontSize: 13.5, color: theme.textSecondary, margin: "0 0 12px", lineHeight: 1.55 }}>
                   Now let's find your Chat ID - this tells your bot who to message.
                 </p>
-                <ol style={{ fontSize: 13, color: theme.textSecondary, margin: "0 0 14px", paddingLeft: 18, lineHeight: 1.7 }}>
+                <ol style={{ fontSize: 13, color: theme.textSecondary, margin: "0 0 16px", paddingLeft: 20, lineHeight: 1.85 }}>
                   <li>Open a chat with the bot you just created</li>
                   <li>Send it any message, like "hi"</li>
                   <li>It will reply instantly with your Chat ID</li>
@@ -1910,19 +2008,19 @@ function UserMenu({ user, access, pendingBudgetRequest, onRequestBudgetAccess })
                   placeholder="Paste your Chat ID here"
                   value={chatId}
                   onChange={(e) => setChatId(e.target.value)}
-                  style={{ width: "100%", boxSizing: "border-box", border: "1px solid #E6DACB", borderRadius: 8, padding: "8px 10px", fontSize: 13, marginBottom: 14 }}
+                  style={{ ...fieldStyle(), fontFamily: MONO, fontSize: 12.5, marginBottom: 14 }}
                 />
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
                     onClick={() => setWizardStep(1)}
-                    style={{ flex: 1, border: `1px solid ${theme.border}`, background: "transparent", color: theme.textSecondary, fontSize: 13, fontWeight: 700, padding: "9px 10px", borderRadius: 8, cursor: "pointer" }}
+                    style={{ flex: 1, border: `1px solid ${theme.glassBorder2}`, background: theme.inputBg, color: theme.textMuted, fontSize: 13, fontWeight: 500, padding: "12px 10px", borderRadius: 14, cursor: "pointer" }}
                   >
                     Back
                   </button>
                   <button
                     onClick={async () => { await handleSaveNotify(); setWizardStep(3); }}
                     disabled={!chatId.trim()}
-                    style={{ flex: 1, border: "none", background: theme.accentPlum, color: theme.cardBg, fontSize: 13, fontWeight: 700, padding: "9px 10px", borderRadius: 8, cursor: chatId.trim() ? "pointer" : "default", opacity: chatId.trim() ? 1 : 0.5 }}
+                    style={{ ...accentButtonStyle(!!chatId.trim()), flex: 1, fontSize: 13, fontWeight: 600, padding: "12px 10px", borderRadius: 14 }}
                   >
                     Save
                   </button>
@@ -1932,12 +2030,12 @@ function UserMenu({ user, access, pendingBudgetRequest, onRequestBudgetAccess })
 
             {wizardStep === 3 && (
               <>
-                <p style={{ fontSize: 13, color: theme.textSecondary, margin: "0 0 16px", lineHeight: 1.5 }}>
+                <p style={{ fontSize: 13.5, color: theme.textSecondary, margin: "0 0 18px", lineHeight: 1.55 }}>
                   All set! You will now get Orbit notifications through your own Telegram bot.
                 </p>
                 <button
                   onClick={() => { setShowNotify(false); setWizardStep(1); }}
-                  style={{ width: "100%", border: "none", background: theme.accentPlum, color: theme.cardBg, fontSize: 13, fontWeight: 700, padding: "9px 10px", borderRadius: 8, cursor: "pointer" }}
+                  style={{ ...accentButtonStyle(true), width: "100%", fontSize: 13, fontWeight: 600, padding: "12px 10px", borderRadius: 14 }}
                 >
                   Done
                 </button>
@@ -2002,12 +2100,30 @@ function GroupList({ groups, kind, dragOverZone, setDragOverZone, onDrop, onDele
 }
 
 
-function TaskCard({ text, due, done, categoryId, categories, onToggle, onRemove, onEdit, todoId, onReorderPointerDown, isDragging, dragDeltaY, isDropTarget, badge, highlighted, accentColor, hideTrash }) {
+function TaskCard({
+  text, due, done, categoryId, categories, onToggle, onRemove, onEdit, todoId,
+  onReorderPointerDown, isDragging, dragDeltaY, isDropTarget, badge, highlighted,
+  tone = "red", showHandle, showRowButtons, onRemind, remindActive,
+}) {
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(text);
   const [editDue, setEditDue] = useState(due || "");
   const editDueRef = useRef(null);
   const [editCategoryId, setEditCategoryId] = useState(categoryId || null);
+
+  // The accent ring that bursts outward when a task is checked off.
+  const [bursting, setBursting] = useState(false);
+  const burstTimer = useRef(null);
+  useEffect(() => () => clearTimeout(burstTimer.current), []);
+
+  function handleToggle() {
+    if (!done) {
+      setBursting(true);
+      clearTimeout(burstTimer.current);
+      burstTimer.current = setTimeout(() => setBursting(false), 620);
+    }
+    onToggle();
+  }
 
   function startEdit() {
     setEditText(text);
@@ -2030,50 +2146,82 @@ function TaskCard({ text, due, done, categoryId, categories, onToggle, onRemove,
     setEditing(false);
   }
 
+  // Overdue tasks (and stale thoughts, which pass tone="gold") get a tinted
+  // glass fill and border instead of the plain one.
+  const flagColor = tone === "gold" ? theme.goldDot : theme.accentRed;
+  const flagged = highlighted && !editing;
+  const borderColor = flagged
+    ? mix(flagColor, 34, theme.glassBorder)
+    : isDropTarget
+      ? theme.accentPlum
+      : theme.glassBorder;
+
   return (
     <div
       data-todo-id={todoId}
       style={{
-        display: "flex", alignItems: "flex-start", gap: 10,
-        background: isDropTarget ? theme.softBg : highlighted && !editing ? theme.softBg : theme.cardBg,
-        border: isDropTarget ? "1px dashed #C99A5A" : highlighted && !editing ? "1px solid #F7C99A" : editing ? "1px solid #D9CDBE" : "1px solid #EFE6D9",
-        borderRadius: 14, padding: "12px 12px 12px 8px",
-        animation: "fadeIn 0.2s ease",
-        boxShadow: isDragging ? "0 8px 20px rgba(58,44,30,0.18)" : "0 1px 2px rgba(58,44,30,0.03)",
-        transform: isDragging ? `translateY(${dragDeltaY}px) scale(1.01)` : "none",
-        position: "relative",
-        zIndex: isDragging ? 50 : "auto",
-        transition: isDragging ? "none" : "box-shadow 0.15s ease",
+        position: "relative", display: "flex", alignItems: "flex-start", gap: 11,
+        padding: showHandle ? "14px 13px 14px 10px" : "14px 13px",
+        borderRadius: 22,
+        background: flagged
+          ? `linear-gradient(157deg, ${theme.glassHigh}, ${mix(flagColor, 8, theme.glassFill)})`
+          : `linear-gradient(157deg, ${theme.glassHigh}, ${theme.glassFill})`,
+        backdropFilter: "blur(22px) saturate(180%)",
+        WebkitBackdropFilter: "blur(22px) saturate(180%)",
+        border: `1px solid ${borderColor}`,
+        boxShadow: isDragging
+          ? `inset 0 1px 0 ${theme.glassSpec}, 0 22px 50px -18px ${theme.glassShadow}`
+          : `inset 0 1px 0 ${theme.glassSpec}, 0 10px 28px -20px ${theme.glassShadow}`,
+        transform: isDragging ? `translateY(${dragDeltaY}px) scale(1.02)` : "none",
+        opacity: done ? 0.62 : 1,
+        transition: isDragging ? "none" : `transform .42s ${SPRING}, opacity .3s ease, box-shadow .3s ease`,
+        zIndex: isDragging ? 30 : 1,
+        touchAction: "pan-y",
       }}
     >
-      {onReorderPointerDown && (
-          <span
-            data-drag-handle="true"
-            onPointerDown={onReorderPointerDown}
-            style={{ cursor: editing ? "default" : isDragging ? "grabbing" : "grab", display: "flex", alignItems: "center", justifyContent: "center", marginTop: 2, marginLeft: -8, flexShrink: 0, padding: 8, touchAction: "none", WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none" }}
-          >
-            <GripVertical size={16} color={theme.borderStrong} />
-          </span>
+      {showHandle && onReorderPointerDown && !editing && (
+        <span
+          data-drag-handle="true"
+          onPointerDown={onReorderPointerDown}
+          style={{
+            display: "flex", alignItems: "center", padding: 2, margin: "1px -2px 0 -2px",
+            flexShrink: 0, color: theme.textFainter, opacity: 0.6,
+            cursor: isDragging ? "grabbing" : "grab",
+            touchAction: "none", WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none",
+          }}
+        >
+          <GripVertical size={15} />
+        </span>
       )}
 
       {!editing && (
         <button
-          onClick={onToggle}
+          onClick={handleToggle}
           style={{
-            width: 21, height: 21, borderRadius: "50%",
-            border: `2px solid ${done ? accentColor.dot : theme.borderStrong}`,
-            background: done ? accentColor.dot : theme.cardBg,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", flexShrink: 0, marginTop: 1, transition: "all 0.15s ease",
+            position: "relative", width: 23, height: 23, borderRadius: "50%", flexShrink: 0, marginTop: 1,
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 0, cursor: "pointer",
+            border: `2px solid ${done ? theme.accentPlum : theme.glassBorder2}`,
+            background: done ? `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})` : "transparent",
+            boxShadow: done ? `0 4px 14px -5px ${theme.accentPlum}` : "none",
+            transition: `all .35s ${SPRING}`,
           }}
         >
-          {done && <Check size={12} color={theme.cardBg} strokeWidth={3} />}
+          {done && (
+            <Check size={12} color={theme.accentInk} strokeWidth={3.5} style={{ animation: `tick .45s ${SPRING}` }} />
+          )}
+          {bursting && (
+            <span style={{
+              position: "absolute", inset: -6, borderRadius: "50%",
+              border: `2px solid ${theme.accentPlum}`,
+              animation: `burst .62s ${EASE_OUT} forwards`, pointerEvents: "none",
+            }} />
+          )}
         </button>
       )}
 
       <div style={{ flex: 1, minWidth: 0 }}>
         {editing ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <textarea
               autoFocus
               value={editText}
@@ -2083,23 +2231,41 @@ function TaskCard({ text, due, done, categoryId, categories, onToggle, onRemove,
                 if (e.key === "Escape") cancel();
               }}
               rows={2}
-              style={{ width: "100%", border: "1px solid #E6DACB", borderRadius: 8, fontSize: 15, padding: "6px 8px", color: theme.textPrimary, background: theme.inputBg, resize: "none", fontFamily: "inherit" }}
+              style={{
+                width: "100%", padding: "11px 13px", borderRadius: 14, fontFamily: "inherit",
+                fontSize: 15, lineHeight: 1.45, resize: "none", color: theme.textPrimary,
+                background: theme.inputBg, border: `1px solid ${theme.accentPlum}`,
+                boxShadow: `0 0 0 3px ${theme.accentSoft}`,
+              }}
             />
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <Calendar size={13} color={theme.textFaint} style={{ cursor: "pointer" }} onClick={() => editDueRef.current?.showPicker?.()} />
-                <input ref={editDueRef} type="date" value={editDue} onChange={(e) => setEditDue(e.target.value)} style={{ border: "1px solid #E6DACB", borderRadius: 6, fontSize: 12, color: theme.textSecondary, padding: "3px 6px", background: theme.inputBg }} />
-              </div>
-              <button onClick={save} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, border: "none", background: theme.textPrimary, color: theme.cardBg, borderRadius: 8, padding: "5px 10px", cursor: "pointer" }}>
-                <Check size={12} /> Save
+              <span
+                onClick={() => editDueRef.current?.showPicker?.()}
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 11, fontSize: 12, color: theme.textMuted, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`, cursor: "pointer" }}
+              >
+                <Calendar size={13} />
+                <input
+                  ref={editDueRef}
+                  type="date"
+                  value={editDue}
+                  onChange={(e) => setEditDue(e.target.value)}
+                  style={{ border: "none", background: "transparent", fontFamily: MONO, fontSize: 12, color: theme.textSecondary, padding: 0 }}
+                />
+              </span>
+              <span style={{ fontSize: 11.5, color: theme.textFainter, marginRight: "auto" }}>Enter to save · Esc to cancel</span>
+              <button
+                onClick={cancel}
+                style={{ padding: "9px 14px", borderRadius: 12, fontSize: 12.5, fontWeight: 500, color: theme.textMuted, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`, cursor: "pointer" }}
+              >
+                Cancel
               </button>
-              <button onClick={cancel} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, border: "none", background: "transparent", color: theme.textMuted, borderRadius: 8, padding: "5px 10px", cursor: "pointer" }}>
-                <X size={12} /> Cancel
+              <button onClick={save} style={{ ...accentButtonStyle(true), padding: "9px 18px", borderRadius: 12, fontSize: 12.5, fontWeight: 600 }}>
+                Save
               </button>
             </div>
             {categories && (
               <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                <Tag size={13} color={theme.textFaint} />
+                <Tag size={13} color={theme.textFainter} />
                 <CategoryChip label="None" selected={!editCategoryId} onClick={() => setEditCategoryId(null)} />
                 {categories.map((c) => (
                   <CategoryChip key={c.id} label={c.name} color={PALETTE[c.color]} selected={editCategoryId === c.id} onClick={() => setEditCategoryId(c.id)} />
@@ -2109,33 +2275,31 @@ function TaskCard({ text, due, done, categoryId, categories, onToggle, onRemove,
           </div>
         ) : (
           <>
-            <div style={{ fontSize: 15, color: done ? theme.textFaint : theme.textPrimary, textDecoration: done ? "line-through" : "none", lineHeight: 1.4, wordBreak: "break-word" }}>
+            <div style={{
+              fontSize: 15, lineHeight: 1.4, overflowWrap: "anywhere", textWrap: "pretty",
+              color: done ? theme.textFainter : theme.textPrimary,
+              textDecoration: done ? "line-through" : "none",
+              transition: "color .3s ease",
+            }}>
               {text}
             </div>
-            {badge && <div style={{ marginTop: 6 }}>{badge}</div>}
+            {badge && <div style={{ marginTop: 7 }}>{badge}</div>}
           </>
         )}
       </div>
 
       {!editing && (
-        <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
-          <button
-            onClick={startEdit}
-            style={{ border: "none", background: "transparent", color: theme.textFainter, cursor: "pointer", padding: 4 }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = theme.textSecondary)}
-            onMouseLeave={(e) => (e.currentTarget.style.color = theme.textFainter)}
-          >
-            <Pencil size={14} />
-          </button>
-          {!hideTrash && (
-            <button
-              onClick={onRemove}
-              style={{ border: "none", background: "transparent", color: theme.textFainter, cursor: "pointer", padding: 4 }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = theme.accentRed)}
-              onMouseLeave={(e) => (e.currentTarget.style.color = theme.textFainter)}
-            >
+        <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+          <IconAction onClick={startEdit} title="Edit"><Pencil size={14} /></IconAction>
+          {showRowButtons && onRemind && (
+            <IconAction onClick={onRemind} title="Time sensitive" hoverColor={theme.goldDot} active={remindActive} activeColor={theme.goldDot}>
+              <Clock size={14} />
+            </IconAction>
+          )}
+          {showRowButtons && onRemove && (
+            <IconAction onClick={onRemove} title="Delete" hoverColor={theme.accentRed}>
               <Trash2 size={14} />
-            </button>
+            </IconAction>
           )}
         </div>
       )}
@@ -2143,13 +2307,77 @@ function TaskCard({ text, due, done, categoryId, categories, onToggle, onRemove,
   );
 }
 
-function CategoryChip({ label, color, selected, onClick }) {
-  const bg = selected ? (color ? color.bg : theme.borderSoft) : theme.cardBg;
-  const text = selected ? (color ? color.text : theme.textSecondary) : theme.textMuted;
-  const border = selected ? "transparent" : theme.border;
+// Quiet 14px row button that colours in on hover — pencil, clock, trash.
+function IconAction({ onClick, title, children, hoverColor, active, activeColor }) {
+  const [hover, setHover] = useState(false);
+  const color = hover ? (hoverColor || theme.textPrimary) : active ? activeColor : theme.textFainter;
   return (
-    <button onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, padding: "5px 11px", borderRadius: 999, border: `1px solid ${border}`, background: bg, color: text, cursor: "pointer", transition: "all 0.15s ease" }}>
-      {color && <span style={{ width: 6, height: 6, borderRadius: "50%", background: color.dot }} />}
+    <button
+      onClick={onClick}
+      title={title}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 5, borderRadius: 9, border: "none", cursor: "pointer", color,
+        background: hover
+          ? mix(hoverColor || theme.textPrimary, 14)
+          : active ? mix(activeColor, 14) : "transparent",
+        transition: "all .25s ease",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// The badge row under a task: due date, reminder time, repeat, category.
+function TaskBadges({ todo, overdue, category }) {
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+      {todo.due && (
+        <Badge tone={overdue ? "red" : "neutral"} icon={Calendar}>
+          {overdue ? `Overdue · ${fmtDate(todo.due)}` : fmtDate(todo.due)}
+        </Badge>
+      )}
+      {todo.timeSensitive && todo.notifyAt && (
+        <Badge tone="gold" icon={Clock}>{fmtTime(todo.notifyAt)}</Badge>
+      )}
+      {todo.recurrence && (
+        <Badge icon={Repeat} capitalize>{todo.recurrence.type}</Badge>
+      )}
+      {category && <CategoryBadge category={category} />}
+    </div>
+  );
+}
+
+function CategoryBadge({ category }) {
+  const p = PALETTE[category.color] || PALETTE.blue;
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", fontSize: 11, fontWeight: 500,
+      padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap",
+      color: p.text, background: p.bg, border: `1px solid ${mix(p.dot, 34)}`,
+    }}>
+      {category.name}
+    </span>
+  );
+}
+
+function CategoryChip({ label, color, selected, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500,
+        padding: "6px 13px", borderRadius: 999, cursor: "pointer",
+        color: selected ? (color ? color.text : theme.accentPlum) : theme.textMuted,
+        background: selected ? (color ? color.bg : theme.accentSoft) : theme.inputBg,
+        border: `1px solid ${selected ? (color ? color.dot : theme.accentPlum) : theme.glassBorder2}`,
+        transition: `all .25s ${SPRING}`,
+      }}
+    >
+      {color && <span style={{ width: 6, height: 6, borderRadius: 99, flexShrink: 0, background: color.dot }} />}
       {label}
     </button>
   );
@@ -2174,22 +2402,22 @@ function CategoryPicker({ categories, recent, selectedId, onSelect, showMore, se
         )}
         <button
           onClick={() => setShowMore((v) => !v)}
-          style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, padding: "5px 10px", borderRadius: 999, border: "1px solid #E6DACB", background: theme.cardBg, color: theme.textMuted, cursor: "pointer" }}
+          style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 500, padding: "6px 12px", borderRadius: 999, border: `1px solid ${theme.glassBorder2}`, background: theme.inputBg, color: theme.textMuted, cursor: "pointer" }}
         >
-          More <ChevronDown size={12} style={{ transform: showMore ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }} />
+          More <ChevronDown size={12} style={{ transform: showMore ? "rotate(180deg)" : "none", transition: `transform .3s ${SPRING}` }} />
         </button>
       </div>
 
       {showMore && (
-        <div style={{ marginTop: 10, padding: 10, background: theme.inputBg, border: "1px solid #EFE6D9", borderRadius: 12 }}>
+        <div style={{ marginTop: 10, padding: 12, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`, borderRadius: 18, animation: `popIn .25s ${SPRING}` }}>
           {categories.length > 5 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, padding: "6px 10px", background: theme.cardBg, border: "1px solid #E6DACB", borderRadius: 8 }}>
-              <Search size={13} color={theme.textFaint} />
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, padding: "8px 12px", background: theme.glassFill, border: `1px solid ${theme.glassBorder2}`, borderRadius: 12 }}>
+              <Search size={13} color={theme.textFainter} />
               <input
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
-                placeholder="Search categories..."
-                style={{ flex: 1, border: "none", fontSize: 13, background: "transparent" }}
+                placeholder="Search categories…"
+                style={{ flex: 1, border: "none", fontSize: 13, background: "transparent", color: theme.textPrimary }}
               />
             </div>
           )}
@@ -2201,7 +2429,7 @@ function CategoryPicker({ categories, recent, selectedId, onSelect, showMore, se
               <CategoryChip key={c.id} label={c.name} color={PALETTE[c.color]} selected={selectedId === c.id} onClick={() => onSelect(c.id)} />
             ))}
           </div>
-          <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #EFE6D9" }}>
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${theme.glassBorder2}` }}>
             {showNewCat ? (
               <InlineCreate
                 value={newCatName}
@@ -2214,7 +2442,7 @@ function CategoryPicker({ categories, recent, selectedId, onSelect, showMore, se
             ) : (
               <button
                 onClick={() => setShowNewCat(true)}
-                style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, padding: "6px 10px", borderRadius: 999, border: "1px dashed #C4B7A9", background: "transparent", color: theme.textMuted, cursor: "pointer" }}
+                style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 500, padding: "6px 12px", borderRadius: 999, border: `1px dashed ${theme.glassBorder2}`, background: "transparent", color: theme.textMuted, cursor: "pointer" }}
               >
                 <Plus size={12} /> New category
               </button>
@@ -2231,23 +2459,23 @@ function ManagePeopleModal({ people, onClose, onDelete }) {
   return (
     <div
       onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(58,44,30,0.4)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 100 }}
+      style={{ position: "fixed", inset: 0, background: theme.scrim, backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 100, animation: "fadeIn .2s ease" }}
     >
-      <div onClick={(e) => e.stopPropagation()} style={{ background: theme.cardBg, borderRadius: 18, padding: 20, width: "100%", maxWidth: 380, maxHeight: "70vh", overflowY: "auto" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ ...glass.raised, borderRadius: 28, padding: 20, width: "100%", maxWidth: 380, maxHeight: "70vh", overflowY: "auto", animation: `popIn .3s ${SPRING}` }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 18, fontWeight: 600, color: theme.textPrimary, margin: 0 }}>Manage people</h2>
-          <button onClick={onClose} style={{ border: "none", background: "transparent", color: theme.textFaint, cursor: "pointer", padding: 4 }}>
+          <h2 style={{ ...display(20), color: theme.textPrimary, margin: 0 }}>Manage people</h2>
+          <button onClick={onClose} style={{ border: "none", background: "transparent", color: theme.textFainter, cursor: "pointer", padding: 4, display: "flex" }}>
             <X size={18} />
           </button>
         </div>
         {alphabetical.length === 0 && (
-          <p style={{ fontSize: 13, color: theme.textFaint }}>No one saved yet — add someone from the "New person" chip when capturing a thought.</p>
+          <p style={{ fontSize: 13, color: theme.textMuted, lineHeight: 1.5 }}>No one saved yet — add someone from the "New person" chip when capturing a thought.</p>
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {alphabetical.map((p) => (
-            <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: 10, background: theme.inputBg }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700, color: PALETTE[p.color].text }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: PALETTE[p.color].dot }} />
+            <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 13px", borderRadius: 14, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}` }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 500, color: PALETTE[p.color].text }}>
+                <span style={{ width: 8, height: 8, borderRadius: 99, background: PALETTE[p.color].dot, boxShadow: `0 0 10px -1px ${PALETTE[p.color].dot}` }} />
                 {p.name}
               </span>
               <button onClick={() => onDelete(p.id)} style={{ border: "none", background: "transparent", color: theme.textFainter, cursor: "pointer", padding: 4 }}>
@@ -2266,23 +2494,23 @@ function ManageCategoriesModal({ categories, onClose, onDelete }) {
   return (
     <div
       onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(58,44,30,0.4)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 100 }}
+      style={{ position: "fixed", inset: 0, background: theme.scrim, backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 100, animation: "fadeIn .2s ease" }}
     >
-      <div onClick={(e) => e.stopPropagation()} style={{ background: theme.cardBg, borderRadius: 18, padding: 20, width: "100%", maxWidth: 380, maxHeight: "70vh", overflowY: "auto" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ ...glass.raised, borderRadius: 28, padding: 20, width: "100%", maxWidth: 380, maxHeight: "70vh", overflowY: "auto", animation: `popIn .3s ${SPRING}` }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 18, fontWeight: 600, color: theme.textPrimary, margin: 0 }}>Manage categories</h2>
-          <button onClick={onClose} style={{ border: "none", background: "transparent", color: theme.textFaint, cursor: "pointer", padding: 4 }}>
+          <h2 style={{ ...display(20), color: theme.textPrimary, margin: 0 }}>Manage categories</h2>
+          <button onClick={onClose} style={{ border: "none", background: "transparent", color: theme.textFainter, cursor: "pointer", padding: 4, display: "flex" }}>
             <X size={18} />
           </button>
         </div>
         {alphabetical.length === 0 && (
-          <p style={{ fontSize: 13, color: theme.textFaint }}>No categories yet — create one from the "More" menu when adding a task.</p>
+          <p style={{ fontSize: 13, color: theme.textMuted, lineHeight: 1.5 }}>No categories yet — create one from the "More" menu when adding a task.</p>
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {alphabetical.map((c) => (
-            <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: 10, background: theme.inputBg }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700, color: PALETTE[c.color].text }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: PALETTE[c.color].dot }} />
+            <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 13px", borderRadius: 14, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}` }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 500, color: PALETTE[c.color].text }}>
+                <span style={{ width: 8, height: 8, borderRadius: 99, background: PALETTE[c.color].dot, boxShadow: `0 0 10px -1px ${PALETTE[c.color].dot}` }} />
                 {c.name}
               </span>
               <button onClick={() => onDelete(c.id)} style={{ border: "none", background: "transparent", color: theme.textFainter, cursor: "pointer", padding: 4 }}>
@@ -2296,14 +2524,19 @@ function ManageCategoriesModal({ categories, onClose, onDelete }) {
   );
 }
 
-function Badge({ children, warn, icon: Icon }) {
+// Monospace pill. `tone` red = overdue, gold = time-sensitive or stale.
+function Badge({ children, tone = "neutral", icon: Icon, capitalize }) {
+  const tinted = tone !== "neutral";
+  const color = tone === "red" ? theme.accentRed : tone === "gold" ? theme.goldDot : theme.textMuted;
   return (
     <span style={{
-      fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
-      display: "inline-flex", alignItems: "center", gap: 4,
-      background: warn ? theme.softBg2 : theme.dividerSoft, color: warn ? theme.oldOrangeText : theme.textSecondary,
+      display: "inline-flex", alignItems: "center", gap: 4, whiteSpace: "nowrap",
+      fontFamily: MONO, fontSize: 11, fontWeight: 500, padding: "3px 9px", borderRadius: 999,
+      textTransform: capitalize ? "capitalize" : "none",
+      color, background: tinted ? mix(color, 14) : theme.inputBg,
+      border: `1px solid ${tinted ? mix(color, 30) : theme.glassBorder2}`,
     }}>
-      <Icon size={11} />
+      {Icon && <Icon size={11} />}
       {children}
     </span>
   );
@@ -2311,7 +2544,7 @@ function Badge({ children, warn, icon: Icon }) {
 
 function InlineCreate({ value, onChange, onConfirm, onCancel, placeholder, small }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, background: theme.cardBg, border: "1px solid #E6DACB", borderRadius: 999, padding: "5px 6px 5px 14px" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 6, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`, borderRadius: 999, padding: "5px 6px 5px 14px" }}>
       <input
         autoFocus
         value={value}
@@ -2321,9 +2554,9 @@ function InlineCreate({ value, onChange, onConfirm, onCancel, placeholder, small
           if (e.key === "Escape") onCancel();
         }}
         placeholder={placeholder}
-        style={{ border: "none", fontSize: 13, width: small ? 90 : 130, background: "transparent" }}
+        style={{ border: "none", fontSize: 13, width: small ? 90 : 130, background: "transparent", color: theme.textPrimary }}
       />
-      <button onClick={onConfirm} style={{ border: "none", background: theme.textPrimary, color: theme.cardBg, borderRadius: 999, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+      <button onClick={onConfirm} style={{ ...accentButtonStyle(true), borderRadius: 999, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <Check size={14} />
       </button>
       <button onClick={onCancel} style={{ border: "none", background: "transparent", color: theme.textFaint, borderRadius: 999, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>

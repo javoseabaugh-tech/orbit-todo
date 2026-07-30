@@ -1,0 +1,1901 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;padding:0;height:100%;background:#0b0e13;}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  button{appearance:none;-webkit-appearance:none;background:transparent;border:none;font:inherit;color:inherit;cursor:pointer;padding:0;}
+  input,textarea,select{font:inherit;color:inherit;}
+  input:focus,textarea:focus,select:focus{outline:none;}
+  a{color:var(--ac);text-decoration:none;}
+  a:hover{color:var(--ac2);text-decoration:underline;}
+  ::selection{background:var(--acs);color:var(--tx);}
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--gb);border-radius:99px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  @keyframes drift1{0%,100%{transform:translate3d(0,0,0) scale(1)}33%{transform:translate3d(9vw,7vh,0) scale(1.18)}66%{transform:translate3d(-6vw,11vh,0) scale(.9)}}
+  @keyframes drift2{0%,100%{transform:translate3d(0,0,0) scale(1.05)}33%{transform:translate3d(-11vw,-6vh,0) scale(.88)}66%{transform:translate3d(7vw,-10vh,0) scale(1.2)}}
+  @keyframes drift3{0%,100%{transform:translate3d(0,0,0) scale(.95)}50%{transform:translate3d(-8vw,-12vh,0) scale(1.25)}}
+  @keyframes screenIn{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+  @keyframes rowIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @keyframes sheetIn{from{transform:translateY(102%)}to{transform:translateY(0)}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  @keyframes popIn{from{opacity:0;transform:translateY(-6px) scale(.94)}to{opacity:1;transform:none}}
+  @keyframes burst{0%{opacity:.9;transform:scale(.4)}100%{opacity:0;transform:scale(2.6)}}
+  @keyframes tick{0%{transform:scale(.2) rotate(-25deg);opacity:0}55%{transform:scale(1.3) rotate(6deg);opacity:1}100%{transform:scale(1) rotate(0)}}
+  @keyframes shimmer{0%{transform:translateX(-120%)}100%{transform:translateX(320%)}}
+  @keyframes listen{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes glowPulse{0%,100%{opacity:.35}50%{opacity:.85}}
+  @keyframes ringSweep{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</helmet>
+
+<div ref="{{ rootRef }}" style="position:relative;min-height:100vh;background:var(--bg1);font-family:'Geist',system-ui,sans-serif;color:var(--tx);overflow:hidden;isolation:isolate">
+
+  <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"><symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"></path> <path d="M12 5v14"></path></symbol><symbol id="i-briefcase" viewBox="0 0 24 24"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path> <rect width="20" height="14" x="2" y="6" rx="2"></rect></symbol><symbol id="i-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path> <circle cx="12" cy="7" r="4"></circle></symbol><symbol id="i-calendar" viewBox="0 0 24 24"><path d="M8 2v3"></path> <path d="M16 2v3"></path> <rect x="3" y="3" width="18" height="18" rx="2"></rect> <path d="M3 9h18"></path></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"></path></symbol><symbol id="i-trash-2" viewBox="0 0 24 24"><path d="M10 11v6"></path> <path d="M14 11v6"></path> <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path> <path d="M3 6h18"></path> <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></symbol><symbol id="i-grip-vertical" viewBox="0 0 24 24"><circle cx="9" cy="12" r="1"></circle> <circle cx="9" cy="5" r="1"></circle> <circle cx="9" cy="19" r="1"></circle> <circle cx="15" cy="12" r="1"></circle> <circle cx="15" cy="5" r="1"></circle> <circle cx="15" cy="19" r="1"></circle></symbol><symbol id="i-inbox" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline> <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></symbol><symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"></path> <path d="m6 6 12 12"></path></symbol><symbol id="i-message-circle-more" viewBox="0 0 24 24"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"></path> <path d="M8 12h.01"></path> <path d="M12 12h.01"></path> <path d="M16 12h.01"></path></symbol><symbol id="i-user-plus" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path> <circle cx="9" cy="7" r="4"></circle> <line x1="19" x2="19" y1="8" y2="14"></line> <line x1="22" x2="16" y1="11" y2="11"></line></symbol><symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle> <path d="M12 6v6l4 2"></path></symbol><symbol id="i-pencil" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path> <path d="m15 5 4 4"></path></symbol><symbol id="i-log-out" viewBox="0 0 24 24"><path d="m16 17 5-5-5-5"></path> <path d="M21 12H9"></path> <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path></symbol><symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"></path></symbol><symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></symbol><symbol id="i-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"></path> <circle cx="11" cy="11" r="8"></circle></symbol><symbol id="i-tag" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"></path> <circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle></symbol><symbol id="i-settings" viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"></path> <circle cx="12" cy="12" r="3"></circle></symbol><symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"></path> <path d="M3 11v-1a4 4 0 0 1 4-4h14"></path> <path d="m7 22-4-4 4-4"></path> <path d="M21 13v1a4 4 0 0 1-4 4H3"></path></symbol><symbol id="i-folder-kanban" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path> <path d="M8 10v4"></path> <path d="M12 10v2"></path> <path d="M16 10v6"></path></symbol><symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"></path></symbol><symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path> <circle cx="12" cy="12" r="3"></circle></symbol><symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"></path> <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"></path> <path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"></path> <path d="m2 2 20 20"></path></symbol><symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"></path> <path d="M20 2v4"></path> <path d="M22 4h-4"></path> <circle cx="4" cy="20" r="2"></circle></symbol><symbol id="i-keyboard" viewBox="0 0 24 24"><path d="M10 8h.01"></path> <path d="M12 12h.01"></path> <path d="M14 8h.01"></path> <path d="M16 12h.01"></path> <path d="M18 8h.01"></path> <path d="M6 8h.01"></path> <path d="M7 16h10"></path> <path d="M8 12h.01"></path> <rect width="20" height="16" x="2" y="4" rx="2"></rect></symbol><symbol id="i-paperclip" viewBox="0 0 24 24"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551"></path></symbol><symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"></path> <path d="M12 19V5"></path></symbol><symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path></symbol><symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path> <path d="m9 12 2 2 4-4"></path></symbol><symbol id="i-wallet" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"></path> <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"></path></symbol><symbol id="i-receipt" viewBox="0 0 24 24"><path d="M12 17V7"></path> <path d="M16 8h-6a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H8"></path> <path d="M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"></path></symbol><symbol id="i-key-round" viewBox="0 0 24 24"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"></path> <circle cx="16.5" cy="7.5" r=".5" fill="currentColor"></circle></symbol><symbol id="i-piggy-bank" viewBox="0 0 24 24"><path d="M11 17h3v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-3a3.16 3.16 0 0 0 2-2h1a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1h-1a5 5 0 0 0-2-4V3a4 4 0 0 0-3.2 1.6l-.3.4H11a6 6 0 0 0-6 6v1a5 5 0 0 0 2 4v3a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1z"></path> <path d="M16 10h.01"></path> <path d="M2 8v1a2 2 0 0 0 2 2h1"></path></symbol><symbol id="i-external-link" viewBox="0 0 24 24"><path d="M15 3h6v6"></path> <path d="M10 14 21 3"></path> <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></symbol><symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect> <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></symbol><symbol id="i-rotate-ccw" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path> <path d="M3 3v5h5"></path></symbol><symbol id="i-party-popper" viewBox="0 0 24 24"><path d="M5.8 11.3 2 22l10.7-3.79"></path> <path d="M4 3h.01"></path> <path d="M22 8h.01"></path> <path d="M15 2h.01"></path> <path d="M22 20h.01"></path> <path d="m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10"></path> <path d="m22 13-.82-.33c-.86-.34-1.82.2-1.98 1.11c-.11.7-.72 1.22-1.43 1.22H17"></path> <path d="m11 2 .33.82c.34.86-.2 1.82-1.11 1.98C9.52 4.9 9 5.52 9 6.23V7"></path> <path d="M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2Z"></path></symbol><symbol id="i-scan-face" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path> <path d="M17 3h2a2 2 0 0 1 2 2v2"></path> <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path> <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path> <path d="M8 14s1.5 2 4 2 4-2 4-2"></path> <path d="M9 9h.01"></path> <path d="M15 9h.01"></path></symbol><symbol id="i-circle-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle> <line x1="12" x2="12" y1="8" y2="12"></line> <line x1="12" x2="12.01" y1="16" y2="16"></line></symbol><symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"></path> <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"></circle> <circle cx="17.5" cy="10.5" r=".5" fill="currentColor"></circle> <circle cx="6.5" cy="12.5" r=".5" fill="currentColor"></circle> <circle cx="8.5" cy="7.5" r=".5" fill="currentColor"></circle></symbol><symbol id="i-landmark" viewBox="0 0 24 24"><path d="M10 18v-7"></path> <path d="M11.119 2.205a2 2 0 0 1 1.762 0l7.84 3.846A.5.5 0 0 1 20.5 7h-17a.5.5 0 0 1-.22-.949z"></path> <path d="M14 18v-7"></path> <path d="M18 18v-7"></path> <path d="M3 22h18"></path> <path d="M6 18v-7"></path></symbol><symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"></path> <path d="M19 12H5"></path></symbol><symbol id="i-arrow-up-right" viewBox="0 0 24 24"><path d="M7 7h10v10"></path> <path d="M7 17 17 7"></path></symbol><symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path> <path d="M16 3.128a4 4 0 0 1 0 7.744"></path> <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path> <circle cx="9" cy="7" r="4"></circle></symbol><symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 19v3"></path> <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path> <rect x="9" y="2" width="6" height="13" rx="3"></rect></symbol><symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle> <path d="M12 2v2"></path> <path d="M12 20v2"></path> <path d="m4.93 4.93 1.41 1.41"></path> <path d="m17.66 17.66 1.41 1.41"></path> <path d="M2 12h2"></path> <path d="M20 12h2"></path> <path d="m6.34 17.66-1.41 1.41"></path> <path d="m19.07 4.93-1.41 1.41"></path></symbol></svg>
+
+  <div style="position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;background:radial-gradient(140% 90% at 50% 0%,var(--bg0),var(--bg1) 70%)">
+    <div style="position:absolute;top:-18vh;left:-12vw;width:62vw;height:62vw;border-radius:50%;background:var(--b1);filter:blur(90px);opacity:var(--bop);animation:drift1 26s ease-in-out infinite"></div>
+    <div style="position:absolute;top:20vh;right:-16vw;width:56vw;height:56vw;border-radius:50%;background:var(--b2);filter:blur(100px);opacity:var(--bop);animation:drift2 32s ease-in-out infinite"></div>
+    <div style="position:absolute;bottom:-22vh;left:22vw;width:52vw;height:52vw;border-radius:50%;background:var(--b3);filter:blur(96px);opacity:var(--bop2);animation:drift3 38s ease-in-out infinite"></div>
+    <div style="position:absolute;inset:0;opacity:var(--grain);background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.5) 0 1px,transparent 1px 3px),repeating-linear-gradient(90deg,rgba(0,0,0,.5) 0 1px,transparent 1px 3px);mix-blend-mode:overlay"></div>
+  </div>
+
+  <div style="position:relative;z-index:1;display:flex;justify-content:center;padding:0">
+    <div style="{{ frameStyle }}">
+
+      <sc-if value="{{ isSignin }}" hint-placeholder-val="{{ false }}">
+        <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px;animation:screenIn .5s cubic-bezier(.22,1,.36,1)">
+          <div style="width:100%;max-width:380px;padding:38px 30px 30px;border-radius:32px;text-align:center;background:linear-gradient(157deg,var(--gh),var(--gl));backdrop-filter:blur(28px) saturate(180%);-webkit-backdrop-filter:blur(28px) saturate(180%);border:1px solid var(--gb);box-shadow:inset 0 1px 0 var(--ghi),0 30px 70px -30px var(--gsh)">
+            <div style="display:flex;justify-content:center;margin-bottom:20px">{{ logoLarge }}</div>
+            <h1 style="margin:0 0 8px;font-family:'Bricolage Grotesque',sans-serif;font-size:34px;font-weight:600;letter-spacing:-.03em;line-height:1">Orbit</h1>
+            <p style="margin:0 0 28px;font-size:14.5px;color:var(--tx3);line-height:1.5">Everything you're carrying — work, life and the things still on your mind.</p>
+            <button onClick="{{ signIn }}" style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:14px 18px;border-radius:16px;font-size:14.5px;font-weight:600;background:var(--g2);border:1px solid var(--gb);backdrop-filter:blur(12px);box-shadow:inset 0 1px 0 var(--ghi)" style-hover="transform:translateY(-1px);box-shadow:inset 0 1px 0 var(--ghi),0 10px 24px -12px var(--gsh)">
+              <svg width="18" height="18" viewBox="0 0 18 18" style="flex-shrink:0"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"></path><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.95v2.33A9 9 0 0 0 9 18z"></path><path fill="#FBBC05" d="M3.97 10.72A5.4 5.4 0 0 1 3.69 9c0-.6.1-1.18.28-1.72V4.95H.95A9 9 0 0 0 0 9c0 1.45.35 2.83.95 4.05l3.02-2.33z"></path><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .95 4.95l3.02 2.33C4.68 5.16 6.66 3.58 9 3.58z"></path></svg>
+              Sign in with Google
+            </button>
+            <p style="margin:16px 0 0;font-size:11.5px;color:var(--tx4)">Orbit is private. Only invited accounts can sign in.</p>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isApp }}" hint-placeholder-val="{{ true }}">
+        <div style="{{ pageStyle }}">
+
+          <div style="{{ topBarStyle }}">
+            <div style="display:flex;align-items:center;gap:9px;min-width:0">
+              {{ logoMark }}
+              <span style="font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:600;letter-spacing:-.02em">Orbit</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:7px;flex-shrink:0">
+              <button onClick="{{ goBudget }}" title="Budget" style="width:34px;height:34px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--gl);border:1px solid var(--gb);backdrop-filter:blur(14px);box-shadow:inset 0 1px 0 var(--ghi);transition:transform .3s cubic-bezier(.34,1.56,.64,1)" style-hover="transform:translateY(-2px) scale(1.06)"><svg width="16" height="16" style="color:var(--tx2)"><use href="#i-wallet"></use></svg></button>
+              <button onClick="{{ goNightly }}" title="Nightly routine" style="width:34px;height:34px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--gl);border:1px solid var(--gb);backdrop-filter:blur(14px);box-shadow:inset 0 1px 0 var(--ghi);transition:transform .3s cubic-bezier(.34,1.56,.64,1)" style-hover="transform:translateY(-2px) scale(1.06)"><svg width="16" height="16" style="color:var(--tx2)"><use href="#i-moon"></use></svg></button>
+              <button onClick="{{ goAccess }}" title="Access" style="width:34px;height:34px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--gl);border:1px solid var(--gb);backdrop-filter:blur(14px);box-shadow:inset 0 1px 0 var(--ghi);transition:transform .3s cubic-bezier(.34,1.56,.64,1)" style-hover="transform:translateY(-2px) scale(1.06)"><svg width="16" height="16" style="color:var(--tx2)"><use href="#i-settings"></use></svg></button>
+              <button onClick="{{ toggleMenu }}" title="Account" style="width:34px;height:34px;border-radius:50%;margin-left:3px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--aci);background:linear-gradient(140deg,var(--ac),var(--ac2));box-shadow:0 0 0 1.5px var(--gb),0 4px 14px -6px var(--ac);transition:transform .3s cubic-bezier(.34,1.56,.64,1)" style-hover="transform:scale(1.08)">J</button>
+            </div>
+          </div>
+
+          <div style="{{ bodyStyle }}">
+
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:18px">
+              <div style="min-width:0">
+                <h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(30px,6vw,42px);font-weight:600;letter-spacing:-.035em;line-height:1.02">{{ pageTitle }}</h1>
+                <p style="margin:7px 0 0;font-size:14px;color:var(--tx3);line-height:1.4">{{ pageSub }}</p>
+              </div>
+              <button onClick="{{ toggleHideFuture }}" style="{{ hideFutureStyle }}">
+                <svg width="13" height="13"><use href="{{ hideFutureIcon }}"></use></svg>
+                {{ hideFutureLabel }}
+              </button>
+            </div>
+
+            <div style="{{ starWrapStyle }}">
+              <sc-if value="{{ brainIdle }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                  <button onClick="{{ startListening }}" style="display:flex;align-items:center;gap:10px;padding:8px 18px 8px 8px;border-radius:999px;font-size:13px;font-weight:600;background:linear-gradient(140deg,var(--gh),var(--gl));border:1px solid var(--gb);backdrop-filter:blur(18px) saturate(180%);box-shadow:inset 0 1px 0 var(--ghi),0 8px 22px -14px var(--gsh);transition:transform .35s cubic-bezier(.34,1.56,.64,1)" style-hover="transform:translateY(-2px)">
+                    <span style="position:relative;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,var(--ac),var(--ac2));box-shadow:0 4px 14px -5px var(--ac)">
+                      <span style="position:absolute;inset:-4px;border-radius:50%;border:1.5px solid var(--ac);opacity:.4;animation:glowPulse 2.4s ease-in-out infinite"></span>
+                      <svg width="15" height="15" style="color:var(--aci)"><use href="#i-sparkles"></use></svg>
+                    </span>
+                    Ask Star
+                  </button>
+                  <button onClick="{{ startTyping }}" title="Type instead" style="width:34px;height:34px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--gl);border:1px solid var(--gb);backdrop-filter:blur(14px);color:var(--tx3)" style-hover="color:var(--tx)"><svg width="15" height="15"><use href="#i-keyboard"></use></svg></button>
+                  <button onClick="{{ noop }}" title="Attach a photo" style="width:34px;height:34px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--gl);border:1px solid var(--gb);backdrop-filter:blur(14px);color:var(--tx3)" style-hover="color:var(--tx)"><svg width="15" height="15"><use href="#i-paperclip"></use></svg></button>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ brainListening }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;border-radius:20px;background:linear-gradient(140deg,var(--gh),var(--gl));border:1px solid var(--ac);backdrop-filter:blur(20px) saturate(180%);box-shadow:inset 0 1px 0 var(--ghi),0 0 0 4px var(--acs)">
+                  <span style="display:flex;align-items:flex-end;gap:3px;height:22px;flex-shrink:0">
+                    <i style="display:block;width:3px;height:22px;border-radius:2px;background:var(--ac);animation:listen .7s ease-in-out infinite"></i>
+                    <i style="display:block;width:3px;height:22px;border-radius:2px;background:var(--ac);animation:listen .7s ease-in-out .12s infinite"></i>
+                    <i style="display:block;width:3px;height:22px;border-radius:2px;background:var(--ac);animation:listen .7s ease-in-out .24s infinite"></i>
+                    <i style="display:block;width:3px;height:22px;border-radius:2px;background:var(--ac);animation:listen .7s ease-in-out .36s infinite"></i>
+                    <i style="display:block;width:3px;height:22px;border-radius:2px;background:var(--ac);animation:listen .7s ease-in-out .48s infinite"></i>
+                  </span>
+                  <span style="flex:1;min-width:0;font-size:13.5px;color:var(--tx2);font-style:italic">{{ brainHeard }}</span>
+                  <button onClick="{{ stopListening }}" style="padding:7px 14px;border-radius:999px;font-size:12px;font-weight:600;background:var(--ac);color:var(--aci)">Stop</button>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ brainParsing }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:12px;padding:13px 18px;border-radius:20px;background:linear-gradient(140deg,var(--gh),var(--gl));border:1px solid var(--gb);backdrop-filter:blur(20px) saturate(180%);box-shadow:inset 0 1px 0 var(--ghi)">
+                  <span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--acs);border-top-color:var(--ac);animation:spin .8s linear infinite;flex-shrink:0"></span>
+                  <span style="font-size:13.5px;color:var(--tx2)">Star is sorting that out…</span>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ brainTyping }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;border-radius:18px;background:linear-gradient(140deg,var(--gh),var(--gl));border:1px solid var(--gb);backdrop-filter:blur(20px) saturate(180%);box-shadow:inset 0 1px 0 var(--ghi)">
+                  <svg width="16" height="16" style="color:var(--ac);flex-shrink:0"><use href="#i-sparkles"></use></svg>
+                  <input value="{{ brainText }}" onChange="{{ setBrainText }}" onKeyDown="{{ brainKey }}" placeholder="Tell Star what's on your mind…" style="flex:1;min-width:0;border:none;background:transparent;font-size:14px;color:var(--tx)">
+                  <button onClick="{{ submitBrain }}" style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--ac);color:var(--aci);flex-shrink:0"><svg width="15" height="15"><use href="#i-arrow-up"></use></svg></button>
+                  <button onClick="{{ cancelBrain }}" style="width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--tx4);flex-shrink:0"><svg width="15" height="15"><use href="#i-x"></use></svg></button>
+                </div>
+              </sc-if>
+            </div>
+
+            <sc-if value="{{ showLists }}" hint-placeholder-val="{{ true }}">
+              <div style="{{ columnsStyle }}">
+                <sc-for list="{{ columns }}" as="col" hint-placeholder-count="1">
+                  <div onClick="{{ col.focus }}" style="{{ col.wrapStyle }}">
+
+                    <sc-if value="{{ col.showHead }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px">
+                        <svg width="15" height="15" style="{{ col.iconStyle }}"><use href="{{ col.icon }}"></use></svg>
+                        <span style="font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:600;letter-spacing:-.02em">{{ col.label }}</span>
+                        <span style="margin-left:auto;font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--tx4)">{{ col.countLabel }}</span>
+                        <button onClick="{{ col.manage }}" style="font-size:11.5px;font-weight:500;color:var(--tx4);padding:3px 7px;border-radius:8px" style-hover="color:var(--tx2);background:var(--gl)">Categories</button>
+                      </div>
+                    </sc-if>
+
+                    <sc-if value="{{ col.hasChips }}" hint-placeholder-val="{{ true }}">
+                      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+                        <sc-for list="{{ col.chips }}" as="chip" hint-placeholder-count="3">
+                          <button onClick="{{ chip.toggle }}" style="{{ chip.style }}">
+                            <span style="{{ chip.dotStyle }}"></span>{{ chip.name }}
+                          </button>
+                        </sc-for>
+                        <sc-if value="{{ col.filtered }}" hint-placeholder-val="{{ false }}">
+                          <button onClick="{{ col.clearFilter }}" style="padding:5px 12px;border-radius:999px;font-size:12px;font-weight:500;color:var(--red)">Clear</button>
+                        </sc-if>
+                      </div>
+                    </sc-if>
+
+                    <div style="display:flex;flex-direction:column;gap:9px">
+                      <sc-if value="{{ col.empty }}" hint-placeholder-val="{{ false }}">
+                        <div style="padding:34px 16px;border-radius:20px;border:1px dashed var(--gb2);text-align:center;font-size:13px;color:var(--tx4)">{{ col.emptyLabel }}</div>
+                      </sc-if>
+
+                      <sc-for list="{{ col.items }}" as="t" hint-placeholder-count="4">
+                        <div style="{{ t.slotStyle }}">
+                          <div style="{{ t.actionsStyle }}">
+                            <span style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--gold)"><svg width="14" height="14"><use href="#i-clock"></use></svg>Remind</span>
+                            <span style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--red)">Delete<svg width="14" height="14"><use href="#i-trash-2"></use></svg></span>
+                          </div>
+                          <div onPointerDown="{{ t.swipeDown }}" style="{{ t.cardStyle }}">
+                            <span onPointerDown="{{ t.dragDown }}" style="{{ t.handleStyle }}" style-hover="opacity:1"><svg width="15" height="15"><use href="#i-grip-vertical"></use></svg></span>
+                            <button onClick="{{ t.toggle }}" style="{{ t.boxStyle }}">
+                              <sc-if value="{{ t.done }}" hint-placeholder-val="{{ false }}">
+                                <svg width="12" height="12" style="color:var(--aci);animation:tick .45s cubic-bezier(.34,1.56,.64,1)" stroke-width="3.5"><use href="#i-check"></use></svg>
+                              </sc-if>
+                              <sc-if value="{{ t.bursting }}" hint-placeholder-val="{{ false }}">
+                                <span style="{{ t.burstStyle }}"></span>
+                              </sc-if>
+                            </button>
+                            <div style="flex:1;min-width:0">
+                              <sc-if value="{{ t.editing }}" hint-placeholder-val="{{ false }}">
+                                <div style="display:flex;flex-direction:column;gap:10px;width:100%">
+                                  <textarea value="{{ t.editText }}" onChange="{{ t.onEditText }}" onKeyDown="{{ t.onEditKey }}" autoFocus="{{ true }}" rows="2" style="width:100%;padding:11px 13px;border-radius:14px;font-family:inherit;font-size:15px;line-height:1.45;resize:none;color:var(--tx);background:var(--gl2);border:1px solid var(--ac);box-shadow:0 0 0 3px var(--acs)"></textarea>
+                                  <div style="display:flex;align-items:center;gap:8px">
+                                    <span style="font-size:11.5px;color:var(--tx4);margin-right:auto">Enter to save · Esc to cancel</span>
+                                    <button onClick="{{ t.cancelEdit }}" style="padding:9px 14px;border-radius:12px;font-size:12.5px;font-weight:500;color:var(--tx3);background:var(--gl2);border:1px solid var(--gb2)">Cancel</button>
+                                    <button onClick="{{ t.saveEdit }}" style="padding:9px 18px;border-radius:12px;font-size:12.5px;font-weight:600;color:var(--aci);background:linear-gradient(140deg,var(--ac),var(--ac2));box-shadow:0 8px 20px -10px var(--ac)">Save</button>
+                                  </div>
+                                </div>
+                              </sc-if>
+                              <sc-if value="{{ t.notEditing }}" hint-placeholder-val="{{ true }}">
+                                <div style="{{ t.textStyle }}">{{ t.text }}</div>
+                              </sc-if>
+                              <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:7px">
+                                <sc-for list="{{ t.badges }}" as="b" hint-placeholder-count="1">
+                                  <span style="{{ b.style }}">
+                                    <sc-if value="{{ b.hasIcon }}" hint-placeholder-val="{{ true }}"><svg width="11" height="11"><use href="{{ b.icon }}"></use></svg></sc-if>
+                                    {{ b.label }}
+                                  </span>
+                                </sc-for>
+                              </div>
+                            </div>
+                            <div style="{{ t.actionsWrapStyle }}">
+                              <button onClick="{{ t.edit }}" style="padding:5px;border-radius:9px;color:var(--tx4)" style-hover="color:var(--tx);background:var(--gl)"><svg width="14" height="14"><use href="#i-pencil"></use></svg></button>
+                              <sc-if value="{{ t.rowButtons }}" hint-placeholder-val="{{ false }}">
+                                <button onClick="{{ t.remind }}" title="Time sensitive" style="{{ t.remindStyle }}" style-hover="color:var(--gold);background:color-mix(in oklab, var(--gold) 16%, transparent)"><svg width="14" height="14"><use href="#i-clock"></use></svg></button>
+                                <button onClick="{{ t.remove }}" title="Delete" style="padding:5px;border-radius:9px;color:var(--tx4)" style-hover="color:var(--red);background:color-mix(in oklab, var(--red) 14%, transparent)"><svg width="14" height="14"><use href="#i-trash-2"></use></svg></button>
+                              </sc-if>
+                            </div>
+                          </div>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+
+                <sc-if value="{{ showWorkbench }}" hint-placeholder-val="{{ false }}">
+                  <div onClick="{{ focusWorkbench }}" style="{{ workbenchWrapStyle }}">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px">
+                      <div style="display:flex;gap:7px">
+                        <button onClick="{{ filterWork }}" style="{{ wbWorkStyle }}">Work</button>
+                        <button onClick="{{ filterPersonal }}" style="{{ wbPersonalStyle }}">Personal</button>
+                      </div>
+                      <button onClick="{{ toggleProjectPanel }}" style="display:flex;align-items:center;gap:6px;padding:8px 15px;border-radius:13px;font-size:12.5px;font-weight:600;white-space:nowrap;flex-shrink:0;color:var(--aci);background:linear-gradient(140deg,var(--ac),var(--ac2));box-shadow:0 6px 18px -8px var(--ac);transition:transform .3s cubic-bezier(.34,1.56,.64,1)" style-hover="transform:translateY(-2px)"><svg width="15" height="15"><use href="#i-plus"></use></svg>New project</button>
+                    </div>
+                    <sc-if value="{{ showProjectPanel }}" hint-placeholder-val="{{ false }}">
+                      <div onClick="{{ stop }}" style="padding:15px;border-radius:22px;margin-bottom:12px;animation:popIn .3s cubic-bezier(.34,1.56,.64,1);background:linear-gradient(157deg,var(--gh),var(--gl));backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);border:1px solid var(--ac);box-shadow:inset 0 1px 0 var(--ghi),0 0 0 3px var(--acs),0 14px 36px -22px var(--gsh)">
+                        <input value="{{ projectDraft }}" onChange="{{ setProjectDraft }}" onKeyDown="{{ projectKey }}" autoFocus="{{ true }}" placeholder="Project title" style="width:100%;padding:11px 13px;border-radius:14px;font-size:15px;color:var(--tx);background:var(--gl2);border:1px solid var(--gb2);margin-bottom:11px">
+                        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:11px">
+                          <svg width="14" height="14" style="color:var(--tx4)"><use href="#i-tag"></use></svg>
+                          <sc-for list="{{ projectCats }}" as="pc" hint-placeholder-count="4">
+                            <button onClick="{{ pc.pick }}" style="{{ pc.style }}"><span style="{{ pc.dotStyle }}"></span>{{ pc.name }}</button>
+                          </sc-for>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:13px">
+                          <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx4)"><svg width="13" height="13"><use href="#i-calendar"></use></svg>Deadline (optional)</span>
+                          <input type="date" value="{{ projectDeadline }}" onChange="{{ setProjectDeadline }}" style="padding:7px 11px;border-radius:11px;font-size:12.5px;color:var(--tx2);background:var(--gl2);border:1px solid var(--gb2)">
+                          <sc-if value="{{ hasProjectDeadline }}" hint-placeholder-val="{{ false }}">
+                            <button onClick="{{ clearProjectDeadline }}" style="font-size:11.5px;font-weight:500;color:var(--tx4)" style-hover="color:var(--red)">Clear</button>
+                          </sc-if>
+                        </div>
+                        <button onClick="{{ createProject }}" style="{{ createProjectStyle }}">Create project</button>
+                      </div>
+                    </sc-if>
+                    <div style="display:flex;flex-direction:column;gap:11px">
+                      <sc-if value="{{ noProjects }}" hint-placeholder-val="{{ false }}">
+                        <div style="padding:32px 16px;border-radius:20px;border:1px dashed var(--gb2);text-align:center;font-size:13px;color:var(--tx4)">{{ noProjectsLabel }}</div>
+                      </sc-if>
+                      <sc-for list="{{ projects }}" as="p" hint-placeholder-count="2">
+                        <div style="padding:15px;border-radius:22px;background:linear-gradient(157deg,var(--gh),var(--gl));backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--gb);box-shadow:inset 0 1px 0 var(--ghi),0 10px 28px -18px var(--gsh)">
+                          <div style="display:flex;align-items:center;gap:9px">
+                            <button onClick="{{ p.toggleOpen }}" style="display:flex;align-items:center;gap:9px;flex:1;min-width:0;text-align:left">
+                              <svg width="15" height="15" style="{{ p.chevStyle }}"><use href="#i-chevron-down"></use></svg>
+                              <span style="font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:600;letter-spacing:-.02em">{{ p.title }}</span>
+                            </button>
+                            <span style="{{ p.catStyle }}">{{ p.catName }}</span>
+                            <button onClick="{{ p.remove }}" title="Delete project" style="padding:4px;color:var(--tx4)" style-hover="color:var(--red)"><svg width="14" height="14"><use href="#i-trash-2"></use></svg></button>
+                          </div>
+                          <div style="margin-top:12px;height:7px;border-radius:99px;background:var(--gl2);overflow:hidden;position:relative">
+                            <div style="{{ p.barStyle }}"></div>
+                            <div style="position:absolute;inset:0;overflow:hidden;border-radius:99px"><span style="position:absolute;top:0;bottom:0;width:34%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);animation:shimmer 2.6s ease-in-out infinite"></span></div>
+                          </div>
+                          <div style="margin-top:7px;font-size:11.5px;color:var(--tx4);font-family:'Geist Mono',monospace">{{ p.meta }}</div>
+                          <sc-if value="{{ p.open }}" hint-placeholder-val="{{ false }}">
+                            <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--gb2);display:flex;flex-direction:column;gap:2px">
+                              <sc-for list="{{ p.milestones }}" as="m" hint-placeholder-count="3">
+                                <div style="display:flex;align-items:center;gap:10px;padding:7px 0">
+                                  <button onClick="{{ m.toggle }}" style="{{ m.boxStyle }}">
+                                    <sc-if value="{{ m.done }}" hint-placeholder-val="{{ false }}"><svg width="10" height="10" style="color:var(--aci)" stroke-width="3.5"><use href="#i-check"></use></svg></sc-if>
+                                  </button>
+                                  <span style="{{ m.textStyle }}">{{ m.text }}</span>
+                                  <span style="font-size:11px;color:var(--tx4);font-family:'Geist Mono',monospace">{{ m.due }}</span>
+                                  <sc-if value="{{ m.notPromoted }}" hint-placeholder-val="{{ true }}">
+                                    <button onClick="{{ m.promote }}" title="Add to today's list" style="padding:3px;color:var(--tx4)" style-hover="color:var(--ac)"><svg width="13" height="13"><use href="#i-arrow-up-right"></use></svg></button>
+                                  </sc-if>
+                                  <sc-if value="{{ m.promoted }}" hint-placeholder-val="{{ false }}">
+                                    <button onClick="{{ m.unpromote }}" title="Remove from today's list" style="display:flex;align-items:center;gap:3px;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:600;color:var(--ac);background:var(--acs);border:1px solid var(--ac)">In today<svg width="10" height="10"><use href="#i-x"></use></svg></button>
+                                  </sc-if>
+                                  <button onClick="{{ m.remove }}" title="Delete milestone" style="padding:3px;color:var(--tx4)" style-hover="color:var(--red)"><svg width="13" height="13"><use href="#i-x"></use></svg></button>
+                                </div>
+                              </sc-for>
+                              <div style="display:flex;gap:7px;margin-top:8px">
+                                <input value="{{ p.msDraft }}" onChange="{{ p.setMsDraft }}" onKeyDown="{{ p.msKey }}" placeholder="Add a milestone" style="flex:1;min-width:0;padding:9px 12px;border-radius:12px;font-size:13px;background:var(--gl2);border:1px solid var(--gb2);color:var(--tx)">
+                                <button onClick="{{ p.addMs }}" style="width:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,var(--ac),var(--ac2));color:var(--aci)"><svg width="15" height="15"><use href="#i-plus"></use></svg></button>
+                              </div>
+                            </div>
+                          </sc-if>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ showThoughtsInline }}" hint-placeholder-val="{{ false }}">
+              <div style="{{ thoughtsWrapStyle }}">
+                <sc-if value="{{ showThoughtsClose }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+                    <h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:600;letter-spacing:-.03em">Clear your head</h2>
+                    <button onClick="{{ closeThoughts }}" style="padding:6px;border-radius:10px;color:var(--tx4)" style-hover="color:var(--tx);background:var(--gl2)"><svg width="19" height="19"><use href="#i-x"></use></svg></button>
+                  </div>
+                </sc-if>
+                <div style="padding:16px;border-radius:24px;margin-bottom:18px;background:linear-gradient(157deg,var(--gh),var(--gl));backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);border:1px solid var(--gb);box-shadow:inset 0 1px 0 var(--ghi),0 14px 36px -22px var(--gsh)">
+                  <textarea value="{{ thoughtDraft }}" onChange="{{ setThoughtDraft }}" rows="2" placeholder="What's on your mind? Get it out of your head…" style="width:100%;border:none;background:transparent;font-family:inherit;font-size:15.5px;line-height:1.5;color:var(--tx);resize:none;padding:4px 2px"></textarea>
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:12px;border-top:1px solid var(--gb2)">
+                    <span style="display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;font-size:12px;color:var(--tx3);background:var(--gl2);border:1px solid var(--gb2)"><svg width="13" height="13"><use href="#i-calendar"></use></svg>No date</span>
+                    <span style="font-size:12px;color:var(--tx4)">Talk to</span>
+                    <sc-for list="{{ personChips }}" as="pc" hint-placeholder-count="4">
+                      <button onClick="{{ pc.select }}" style="{{ pc.style }}"><span style="{{ pc.dotStyle }}"></span>{{ pc.name }}</button>
+                    </sc-for>
+                    <button onClick="{{ noop }}" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:500;color:var(--tx3);border:1px dashed var(--gb2)"><svg width="12" height="12"><use href="#i-user-plus"></use></svg>New person</button>
+                    <button onClick="{{ addThought }}" style="{{ captureStyle }}"><svg width="15" height="15"><use href="#i-plus"></use></svg>Capture</button>
+                  </div>
+                </div>
+
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                  <span style="font-size:12px;color:var(--tx4)">Drag a thought onto a name to reassign it</span>
+                  <button onClick="{{ openManagePeople }}" style="font-size:12px;font-weight:500;color:var(--tx4);padding:3px 7px;border-radius:8px" style-hover="color:var(--tx2);background:var(--gl)">Manage people</button>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:20px">
+                  <sc-for list="{{ thoughtGroups }}" as="g" hint-placeholder-count="3">
+                    <div>
+                      <div style="display:flex;align-items:center;gap:9px;padding:0 4px 10px">
+                        <span style="{{ g.dotStyle }}"></span>
+                        <span style="{{ g.nameStyle }}">{{ g.name }}</span>
+                        <span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--tx4)">{{ g.count }}</span>
+                        <sc-if value="{{ g.deletable }}" hint-placeholder-val="{{ false }}">
+                          <button onClick="{{ noop }}" style="margin-left:auto;padding:4px;color:var(--tx4)" style-hover="color:var(--red)"><svg width="13" height="13"><use href="#i-trash-2"></use></svg></button>
+                        </sc-if>
+                      </div>
+                      <div style="display:flex;flex-direction:column;gap:9px">
+                        <sc-if value="{{ g.empty }}" hint-placeholder-val="{{ false }}">
+                          <div style="padding:16px;border-radius:16px;border:1px dashed var(--gb2);text-align:center;font-size:12px;color:var(--tx4)">{{ g.emptyLabel }}</div>
+                        </sc-if>
+                        <sc-for list="{{ g.items }}" as="t" hint-placeholder-count="2">
+                          <div style="{{ t.cardStyle }}">
+                            <button onClick="{{ t.toggle }}" style="{{ t.boxStyle }}">
+                              <sc-if value="{{ t.done }}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" style="color:var(--aci);animation:tick .45s cubic-bezier(.34,1.56,.64,1)" stroke-width="3.5"><use href="#i-check"></use></svg></sc-if>
+                            </button>
+                            <div style="flex:1;min-width:0">
+                              <div style="{{ t.textStyle }}">{{ t.text }}</div>
+                              <div style="margin-top:7px"><span style="{{ t.badgeStyle }}"><svg width="11" height="11"><use href="{{ t.badgeIcon }}"></use></svg>{{ t.badge }}</span></div>
+                            </div>
+                            <button onClick="{{ noop }}" style="flex-shrink:0;padding:5px;border-radius:9px;color:var(--tx4)" style-hover="color:var(--tx);background:var(--gl)"><svg width="14" height="14"><use href="#i-pencil"></use></svg></button>
+                            <button onClick="{{ t.remove }}" style="flex-shrink:0;padding:5px;border-radius:9px;color:var(--tx4)" style-hover="color:var(--red);background:var(--gl)"><svg width="14" height="14"><use href="#i-trash-2"></use></svg></button>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+
+          </div>
+
+          <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ true }}">
+            <div style="position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;justify-content:center;padding:0 14px 18px;pointer-events:none">
+              <div style="display:flex;align-items:center;gap:3px;padding:6px;border-radius:26px;pointer-events:auto;background:linear-gradient(157deg,var(--gh),var(--gl));backdrop-filter:blur(28px) saturate(200%);-webkit-backdrop-filter:blur(28px) saturate(200%);border:1px solid var(--gb);box-shadow:inset 0 1px 0 var(--ghi),0 18px 44px -18px var(--gsh)">
+                <sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="4">
+                  <button onClick="{{ tb.go }}" style="{{ tb.style }}">
+                    <svg width="18" height="18"><use href="{{ tb.icon }}"></use></svg>
+                    <span style="{{ tb.labelStyle }}">{{ tb.label }}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ showThoughtsFab }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ toggleThoughts }}" title="Thoughts" style="{{ thoughtsFabStyle }}"><svg width="21" height="21"><use href="#i-message-circle-more"></use></svg></button>
+          </sc-if>
+
+          <sc-if value="{{ showFab }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ openAdd }}" style="{{ fabStyle }}">
+              <span style="position:absolute;inset:0;border-radius:inherit;background:linear-gradient(150deg,rgba(255,255,255,.4),transparent 55%);pointer-events:none"></span>
+              <svg width="25" height="25"><use href="#i-plus"></use></svg>
+            </button>
+          </sc-if>
+
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+
+  <sc-if value="{{ isGate }}" hint-placeholder-val="{{ false }}">
+    <div style="position:relative;z-index:1;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px;animation:screenIn .45s cubic-bezier(.22,1,.36,1)">
+      <div style="width:100%;max-width:370px;padding:32px 28px;border-radius:30px;text-align:center;background:linear-gradient(157deg,var(--gh),var(--gl));backdrop-filter:blur(30px) saturate(200%);-webkit-backdrop-filter:blur(30px) saturate(200%);border:1px solid var(--gb);box-shadow:inset 0 1px 0 var(--ghi),0 30px 70px -30px var(--gsh)">
+        <span style="width:56px;height:56px;margin:0 auto 18px;border-radius:20px;display:flex;align-items:center;justify-content:center;color:var(--aci);background:linear-gradient(140deg,var(--ac),var(--ac2));box-shadow:0 12px 30px -10px var(--ac)"><svg width="26" height="26"><use href="#i-scan-face"></use></svg></span>
+        <sc-if value="{{ gateVerifying }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <div style="font-size:16.5px;font-weight:600;margin-bottom:14px">Verifying it's you…</div>
+            <span style="display:block;width:22px;height:22px;margin:0 auto;border-radius:50%;border:2px solid var(--acs);border-top-color:var(--ac);animation:spin .8s linear infinite"></span>
+          </div>
+        </sc-if>
+        <sc-if value="{{ gatePrompt }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <h1 style="margin:0 0 8px;font-family:'Bricolage Grotesque',sans-serif;font-size:23px;font-weight:600;letter-spacing:-.025em">Protect Budget with Face ID?</h1>
+            <p style="margin:0 0 22px;font-size:13.5px;line-height:1.55;color:var(--tx3)">You'll confirm with Face ID each time you open a budget on this device.</p>
+            <button onClick="{{ gateEnable }}" style="width:100%;padding:13px;border-radius:15px;font-size:14px;font-weight:600;margin-bottom:10px;color:var(--aci);background:linear-gradient(140deg,var(--ac),var(--ac2));box-shadow:0 10px 26px -10px var(--ac)">Enable Face ID</button>
+            <button onClick="{{ gateSkip }}" style="width:100%;padding:13px;border-radius:15px;font-size:14px;font-weight:500;color:var(--tx3);background:var(--gl2);border:1px solid var(--gb2)">Not now</button>
+            <button onClick="{{ gateBack }}" style="margin-top:14px;font-size:12.5px;color:var(--tx4)" style-hover="color:var(--tx2)">Back to Orbit</button>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isBudget }}" hint-placeholder-val="{{ false }}">
+    <div style="position:relative;z-index:1;min-height:100vh;animation:screenIn .45s cubic-bezier(.22,1,.36,1)">
+      <div style="{{ budgetInnerStyle }}">
+        <button onClick="{{ backFromBudget }}" style="display:flex;align-items:center;gap:5px;margin-bottom:20px;font-size:13.5px;color:var(--tx3)" style-hover="color:var(--tx)"><svg width="16" height="16"><use href="#i-chevron-left"></use></svg>Back to Orbit</button>
+
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px">
+          <span style="width:40px;height:40px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--aci);background:linear-gradient(140deg,var(--ac),var(--ac2));box-shadow:0 10px 26px -10px var(--ac)"><svg width="19" height="19"><use href="#i-wallet"></use></svg></span>
+          <div>
+            <h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:30px;font-weight:600;letter-spacing:-.03em;line-height:1">Seabaugh Family</h1>
+            <p style="margin:5px 0 0;font-size:13.5px;color:var(--tx3)">Biweekly budget</p>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:4px;padding:5px;border-radius:999px;margin-bottom:16px;background:linear-gradient(157deg,var(--gh),var(--gl));backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--gb);box-shadow:inset 0 1px 0 var(--ghi)">
+          <button onClick="{{ showBills }}" style="{{ billsTabStyle }}"><svg width="14" height="14"><use href="#i-receipt"></use></svg>Budget</button>
+          <button onClick="{{ showLogins }}" style="{{ loginsTabStyle }}"><svg width="14" height="14"><use href="#i-key-round"></use></svg>Logins</button>
+        </div>
+
+        <sc-if value="{{ budgetIsBills }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <div style="display:flex;gap:4px;padding:5px;border-radius:999px;margin-bottom:18px;max-width:280px;background:var(--gl2);border:1px solid var(--gb2)">
+              <button onClick="{{ setP15 }}" style="{{ period15Style }}">15th</button>
+              <button onClick="{{ setP30 }}" style="{{ period30Style }}">30th</button>
+            </div>
+
+            <sc-if value="{{ showAccounts }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;gap:11px;flex-wrap:wrap;margin-bottom:20px">
+              <sc-for list="{{ budgetAccounts }}" as="a" hint-placeholder-count="2">
+                <div style="{{ a.cardStyle }}">
+                  <div style="display:flex;align-items:center;gap:7px;margin-bottom:11px">
+                    <svg width="15" height="15" style="color:var(--ac);flex-shrink:0"><use href="#i-landmark"></use></svg>
+                    <input value="{{ a.name }}" onChange="{{ a.setName }}" title="Tap to rename" style="flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--tx);background:transparent;border:none;padding:0">
+                    <button onClick="{{ a.remove }}" title="Delete account" style="flex-shrink:0;padding:3px;color:var(--tx4)" style-hover="color:var(--red)"><svg width="14" height="14"><use href="#i-trash-2"></use></svg></button>
+                  </div>
+                  <label style="display:block;font-size:11px;color:var(--tx4);margin-bottom:5px">Available</label>
+                  <input value="{{ a.balanceRaw }}" onChange="{{ a.setBalance }}" inputMode="decimal" style="width:100%;padding:8px 11px;border-radius:12px;font-family:'Geist Mono',monospace;font-size:15px;font-weight:600;color:var(--tx);background:var(--gl2);border:1px solid var(--gb2);margin-bottom:11px">
+                  <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--tx3)"><span>Assigned</span><span style="font-family:'Geist Mono',monospace">{{ a.spent }}</span></div>
+                  <div style="display:flex;justify-content:space-between;margin-top:7px;padding-top:7px;border-top:1px solid var(--gb2);font-size:12px;color:var(--tx3)"><span>Left</span><span style="{{ a.leftStyle }}">{{ a.left }}</span></div>
+                </div>
+              </sc-for>
+              <sc-if value="{{ canAddAccount }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ addAccount }}" style="flex:1 1 180px;min-width:0;min-height:120px;display:flex;align-items:center;justify-content:center;gap:7px;padding:15px;border-radius:22px;font-size:13px;font-weight:500;color:var(--tx4);border:1px dashed var(--gb2);background:var(--gl2)" style-hover="color:var(--ac);border-color:var(--ac)"><svg width="15" height="15"><use href="#i-plus"></use></svg>Add account</button>
+              </sc-if>
+            </div>
+            </sc-if>
+
+            <sc-if value="{{ allHandled }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;align-items:center;gap:13px;padding:16px;border-radius:22px;margin-bottom:18px;background:linear-gradient(140deg,var(--acs),var(--gl));border:1px solid var(--ac);box-shadow:inset 0 1px 0 var(--ghi);animation:popIn .4s cubic-bezier(.34,1.56,.64,1)">
+                <svg width="22" height="22" style="color:var(--ac);flex-shrink:0"><use href="#i-party-popper"></use></svg>
+                <div>
+                  <div style="font-size:14.5px;font-weight:600">Every bill for {{ periodLabel }} is handled</div>
+                  <div style="font-size:12px;color:var(--tx3);margin-top:3px;font-family:'Geist Mono',monospace">{{ handledLine }}</div>
+                </div>
+              </div>
+            </sc-if>
+
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px">
+              <h2 style="margin:0;display:flex;align-items:center;gap:8px;font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:600;letter-spacing:-.02em"><svg width="17" height="17" style="color:var(--ac)"><use href="#i-piggy-bank"></use></svg>Bills due {{ periodLabel }}</h2>
+              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end">
+                <button onClick="{{ resetAll }}" title="Reset every bill on both pay periods to Unpaid" style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:500;color:var(--tx4)" style-hover="color:var(--ac)"><svg width="12" height="12"><use href="#i-rotate-ccw"></use></svg>Reset all to unpaid</button>
+                <sc-if value="{{ hasHidden }}" hint-placeholder-val="{{ false }}">
+                  <button onClick="{{ unhideAll }}" style="font-size:12px;font-weight:500;color:var(--ac)">{{ unhideLabel }}</button>
+                </sc-if>
+                <span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--tx4)">{{ openCount }}</span>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <sc-if value="{{ noBills }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:30px 16px;border-radius:20px;border:1px dashed var(--gb2);text-align:center;font-size:13px;color:var(--tx4)">No bills here yet. Add one below to start allocating this pay period.</div>
+              </sc-if>
+              <sc-for list="{{ budgetBills }}" as="b" hint-placeholder-count="4">
+                <div style="{{ b.rowStyle }}">
+                  <div style="display:flex;align-items:center;gap:9px">
+                    <select value="{{ b.name }}" onChange="{{ b.setName }}" style="{{ b.nameStyle }}">
+                      <sc-for list="{{ loginNames }}" as="ln" hint-placeholder-count="3">
+                        <option value="{{ ln }}">{{ ln }}</option>
+                      </sc-for>
+                    </select>
+                    <sc-if value="{{ b.hasLink }}" hint-placeholder-val="{{ false }}">
+                      <a href="#" title="Open in your browser" style="flex-shrink:0;padding:5px;border-radius:9px;color:var(--tx4);display:flex" style-hover="color:var(--ac)"><svg width="15" height="15"><use href="#i-external-link"></use></svg></a>
+                    </sc-if>
+                    <button onClick="{{ b.remove }}" title="Delete bill" style="flex-shrink:0;padding:5px;border-radius:9px;color:var(--tx4)" style-hover="color:var(--red);background:color-mix(in oklab, var(--red) 14%, transparent)"><svg width="15" height="15"><use href="#i-trash-2"></use></svg></button>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                    <select value="{{ b.status }}" onChange="{{ b.setStatus }}" style="{{ b.statusStyle }}">
+                      <option value="unpaid">Unpaid</option>
+                      <option value="scheduled">Scheduled</option>
+                      <option value="skip">No payment needed</option>
+                      <option value="paid">Payment complete</option>
+                    </select>
+                    <input value="{{ b.amount }}" onChange="{{ b.setAmount }}" inputMode="decimal" style="width:104px;padding:7px 11px;border-radius:11px;font-family:'Geist Mono',monospace;font-size:13px;text-align:right;color:var(--tx);background:var(--gl2);border:1px solid var(--gb2)">
+                    <select value="{{ b.acct }}" onChange="{{ b.setAcct }}" style="margin-left:auto;padding:7px 11px;border-radius:11px;font-size:12px;color:var(--tx2);background:var(--gl2);border:1px solid var(--gb2);cursor:pointer">
+                      <sc-for list="{{ accountOptions }}" as="ao" hint-placeholder-count="2">
+                        <option value="{{ ao.id }}">{{ ao.name }}</option>
+                      </sc-for>
+                    </select>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="margin-top:18px;padding-top:18px;border-top:1px solid var(--gb2);display:flex;gap:9px;flex-wrap:wrap;align-items:center">
+              <select value="{{ newBillName }}" onChange="{{ setNewBillName }}" style="flex:1 1 160px;min-width:0;padding:10px 13px;border-radius:13px;font-size:13.5px;cursor:pointer;color:var(--tx);background:var(--gl2);border:1px solid var(--gb2)">
+                <option value="">Select a bill…</option>
+                <sc-for list="{{ loginNames }}" as="ln" hint-placeholder-count="3">
+                  <option value="{{ ln }}">{{ ln }}</option>
+                </sc-for>
+              </select>
+              <input value="{{ newBillAmount }}" onChange="{{ setNewBillAmount }}" inputMode="decimal" placeholder="Amount" style="width:112px;flex-shrink:0;padding:10px 13px;border-radius:13px;font-family:'Geist Mono',monospace;font-size:13px;text-align:right;color:var(--tx);background:var(--gl2);border:1px solid var(--gb2)">
+              <select value="{{ newBillAcct }}" onChange="{{ setNewBillAcct }}" style="flex-shrink:0;padding:10px 13px;border-radius:13px;font-size:13px;cursor:pointer;color:var(--tx2);background:var(--gl2);border:1px solid var(--gb2)">
+                <sc-for list="{{ accountOptions }}" as="ao" hint-placeholder-count="2">
+                  <option value="{{ ao.id }}">{{ ao.name }}</option>
+                </sc-for>
+              </select>
+              <button onClick="{{ addBill }}" style="{{ addBillStyle }}"><svg width="15" height="15"><use href="#i-plus"></use></svg>Add</button>
+            </div>
+
+            <p style="margin:16px 0 0;font-size:11.5px;line-height:1.55;text-align:center;color:var(--tx4)">Bill status saves automatically. Mark a bill "no payment needed" or "payment complete" and it steps out of the way — unhide brings everything back for a check without changing anything.</p>
+
+            <button onClick="{{ toggleAccounts }}" title="Minimize or expand accounts" style="{{ accountsFabStyle }}">
+              <sc-if value="{{ showAccounts }}" hint-placeholder-val="{{ true }}">
+                <svg width="20" height="20"><use href="#i-landmark"></use></svg>
+              </sc-if>
+              <sc-if value="{{ accountsCollapsed }}" hint-placeholder-val="{{ false }}">
+                <sc-for list="{{ accountSummaries }}" as="as" hint-placeholder-count="2">
+                  <span style="display:flex;align-items:center;gap:14px">
+                    <sc-if value="{{ as.showDivider }}" hint-placeholder-val="{{ false }}">
+                      <span style="width:1px;height:26px;background:rgba(255,255,255,.28)"></span>
+                    </sc-if>
+                    <span style="display:flex;flex-direction:column;align-items:center;line-height:1.15">
+                      <span style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;opacity:.85;white-space:nowrap">{{ as.name }}</span>
+                      <span style="font-family:'Geist Mono',monospace;font-size:13px;font-weight:600;white-space:nowrap">{{ as.left }}</span>
+                    </span>
+                  </span>
+                </sc-for>
+              </sc-if>
+            </button>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ budgetIsLogins }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <sc-if value="{{ vaultLocked }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:26px 24px;border-radius:26px;text-align:center;background:linear-gradient(157deg,var(--gh),var(--gl));backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border:1px solid var(--gb);box-shadow:inset 0 1px 0 var(--ghi),0 16px 40px -24px var(--gsh)">
+                <span style="width:48px;height:48px;margin:0 auto 16px;border-radius:17px;display:flex;align-items:center;justify-content:center;color:var(--aci);background:linear-gradient(140deg,var(--ac),var(--ac2));box-shadow:0 10px 26px -10px var(--ac)"><svg width="22" height="22"><use href="#i-shield-check"></use></svg></span>
+                <h2 style="margin:0 0 6px;font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:600;letter-spacing:-.02em">Unlock your vault</h2>
+                <p style="margin:0 0 18px;font-size:13.5px;line-height:1.55;color:var(--tx3)">Your logins are end-to-end encrypted. Enter your passphrase to view them this visit.</p>
+                <button onClick="{{ unlockFace }}" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border-radius:14px;font-size:13.5px;font-weight:600;margin-bottom:14px;color:var(--aci);background:linear-gradient(140deg,var(--ac),var(--ac2));box-shadow:0 10px 26px -10px var(--ac)"><svg width="16" height="16"><use href="#i-scan-face"></use></svg>{{ vaultBusyLabel }}</button>
+                <div style="display:flex;align-items:center;gap:11px;margin-bottom:14px;color:var(--tx4)"><span style="flex:1;height:1px;background:var(--gb2)"></span><span style="font-size:11.5px">or use your passphrase</span><span style="flex:1;height:1px;background:var(--gb2)"></span></div>
+                <input type="password" value="{{ vaultPass }}" onChange="{{ setVaultPass }}" onKeyDown="{{ vaultKey }}" placeholder="Vault passphrase" style="width:100%;padding:11px 13px;border-radius:14px;font-size:14px;color:var(--tx);background:var(--gl2);border:1px solid var(--gb2);margin-bottom:11px">
+                <button onClick="{{ unlockVault }}" style="{{ unlockStyle }}">Unlock</button>
+                <p style="margin:14px 0 0;font-size:11.5px;color:var(--tx4)">Forgot your passphrase? There's no recovery — the vault is encrypted so only you can open it.</p>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ vaultUnlocked }}" hint-placeholder-val="{{ false }}">
+              <div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px">
+                  <h2 style="margin:0;display:flex;align-items:center;gap:8px;font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:600;letter-spacing:-.02em"><svg width="17" height="17" style="color:var(--ac)"><use href="#i-key-round"></use></svg>Bill logins</h2>
+                  <span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--tx4)">{{ loginCount }}</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:11px">
+                  <sc-for list="{{ budgetLogins }}" as="l" hint-placeholder-count="3">
+                    <div style="padding:15px;border-radius:22px;display:flex;flex-direction:column;gap:9px;background:linear-gradient(157deg,var(--gh),var(--gl));backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--gb);box-shadow:inset 0 1px 0 var(--ghi),0 10px 28px -22px var(--gsh);animation:rowIn .4s cubic-bezier(.22,1,.36,1) both">
+                      <div style="display:flex;align-items:center;gap:9px">
+                        <span style="flex:1;min-width:0;font-size:14.5px;font-weight:600">{{ l.name }}</span>
+                        <a href="#" style="padding:5px;border-radius:9px;color:var(--tx4);display:flex" style-hover="color:var(--ac)"><svg width="15" height="15"><use href="#i-external-link"></use></svg></a>
+                        <button onClick="{{ l.remove }}" style="padding:5px;border-radius:9px;color:var(--tx4)" style-hover="color:var(--red)"><svg width="15" height="15"><use href="#i-trash-2"></use></svg></button>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:12px;background:var(--gl2);border:1px solid var(--gb2)">
+                        <span style="width:62px;flex-shrink:0;font-size:11px;font-weight:600;color:var(--tx4)">Website</span>
+                        <span style="flex:1;min-width:0;font-family:'Geist Mono',monospace;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ l.url }}</span>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:12px;background:var(--gl2);border:1px solid var(--gb2)">
+                        <span style="width:62px;flex-shrink:0;font-size:11px;font-weight:600;color:var(--tx4)">Username</span>
+                        <span style="flex:1;min-width:0;font-family:'Geist Mono',monospace;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ l.username }}</span>
+                        <button onClick="{{ l.copy }}" style="flex-shrink:0;padding:4px;color:var(--tx4)" style-hover="color:var(--ac)"><svg width="14" height="14"><use href="#i-copy"></use></svg></button>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:12px;background:var(--gl2);border:1px solid var(--gb2)">
+                        <span style="width:62px;flex-shrink:0;font-size:11px;font-weight:600;color:var(--tx4)">Password</span>
+                        <span style="flex:1;min-width:0;font-family:'Geist Mono',monospace;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ l.password }}</span>
+                        <button onClick="{{ l.toggleShow }}" style="flex-shrink:0;padding:4px;color:var(--tx4)" style-hover="color:var(--ac)"><svg width="14" height="14"><use href="{{ l.showIcon }}"></use></svg></button>
+                        <button onClick="{{ l.copy }}" style="flex-shrink:0;padding:4px;color:var(--tx4)" style-hover="color:var(--ac)"><svg width="14" height="14"><use href="#i-copy"></use></svg></button>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+                <p style="margin:16px 0 0;font-size:11.5px;text-align:center;color:var(--tx4)">End-to-end encrypted, unlocked only by your vault passphrase.</p>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isAccess }}" hint-placeholder-val="{{ false }}">
+    <div style="position:relative;z-index:1;min-height:100vh;animation:screenIn .45s cubic-bezier(.22,1,.36,1)">
+      <div style="{{ accessInnerStyle }}">
+        <div style="display:flex;align-items:center;gap:11px;margin-bottom:24px">
+          <button onClick="{{ backFromAccess }}" style="display:flex;align-items:center;gap:5px;font-size:13.5px;color:var(--tx3)" style-hover="color:var(--tx)"><svg width="16" height="16"><use href="#i-chevron-left"></use></svg>Back</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px">
+          <span style="width:40px;height:40px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--aci);background:linear-gradient(140deg,var(--ac),var(--ac2));box-shadow:0 10px 26px -10px var(--ac)"><svg width="19" height="19"><use href="#i-shield"></use></svg></span>
+          <div>
+            <h1 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:30px;font-weight:600;letter-spacing:-.03em;line-height:1">Access</h1>
+            <p style="margin:5px 0 0;font-size:13.5px;color:var(--tx3)">Who can sign in, and what they can see</p>
+          </div>
+        </div>
+
+        <div style="padding:18px;border-radius:24px;margin-bottom:26px;background:linear-gradient(157deg,var(--gh),var(--gl));backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);border:1px solid var(--gb);box-shadow:inset 0 1px 0 var(--ghi),0 14px 36px -22px var(--gsh)">
+          <div style="font-size:14.5px;font-weight:600;margin-bottom:12px">Add someone</div>
+          <input value="{{ newEmail }}" onChange="{{ setNewEmail }}" placeholder="email@example.com" style="width:100%;padding:11px 13px;border-radius:14px;font-size:14px;color:var(--tx);background:var(--gl2);border:1px solid var(--gb2);margin-bottom:10px">
+          <select value="{{ newRole }}" onChange="{{ setNewRole }}" style="{{ selectStyle }}">
+            <option value="household">Household — shares the budget automatically</option>
+            <option value="guardian">Guardian — own budget by default, approvable</option>
+            <option value="assistant">Assistant — never budget access</option>
+          </select>
+          <div style="height:10px"></div>
+          <button onClick="{{ addPerson }}" style="{{ addPersonStyle }}"><svg width="16" height="16"><use href="#i-user-plus"></use></svg>Add person</button>
+        </div>
+
+        <div style="font-size:11.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--tx4);margin-bottom:12px">People with access</div>
+        <sc-for list="{{ accessPeople }}" as="p" hint-placeholder-count="4">
+          <div style="{{ p.cardStyle }}">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+              <div style="min-width:0;flex:1">
+                <div style="font-size:14.5px;font-weight:600;word-break:break-all">{{ p.email }}</div>
+                <sc-if value="{{ p.isOwner }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:inline-flex;align-items:center;gap:5px;margin-top:6px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;color:var(--ac);background:var(--acs);border:1px solid var(--ac)"><svg width="11" height="11"><use href="#i-shield-check"></use></svg>{{ p.roleLabel }}</div>
+                </sc-if>
+                <sc-if value="{{ p.notOwner }}" hint-placeholder-val="{{ true }}">
+                  <select value="{{ p.role }}" onChange="{{ p.setRole }}" style="margin-top:8px;padding:6px 10px;border-radius:10px;font-size:12.5px;color:var(--tx2);background:var(--gl2);border:1px solid var(--gb2);cursor:pointer">
+                    <option value="household">Household</option>
+                    <option value="guardian">Guardian</option>
+                    <option value="assistant">Assistant</option>
+                  </select>
+                </sc-if>
+              </div>
+              <sc-if value="{{ p.notOwner }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ p.remove }}" style="flex-shrink:0;padding:6px;border-radius:10px;color:var(--tx4)" style-hover="color:var(--red);background:color-mix(in oklab, var(--red) 14%, transparent)"><svg width="16" height="16"><use href="#i-trash-2"></use></svg></button>
+              </sc-if>
+            </div>
+
+            <sc-if value="{{ p.isHousehold }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:11px;font-size:12.5px;font-weight:500;color:var(--green)">Shares the budget automatically</div>
+            </sc-if>
+            <sc-if value="{{ p.isGuardian }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ p.toggleBudget }}" style="{{ p.budgetStyle }}">{{ p.budgetLabel }}</button>
+            </sc-if>
+            <sc-if value="{{ p.isAssistant }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:11px;display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                <button onClick="{{ p.toggleSharedWork }}" style="{{ p.sharedWorkStyle }}">{{ p.sharedWorkLabel }}</button>
+                <sc-if value="{{ p.showScope }}" hint-placeholder-val="{{ false }}">
+                  <select value="{{ p.scope }}" onChange="{{ p.setScope }}" style="padding:7px 11px;border-radius:11px;font-size:12.5px;color:var(--tx2);background:var(--gl2);border:1px solid var(--gb2);cursor:pointer">
+                    <option value="">All Work + Projects</option>
+                    <sc-for list="{{ workCats }}" as="wc" hint-placeholder-count="3">
+                      <option value="{{ wc.id }}">{{ wc.name }}</option>
+                    </sc-for>
+                  </select>
+                </sc-if>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isNightly }}" hint-placeholder-val="{{ false }}">
+    <div style="{{ nightWrapStyle }}">
+      <div style="{{ nightInnerStyle }}">
+        <button onClick="{{ backFromNight }}" style="display:flex;align-items:center;gap:5px;margin-bottom:22px;font-size:13.5px;color:rgba(233,227,242,.55)" style-hover="color:#e9e3f2"><svg width="16" height="16"><use href="#i-chevron-left"></use></svg>Back</button>
+
+        <div style="display:flex;justify-content:center;margin-bottom:18px">
+          <div style="position:relative;width:88px;height:88px;border-radius:50%;overflow:hidden;background:linear-gradient(140deg,#f0cf8e,#d5a55f);box-shadow:0 0 60px -12px rgba(232,193,132,.6)">
+            <div style="{{ moonShadowStyle }}"></div>
+          </div>
+        </div>
+
+        <div style="text-align:center;margin-bottom:30px">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:26px;font-weight:600;letter-spacing:-.03em">{{ nightTitle }}</div>
+          <div style="{{ nightSubStyle }}">{{ nightSub }}</div>
+          <sc-if value="{{ nightCarried }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:7px;font-size:12px;color:rgba(233,227,242,.38)">{{ nightCarriedLabel }}</div>
+          </sc-if>
+        </div>
+
+        <sc-if value="{{ nightEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="text-align:center;font-size:14px;color:rgba(233,227,242,.45);padding:28px 10px;border-top:1px solid rgba(255,255,255,.07);border-bottom:1px solid rgba(255,255,255,.07)">Nothing set for tonight. Add the first thing below.</div>
+        </sc-if>
+
+        <div style="border-top:1px solid rgba(255,255,255,.07)">
+          <sc-for list="{{ nightItems }}" as="n" hint-placeholder-count="4">
+            <div style="{{ n.rowStyle }}">
+              <button onClick="{{ n.toggle }}" style="{{ n.boxStyle }}">
+                <sc-if value="{{ n.done }}" hint-placeholder-val="{{ false }}"><svg width="11" height="11" stroke-width="3.5" style="animation:tick .45s cubic-bezier(.34,1.56,.64,1)"><use href="#i-check"></use></svg></sc-if>
+              </button>
+              <span style="{{ n.textStyle }}">{{ n.text }}</span>
+              <sc-if value="{{ n.repeating }}" hint-placeholder-val="{{ false }}">
+                <svg width="13" height="13" style="color:rgba(233,227,242,.35);flex-shrink:0;margin-top:3px"><use href="#i-repeat"></use></svg>
+              </sc-if>
+              <sc-if value="{{ n.carried }}" hint-placeholder-val="{{ false }}">
+                <span title="Carried over from an earlier night" style="width:6px;height:6px;border-radius:3px;background:#e8c184;flex-shrink:0;margin-top:8px;animation:glowPulse 2.8s ease-in-out infinite"></span>
+              </sc-if>
+              <button onClick="{{ n.remove }}" style="flex-shrink:0;margin-top:2px;color:rgba(233,227,242,.3)" style-hover="color:#e0796d"><svg width="15" height="15"><use href="#i-trash-2"></use></svg></button>
+            </div>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ hasUpcoming }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:32px">
+            <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:rgba(233,227,242,.33);margin-bottom:9px">Coming up</div>
+            <div style="border-top:1px solid rgba(255,255,255,.07)">
+              <sc-for list="{{ nightUpcoming }}" as="n" hint-placeholder-count="1">
+                <div style="{{ n.rowStyle }}">
+                  <button onClick="{{ n.toggle }}" style="{{ n.boxStyle }}"></button>
+                  <span style="{{ n.textStyle }}">{{ n.text }}</span>
+                  <span style="font-size:12px;color:rgba(233,227,242,.33);white-space:nowrap;flex-shrink:0;margin-top:2px;font-family:'Geist Mono',monospace">{{ n.dateLabel }}</span>
+                  <button onClick="{{ n.remove }}" style="flex-shrink:0;margin-top:2px;color:rgba(233,227,242,.3)" style-hover="color:#e0796d"><svg width="15" height="15"><use href="#i-trash-2"></use></svg></button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <div style="display:flex;gap:9px;margin-top:28px;align-items:flex-end">
+          <textarea value="{{ nightDraft }}" onChange="{{ setNightDraft }}" onKeyDown="{{ nightKey }}" rows="1" placeholder="What matters tonight?" style="flex:1;min-width:0;padding:12px 15px;border-radius:14px;font-family:inherit;font-size:15px;line-height:1.4;resize:none;color:#e9e3f2;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.11)"></textarea>
+          <button onClick="{{ addNight }}" style="{{ addNightStyle }}"><svg width="20" height="20"><use href="#i-plus"></use></svg></button>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:9px;margin-top:11px;flex-wrap:wrap">
+          <span style="{{ nightDatePillStyle }}"><svg width="14" height="14"><use href="#i-calendar"></use></svg>Tonight</span>
+          <button onClick="{{ toggleNightRepeat }}" style="{{ nightRepeatPillStyle }}"><svg width="14" height="14"><use href="#i-repeat"></use></svg>{{ nightRepeatLabel }}</button>
+        </div>
+
+        <sc-if value="{{ nightRepeatOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:11px;padding:14px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);animation:popIn .3s cubic-bezier(.34,1.56,.64,1)">
+            <sc-for list="{{ nightRepeatOptions }}" as="r" hint-placeholder-count="4">
+              <button onClick="{{ r.pick }}" style="{{ r.style }}">{{ r.label }}</button>
+            </sc-for>
+            <div style="width:100%;font-size:11.5px;line-height:1.5;color:rgba(233,227,242,.33);margin-top:3px">Repeating items come back every matching night on their own. A missed night stays missed — it won't pile up on tomorrow.</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasNightTemplates }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:32px">
+            <div style="display:flex;align-items:center;gap:7px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:rgba(233,227,242,.33);margin-bottom:9px"><svg width="12" height="12"><use href="#i-repeat"></use></svg>Repeating</div>
+            <div style="border-top:1px solid rgba(255,255,255,.07)">
+              <sc-for list="{{ nightTemplates }}" as="tpl" hint-placeholder-count="2">
+                <div style="padding:13px 2px;border-bottom:1px solid rgba(255,255,255,.07)">
+                  <div style="font-size:14px;color:rgba(233,227,242,.55)">{{ tpl.text }}</div>
+                  <div style="font-size:11.5px;color:rgba(233,227,242,.33);margin-top:3px">{{ tpl.label }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isStub }}" hint-placeholder-val="{{ false }}">
+    <div style="position:relative;z-index:1;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px;animation:screenIn .45s cubic-bezier(.22,1,.36,1)">
+      <div style="width:100%;max-width:440px;padding:32px 28px;border-radius:30px;text-align:center;background:linear-gradient(157deg,var(--gh),var(--gl));backdrop-filter:blur(30px) saturate(200%);-webkit-backdrop-filter:blur(30px) saturate(200%);border:1px solid var(--gb);box-shadow:inset 0 1px 0 var(--ghi),0 30px 70px -30px var(--gsh)">
+        <div style="width:56px;height:56px;margin:0 auto 18px;border-radius:20px;display:flex;align-items:center;justify-content:center;color:var(--aci);background:linear-gradient(140deg,var(--ac),var(--ac2));box-shadow:0 12px 30px -10px var(--ac)">
+          <svg width="26" height="26"><use href="{{ stubIcon }}"></use></svg>
+        </div>
+        <h1 style="margin:0 0 8px;font-family:'Bricolage Grotesque',sans-serif;font-size:28px;font-weight:600;letter-spacing:-.03em">{{ stubTitle }}</h1>
+        <p style="margin:0 0 24px;font-size:14px;line-height:1.55;color:var(--tx3)">This screen is next up in the redesign — every control from the current version is mapped out, it just hasn't been rebuilt in glass yet.</p>
+        <button onClick="{{ goApp }}" style="display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:16px;font-size:13.5px;font-weight:600;color:var(--aci);background:linear-gradient(140deg,var(--ac),var(--ac2));box-shadow:0 10px 26px -10px var(--ac);transition:transform .35s cubic-bezier(.34,1.56,.64,1)" style-hover="transform:translateY(-2px)">
+          <svg width="15" height="15"><use href="#i-arrow-left"></use></svg>Back to Orbit
+        </button>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showMenu }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeMenu }}" style="position:fixed;inset:0;z-index:70;animation:fadeIn .2s ease">
+      <div onClick="{{ stop }}" style="{{ menuStyle }}">
+        <div style="padding:4px 10px 11px;border-bottom:1px solid var(--gb2);margin-bottom:7px">
+          <div style="font-size:13.5px;font-weight:600">Javo Seabaugh</div>
+          <div style="font-size:11.5px;color:var(--tx4);margin-top:2px">Owner</div>
+        </div>
+        <button onClick="{{ togglePalette }}" style="width:100%;display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:12px;font-size:13px;font-weight:500;color:var(--tx2)" style-hover="background:var(--gl2)"><svg width="15" height="15"><use href="#i-palette"></use></svg>Theme<svg width="13" height="13" style="{{ paletteChevStyle }}"><use href="#i-chevron-down"></use></svg></button>
+        <sc-if value="{{ showPalette }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:3px 4px 7px;display:flex;flex-direction:column;gap:2px;animation:popIn .25s cubic-bezier(.34,1.56,.64,1)">
+            <sc-for list="{{ palettes }}" as="p" hint-placeholder-count="5">
+              <button onClick="{{ p.pick }}" style="{{ p.style }}">
+                <span style="{{ p.swatchStyle }}"></span>
+                <span style="flex:1;text-align:left">{{ p.label }}</span>
+                <sc-if value="{{ p.active }}" hint-placeholder-val="{{ false }}"><svg width="13" height="13"><use href="#i-check"></use></svg></sc-if>
+              </button>
+            </sc-for>
+            <div style="display:flex;gap:5px;margin-top:6px;padding:4px;border-radius:13px;background:var(--gl2)">
+              <button onClick="{{ setLight }}" style="{{ lightStyle }}"><svg width="13" height="13"><use href="#i-sun"></use></svg>Light</button>
+              <button onClick="{{ setDark }}" style="{{ darkStyle }}"><svg width="13" height="13"><use href="#i-moon"></use></svg>Dark</button>
+            </div>
+          </div>
+        </sc-if>
+        <button onClick="{{ openNotify }}" style="width:100%;display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:12px;font-size:13px;font-weight:500;color:var(--tx2)" style-hover="background:var(--gl2)"><svg width="15" height="15"><use href="#i-message-circle-more"></use></svg>Notifications</button>
+        <button onClick="{{ requestBudget }}" style="{{ budgetRequestStyle }}" style-hover="background:var(--gl2)"><svg width="15" height="15"><use href="{{ budgetRequestIcon }}"></use></svg>{{ budgetRequestLabel }}</button>
+        <button onClick="{{ signOut }}" style="width:100%;display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:12px;font-size:13px;font-weight:500;color:var(--red)" style-hover="background:var(--gl2)"><svg width="15" height="15"><use href="#i-log-out"></use></svg>Sign out</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showAdd }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeAdd }}" style="position:fixed;inset:0;z-index:80;background:var(--scrim);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);animation:fadeIn .22s ease;display:flex;align-items:flex-end;justify-content:center">
+      <div onClick="{{ stop }}" style="width:100%;max-width:640px;margin:0 10px 10px;padding:20px;border-radius:30px;animation:sheetIn .42s cubic-bezier(.22,1,.36,1);background:linear-gradient(157deg,var(--gh),var(--gl));backdrop-filter:blur(34px) saturate(200%);-webkit-backdrop-filter:blur(34px) saturate(200%);border:1px solid var(--gb);box-shadow:inset 0 1px 0 var(--ghi),0 -20px 60px -24px var(--gsh)">
+        <div style="width:38px;height:4px;border-radius:99px;background:var(--gb);margin:-6px auto 16px"></div>
+        <div style="display:flex;gap:12px;align-items:center">
+          <input value="{{ draft }}" onChange="{{ setDraft }}" onKeyDown="{{ draftKey }}" placeholder="{{ addPlaceholder }}" style="flex:1;min-width:0;border:none;background:transparent;font-size:17px;font-weight:500;color:var(--tx);padding:4px 2px">
+          <button onClick="{{ commitAdd }}" style="{{ addBtnStyle }}"><svg width="19" height="19"><use href="#i-plus"></use></svg></button>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:14px;padding-top:13px;border-top:1px solid var(--gb2);flex-wrap:wrap">
+          <span style="display:flex;align-items:center;gap:7px;padding:7px 13px;border-radius:999px;font-size:12.5px;color:var(--tx3);background:var(--gl2);border:1px solid var(--gb2)"><svg width="13" height="13"><use href="#i-calendar"></use></svg>Today</span>
+          <svg width="14" height="14" style="color:var(--tx4);margin-left:4px"><use href="#i-repeat"></use></svg>
+          <sc-for list="{{ repeatOptions }}" as="r" hint-placeholder-count="5">
+            <button onClick="{{ r.pick }}" style="{{ r.style }}">{{ r.label }}</button>
+          </sc-for>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;margin-top:14px;padding-top:13px;border-top:1px solid var(--gb2);flex-wrap:wrap">
+          <svg width="14" height="14" style="color:var(--tx4)"><use href="#i-tag"></use></svg>
+          <sc-for list="{{ draftCats }}" as="c" hint-placeholder-count="4">
+            <button onClick="{{ c.pick }}" style="{{ c.style }}"><span style="{{ c.dotStyle }}"></span>{{ c.name }}</button>
+          </sc-for>
+          <button onClick="{{ noop }}" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:500;color:var(--tx3);border:1px dashed var(--gb2)"><svg width="12" height="12"><use href="#i-plus"></use></svg>New</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showNotify }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeNotify }}" style="{{ scrimStyle }}">
+      <div onClick="{{ stop }}" style="{{ modalStyle }}">
+        <div style="display:flex;align-items:center;gap:11px;margin-bottom:4px">
+          <span style="width:36px;height:36px;border-radius:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--aci);background:linear-gradient(140deg,var(--ac),var(--ac2));box-shadow:0 8px 20px -8px var(--ac)"><svg width="17" height="17"><use href="#i-message-circle-more"></use></svg></span>
+          <h2 style="margin:0;flex:1;font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:600;letter-spacing:-.02em">Connect Telegram</h2>
+          <button onClick="{{ closeNotify }}" style="padding:5px;color:var(--tx4)"><svg width="18" height="18"><use href="#i-x"></use></svg></button>
+        </div>
+        <p style="margin:0 0 18px;font-size:11.5px;font-family:'Geist Mono',monospace;color:var(--tx4);letter-spacing:.04em">{{ notifyStepLabel }}</p>
+
+        <sc-if value="{{ notifyStep1 }}" hint-placeholder-val="{{ true }}">
+          <div style="animation:popIn .3s cubic-bezier(.34,1.56,.64,1)">
+            <p style="margin:0 0 12px;font-size:13.5px;line-height:1.55;color:var(--tx2)">First, create your own personal bot — it takes about a minute.</p>
+            <ol style="margin:0 0 16px;padding-left:20px;font-size:13px;line-height:1.85;color:var(--tx2)">
+              <li>Open Telegram and search for <strong>@BotFather</strong></li>
+              <li>Send the message <strong>/newbot</strong></li>
+              <li>Give it any name and username it asks for</li>
+              <li>BotFather replies with a long token — copy it</li>
+            </ol>
+            <input value="{{ botToken }}" onChange="{{ setBotToken }}" placeholder="Paste your bot token" style="width:100%;padding:11px 13px;border-radius:14px;font-family:'Geist Mono',monospace;font-size:12.5px;color:var(--tx);background:var(--gl2);border:1px solid var(--gb2);margin-bottom:14px">
+            <button onClick="{{ notifyNext }}" style="{{ notifyNextStyle }}">Next</button>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ notifyStep2 }}" hint-placeholder-val="{{ false }}">
+          <div style="animation:popIn .3s cubic-bezier(.34,1.56,.64,1)">
+            <p style="margin:0 0 12px;font-size:13.5px;line-height:1.55;color:var(--tx2)">Now find your Chat ID — this tells the bot who to message.</p>
+            <ol style="margin:0 0 16px;padding-left:20px;font-size:13px;line-height:1.85;color:var(--tx2)">
+              <li>Open a chat with the bot you just created</li>
+              <li>Send it any message, like "hi"</li>
+              <li>It replies instantly with your Chat ID</li>
+            </ol>
+            <input value="{{ chatId }}" onChange="{{ setChatId }}" placeholder="Paste your Chat ID" style="width:100%;padding:11px 13px;border-radius:14px;font-family:'Geist Mono',monospace;font-size:12.5px;color:var(--tx);background:var(--gl2);border:1px solid var(--gb2);margin-bottom:14px">
+            <div style="display:flex;gap:9px">
+              <button onClick="{{ notifyBack }}" style="flex:1;padding:12px;border-radius:14px;font-size:13px;font-weight:500;color:var(--tx3);background:var(--gl2);border:1px solid var(--gb2)">Back</button>
+              <button onClick="{{ notifySave }}" style="{{ notifySaveStyle }}">Save</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ notifyStep3 }}" hint-placeholder-val="{{ false }}">
+          <div style="text-align:center;animation:popIn .35s cubic-bezier(.34,1.56,.64,1)">
+            <span style="width:52px;height:52px;margin:6px auto 16px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--aci);background:linear-gradient(140deg,var(--ac),var(--ac2));box-shadow:0 12px 30px -10px var(--ac)"><svg width="24" height="24" stroke-width="3"><use href="#i-check"></use></svg></span>
+            <p style="margin:0 0 20px;font-size:13.5px;line-height:1.55;color:var(--tx2)">All set. Orbit will send your reminders through your own Telegram bot.</p>
+            <button onClick="{{ closeNotify }}" style="width:100%;padding:12px;border-radius:14px;font-size:13px;font-weight:600;color:var(--aci);background:linear-gradient(140deg,var(--ac),var(--ac2));box-shadow:0 8px 22px -10px var(--ac)">Done</button>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showManageCats }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModals }}" style="{{ scrimStyle }}">
+      <div onClick="{{ stop }}" style="{{ modalStyle }}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:600;letter-spacing:-.02em">Manage categories</h2>
+          <button onClick="{{ closeModals }}" style="padding:5px;color:var(--tx4)"><svg width="18" height="18"><use href="#i-x"></use></svg></button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <sc-for list="{{ manageCats }}" as="c" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 13px;border-radius:14px;background:var(--gl2);border:1px solid var(--gb2)">
+              <span style="display:flex;align-items:center;gap:9px;font-size:14px;font-weight:500"><span style="{{ c.dotStyle }}"></span>{{ c.name }}</span>
+              <button onClick="{{ noop }}" style="padding:4px;color:var(--tx4)" style-hover="color:var(--red)"><svg width="15" height="15"><use href="#i-trash-2"></use></svg></button>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showManagePeople }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModals }}" style="{{ scrimStyle }}">
+      <div onClick="{{ stop }}" style="{{ modalStyle }}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h2 style="margin:0;font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:600;letter-spacing:-.02em">Manage people</h2>
+          <button onClick="{{ closeModals }}" style="padding:5px;color:var(--tx4)"><svg width="18" height="18"><use href="#i-x"></use></svg></button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <sc-for list="{{ people }}" as="p" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 13px;border-radius:14px;background:var(--gl2);border:1px solid var(--gb2)">
+              <span style="display:flex;align-items:center;gap:9px;font-size:14px;font-weight:500"><span style="{{ p.dotStyle }}"></span>{{ p.name }}</span>
+              <button onClick="{{ noop }}" style="padding:4px;color:var(--tx4)" style-hover="color:var(--red)"><svg width="15" height="15"><use href="#i-trash-2"></use></svg></button>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;aurora&quot;,&quot;nocturne&quot;,&quot;solstice&quot;,&quot;bloom&quot;,&quot;verdant&quot;],&quot;default&quot;:&quot;aurora&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Theme&quot;},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;auto&quot;,&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;auto&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Theme&quot;},&quot;viewport&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;auto&quot;,&quot;mobile&quot;,&quot;desktop&quot;],&quot;default&quot;:&quot;auto&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Layout&quot;}}">
+const THEMES = {
+  aurora:   { label: "Aurora",   h: 195, n: 230, bh: [195, 245, 285] },
+  nocturne: { label: "Nocturne", h: 272, n: 265, bh: [272, 225, 310] },
+  solstice: { label: "Solstice", h: 58,  n: 62,  bh: [58, 28, 92] },
+  bloom:    { label: "Bloom",    h: 350, n: 340, bh: [350, 310, 20] },
+  verdant:  { label: "Verdant",  h: 158, n: 152, bh: [158, 195, 120] },
+};
+const CAT_KEYS = ["blue", "green", "orange", "yellow"];
+
+function catHues(h) { return [h, h + 72, h + 152, h + 224].map((x) => ((x % 360) + 360) % 360); }
+
+function tokens(id, dark) {
+  const t = THEMES[id] || THEMES.aurora;
+  const h = t.h, n = t.n;
+  const L = (l, c, hu) => `oklch(${l} ${c} ${hu})`;
+  const base = dark
+    ? {
+        "--bg0": L(0.19, 0.03, n), "--bg1": L(0.11, 0.02, n),
+        "--b1": L(0.55, 0.19, t.bh[0]), "--b2": L(0.5, 0.2, t.bh[1]), "--b3": L(0.52, 0.18, t.bh[2]),
+        "--bop": "0.5", "--bop2": "0.38", "--grain": "0.035",
+        "--tx": L(0.97, 0.008, n), "--tx2": L(0.85, 0.014, n), "--tx3": L(0.68, 0.018, n), "--tx4": L(0.55, 0.02, n),
+        "--gl": "rgba(255,255,255,0.055)", "--gl2": "rgba(255,255,255,0.04)", "--g2": "rgba(255,255,255,0.10)",
+        "--gh": "rgba(255,255,255,0.13)", "--ghi": "rgba(255,255,255,0.16)",
+        "--gb": "rgba(255,255,255,0.14)", "--gb2": "rgba(255,255,255,0.09)",
+        "--gsh": "rgba(0,0,0,0.75)", "--scrim": "rgba(4,6,10,0.55)",
+        "--ac": L(0.8, 0.14, h), "--ac2": L(0.86, 0.12, h + 28), "--acs": L(0.35, 0.07, h), "--aci": L(0.17, 0.03, n),
+        "--red": L(0.72, 0.16, 22), "--gold": L(0.82, 0.13, 82), "--green": L(0.8, 0.14, 155),
+      }
+    : {
+        "--bg0": L(0.985, 0.008, n), "--bg1": L(0.945, 0.016, n),
+        "--b1": L(0.88, 0.1, t.bh[0]), "--b2": L(0.86, 0.11, t.bh[1]), "--b3": L(0.9, 0.085, t.bh[2]),
+        "--bop": "0.55", "--bop2": "0.42", "--grain": "0.02",
+        "--tx": L(0.24, 0.026, n), "--tx2": L(0.4, 0.024, n), "--tx3": L(0.55, 0.022, n), "--tx4": L(0.68, 0.018, n),
+        "--gl": "rgba(255,255,255,0.5)", "--gl2": "rgba(255,255,255,0.4)", "--g2": "rgba(255,255,255,0.72)",
+        "--gh": "rgba(255,255,255,0.82)", "--ghi": "rgba(255,255,255,0.9)",
+        "--gb": "rgba(255,255,255,0.7)", "--gb2": "rgba(120,120,140,0.16)",
+        "--gsh": "rgba(30,35,60,0.35)", "--scrim": "rgba(20,24,38,0.28)",
+        "--ac": L(0.6, 0.15, h), "--ac2": L(0.65, 0.14, h + 28), "--acs": L(0.93, 0.05, h), "--aci": "#fff",
+        "--red": L(0.56, 0.18, 25), "--gold": L(0.62, 0.14, 78), "--green": L(0.56, 0.14, 155),
+      };
+  catHues(h).forEach((hu, i) => {
+    base[`--c${i}`] = L(dark ? 0.75 : 0.58, 0.15, hu);
+    base[`--c${i}t`] = L(dark ? 0.86 : 0.45, dark ? 0.1 : 0.12, hu);
+    base[`--c${i}b`] = dark ? `oklch(0.32 0.06 ${hu} / 0.75)` : `oklch(0.94 0.045 ${hu} / 0.9)`;
+  });
+  return base;
+}
+
+const GLASS = "background:linear-gradient(157deg,var(--gh),var(--gl));backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);border:1px solid var(--gb);box-shadow:inset 0 1px 0 var(--ghi),0 14px 36px -22px var(--gsh)";
+const SPRING = "cubic-bezier(.34,1.56,.64,1)";
+
+const TODAY = "2026-07-30";
+function fmt(d) {
+  if (!d) return "";
+  const p = d.split("-").map(Number);
+  return new Date(p[0], p[1] - 1, p[2]).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+function overdue(d, done) { return !!d && !done && d < TODAY; }
+function money(n) { return (Number.isFinite(n) ? n : 0).toLocaleString("en-US", { style: "currency", currency: "USD" }); }
+
+class Component extends DCLogic {
+  rootRef = React.createRef();
+  spriteRef = React.createRef();
+
+  state = {
+    screen: "app", tab: "work", themeId: null, mode: null, vp: null,
+    catFilter: [], hideFuture: false, focusCol: "work",
+    showAdd: false, addTarget: "work", draft: "", draftCat: null, draftRep: "none",
+    showMenu: false, showPalette: false, showManageCats: false, showManagePeople: false,
+    brain: "idle", brainText: "", heard: "",
+    thoughtDraft: "", thoughtPerson: null,
+    burst: null, swipe: null, drag: null, openProject: "p1", wbFilter: null,
+    editingId: null,
+    todos: [
+      { id: "t1", list: "work", text: "Send the Q3 roadmap to Amon", due: "2026-07-27", cat: "w1", done: false },
+      { id: "t2", list: "work", text: "Review the trailer maintenance quote", due: "2026-07-30", cat: "w2", done: false, time: "14:30" },
+      { id: "t3", list: "work", text: "Approve the invoice batch", due: "2026-08-01", cat: "w3", done: false, rep: "monthly" },
+      { id: "t4", list: "work", text: "Draft the handoff doc for the warehouse move", due: null, cat: "w1", done: false },
+      { id: "t5", list: "work", text: "Archive last quarter's contracts", due: "2026-07-29", cat: "w3", done: true },
+      { id: "t6", list: "personal", text: "Refill the prescription", due: "2026-07-28", cat: "p2", done: false },
+      { id: "t7", list: "personal", text: "Book the dentist", due: "2026-07-30", cat: "p2", done: false },
+      { id: "t8", list: "personal", text: "Water the plants", due: "2026-07-30", cat: "p1", done: false, rep: "daily" },
+      { id: "t9", list: "personal", text: "Pick up the dry cleaning", due: "2026-08-02", cat: "p3", done: false },
+      { id: "t10", list: "personal", text: "Call Mom back", due: null, cat: "p4", done: true },
+    ],
+    cats: [
+      { id: "w1", list: "work", name: "Client work", color: "blue" },
+      { id: "w2", list: "work", name: "Ops", color: "green" },
+      { id: "w3", list: "work", name: "Admin", color: "orange" },
+      { id: "p1", list: "personal", name: "Home", color: "blue" },
+      { id: "p2", list: "personal", name: "Health", color: "green" },
+      { id: "p3", list: "personal", name: "Errands", color: "orange" },
+      { id: "p4", list: "personal", name: "Family", color: "yellow" },
+    ],
+    people: [
+      { id: "pe1", name: "Amon", color: "blue" },
+      { id: "pe2", name: "Riley", color: "green" },
+      { id: "pe3", name: "Sam", color: "orange" },
+    ],
+    thoughts: [
+      { id: "th1", text: "Ask about the new hire timeline before the offer goes out", person: null, due: null, done: false, age: "9d ago", stale: true },
+      { id: "th2", text: "Idea: a Friday digest email that rolls up the week", person: null, due: null, done: false, age: "2h ago", stale: false },
+      { id: "th3", text: "Trailer maintenance — book it for next Tuesday", person: "pe1", due: "2026-08-04", done: false, age: "1d ago", stale: false },
+      { id: "th4", text: "Talk through how we're splitting the shared budget", person: "pe2", due: "2026-07-29", done: false, age: "3d ago", stale: false },
+    ],
+    accounts: [
+      { id: "b1", name: "Everyday", bal: { "15": "2400", "30": "1980" } },
+      { id: "b2", name: "Bills", bal: { "15": "1850", "30": "2100" } },
+    ],
+    bills: [
+      { id: "bl1", name: "Mortgage", amount: 1450, acct: "b2", due: "15", status: "unpaid" },
+      { id: "bl2", name: "Electric", amount: 186.4, acct: "b1", due: "15", status: "scheduled" },
+      { id: "bl3", name: "Internet", amount: 79.99, acct: "b1", due: "15", status: "unpaid" },
+      { id: "bl4", name: "Car insurance", amount: 142, acct: "b2", due: "15", status: "paid" },
+      { id: "bl5", name: "Phone", amount: 95, acct: "b1", due: "30", status: "unpaid" },
+      { id: "bl6", name: "Water", amount: 64.2, acct: "b2", due: "30", status: "unpaid" },
+    ],
+    logins: [
+      { id: "lg1", name: "Mortgage", url: "mortgage.example.com", username: "javo@example.com", password: "correct-horse-battery" },
+      { id: "lg2", name: "Electric", url: "electric.example.com", username: "javoseabaugh", password: "sunny-day-4471" },
+      { id: "lg3", name: "Internet", url: "internet.example.com", username: "javo@example.com", password: "fiber-optic-99" },
+    ],
+    access: [
+      { id: "a1", email: "javoseabaugh@gmail.com", role: "owner", budgetShared: true, sharedWork: false, scope: "" },
+      { id: "a2", email: "partner@example.com", role: "household", budgetShared: true, sharedWork: false, scope: "" },
+      { id: "a3", email: "mom@example.com", role: "guardian", budgetShared: false, sharedWork: false, scope: "" },
+      { id: "a4", email: "assistant@example.com", role: "assistant", budgetShared: false, sharedWork: true, scope: "w2" },
+    ],
+    nightly: [
+      { id: "n1", text: "Lay out clothes for tomorrow", done: true, forDate: TODAY, rolled: false, repeat: "daily" },
+      { id: "n2", text: "Ten minutes of stretching", done: false, forDate: TODAY, rolled: false, repeat: null },
+      { id: "n3", text: "Read twenty pages", done: false, forDate: TODAY, rolled: false, repeat: "daily" },
+      { id: "n4", text: "Write one line in the journal", done: false, forDate: TODAY, rolled: true, repeat: null },
+      { id: "n5", text: "Pack the cooler for the trip", done: false, forDate: "2026-08-02", rolled: false, repeat: null },
+    ],
+    projects: [
+      { id: "p1", title: "Warehouse move", cat: "w2", deadline: "2026-09-12", ms: [
+        { id: "m1", text: "Lock in the moving company", due: "2026-08-05", done: true },
+        { id: "m2", text: "Inventory the loading dock", due: "2026-08-12", done: true },
+        { id: "m3", text: "Transfer the utility accounts", due: "2026-08-24", done: false },
+        { id: "m4", text: "Update the delivery addresses", due: "2026-09-01", done: false },
+        { id: "m5", text: "Final walkthrough", due: "2026-09-10", done: false },
+      ] },
+      { id: "p2", title: "Site redesign", cat: "w1", deadline: "2026-08-20", ms: [
+        { id: "m6", text: "Sign off on the wireframes", due: "2026-07-24", done: true },
+        { id: "m7", text: "Hand off the design system", due: "2026-08-02", done: true },
+        { id: "m8", text: "Content pass on every page", due: "2026-08-12", done: false },
+        { id: "m9", text: "Launch", due: "2026-08-20", done: false },
+      ] },
+    ],
+  };
+
+  componentDidMount() {
+    this.applyTheme();
+    this.onResize = () => this.forceUpdate();
+    window.addEventListener("resize", this.onResize);
+  }
+  componentDidUpdate() { this.applyTheme(); }
+  componentWillUnmount() { window.removeEventListener("resize", this.onResize); }
+
+  applyTheme() {
+    const el = this.rootRef.current;
+    if (!el) return;
+    const t = tokens(this.themeId(), this.dark());
+    Object.keys(t).forEach((k) => el.style.setProperty(k, t[k]));
+  }
+
+  themeId() { return this.state.themeId || this.props.theme || "aurora"; }
+  dark() {
+    const m = this.state.mode || this.props.mode;
+    if (m === "dark") return true;
+    if (m === "light") return false;
+    return typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+  mobile() {
+    const v = this.state.vp || this.props.viewport;
+    if (v === "mobile") return true;
+    if (v === "desktop") return false;
+    return typeof window === "undefined" || window.innerWidth < 1100;
+  }
+
+  catOf(id) { return this.state.cats.find((c) => c.id === id); }
+  catVar(id) {
+    const c = this.catOf(id);
+    const i = c ? CAT_KEYS.indexOf(c.color) : 0;
+    return i < 0 ? 0 : i;
+  }
+  set(patch) { this.setState(patch); }
+
+  toggleTodo = (id) => {
+    this.setState((s) => {
+      const cur = s.todos.find((t) => t.id === id);
+      const now = cur ? !cur.done : false;
+      return {
+        todos: s.todos.map((t) => (t.id === id ? { ...t, done: now } : t)),
+        projects: cur && cur.msId ? s.projects.map((p) => ({ ...p, ms: p.ms.map((m) => m.id === cur.msId ? { ...m, done: now } : m) })) : s.projects,
+        burst: now ? id : null,
+      };
+    });
+    setTimeout(() => this.setState((s) => (s.burst === id ? { burst: null } : null)), 620);
+  };
+
+  // ---- swipe to delete / swipe right to remind ----
+  swipeStart = (id) => (e) => {
+    if (e.target.closest("button")) return;
+    const startX = e.clientX;
+    let dx = 0;
+    const move = (ev) => {
+      dx = ev.clientX - startX;
+      if (Math.abs(dx) < 4) return;
+      this.setState({ swipe: { id, dx: Math.max(-150, Math.min(150, dx)) } });
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      if (dx < -95) {
+        this.setState((s) => ({ swipe: null, todos: s.todos.filter((t) => t.id !== id) }));
+      } else {
+        this.setState({ swipe: null });
+      }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
+  dragStart = (id, listKey) => (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startY = e.clientY;
+    const move = (ev) => this.setState({ drag: { id, dy: ev.clientY - startY, list: listKey } });
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      this.setState((s) => {
+        const d = s.drag;
+        if (!d || Math.abs(d.dy) < 30) return { drag: null };
+        const arr = [...s.todos];
+        const i = arr.findIndex((t) => t.id === d.id);
+        const j = Math.max(0, Math.min(arr.length - 1, i + (d.dy > 0 ? 1 : -1)));
+        const [m] = arr.splice(i, 1);
+        arr.splice(j, 0, m);
+        return { drag: null, todos: arr };
+      });
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
+  buildColumn(listKey, isOnly) {
+    const s = this.state;
+    const mob = this.mobile();
+    const cats = s.cats.filter((c) => c.list === listKey);
+    const all = s.todos.filter((t) => t.list === listKey);
+    const dated = s.hideFuture ? all.filter((t) => !t.due || t.due <= TODAY) : all;
+    const colFilter = (s.catFilters && s.catFilters[listKey]) || [];
+    const filt = colFilter.length ? dated.filter((t) => colFilter.includes(t.cat)) : dated;
+    const items = [...filt].sort((a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      if (a.due && b.due && a.due !== b.due) return a.due < b.due ? -1 : 1;
+      if (a.due && !b.due) return -1;
+      if (!a.due && b.due) return 1;
+      return 0;
+    });
+    const focused = !mob && s.focusCol === listKey;
+    const accent = listKey === "work" ? "var(--c0)" : "var(--c1)";
+    return {
+      key: listKey,
+      label: listKey === "work" ? "Work" : "Personal",
+      icon: listKey === "work" ? "#i-briefcase" : "#i-user",
+      iconStyle: { color: accent },
+      showHead: !mob,
+      focus: () => this.setState({ focusCol: listKey }),
+      manage: (e) => { e.stopPropagation(); this.setState({ showManageCats: true, addTarget: listKey }); },
+      countLabel: `${all.filter((t) => !t.done).length} left`,
+      wrapStyle: mob
+        ? { flex: "1 1 auto", minWidth: 0 }
+        : { flex: "1 1 0", minWidth: 0, padding: 16, borderRadius: 26, background: "linear-gradient(157deg,var(--gh),var(--gl))", backdropFilter: "blur(22px) saturate(180%)", WebkitBackdropFilter: "blur(22px) saturate(180%)", border: `1px solid ${focused ? accent : "var(--gb)"}`, boxShadow: focused ? `inset 0 1px 0 var(--ghi),0 0 0 3px color-mix(in oklab, ${accent} 22%, transparent),0 18px 44px -26px var(--gsh)` : "inset 0 1px 0 var(--ghi),0 18px 44px -26px var(--gsh)", transition: `border-color .3s ease, box-shadow .3s ease` },
+      hasChips: cats.length > 0,
+      filtered: colFilter.length > 0,
+      clearFilter: (e) => { e.stopPropagation(); this.setState((st) => ({ catFilters: { ...(st.catFilters || {}), [listKey]: [] } })); },
+      chips: cats.map((c) => {
+        const on = colFilter.includes(c.id);
+        const i = CAT_KEYS.indexOf(c.color);
+        return {
+          name: c.name,
+          toggle: (e) => { e.stopPropagation(); this.setState((st) => { const cur = (st.catFilters || {})[listKey] || []; return { catFilters: { ...(st.catFilters || {}), [listKey]: cur.includes(c.id) ? cur.filter((x) => x !== c.id) : [...cur, c.id] } }; }); },
+          style: { display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 999, fontSize: 12.5, fontWeight: 500, color: on ? `var(--c${i}t)` : "var(--tx3)", background: on ? `var(--c${i}b)` : "var(--gl2)", border: `1px solid ${on ? `var(--c${i})` : "var(--gb2)"}`, backdropFilter: "blur(10px)", transition: `all .25s ${SPRING}` },
+          dotStyle: { width: 6, height: 6, borderRadius: 99, background: `var(--c${i})`, flexShrink: 0 },
+        };
+      }),
+      empty: items.length === 0,
+      emptyLabel: colFilter.length ? "Nothing matches those filters." : "Nothing here yet — tap + to add the first thing.",
+      items: items.map((t, idx) => this.buildTask(t, listKey, idx)),
+    };
+  }
+
+  buildTask(t, listKey, idx) {
+    const s = this.state;
+    const mob = this.mobile();
+    const od = overdue(t.due, t.done);
+    const ci = this.catVar(t.cat);
+    const cat = this.catOf(t.cat);
+    const sw = s.swipe && s.swipe.id === t.id ? s.swipe.dx : 0;
+    const dg = s.drag && s.drag.id === t.id ? s.drag.dy : 0;
+    const badges = [];
+    if (t.due) badges.push({ label: od ? `Overdue · ${fmt(t.due)}` : fmt(t.due), icon: "#i-calendar", hasIcon: true, style: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 500, padding: "3px 9px", borderRadius: 999, fontFamily: "'Geist Mono',monospace", color: od ? "var(--red)" : "var(--tx3)", background: od ? "color-mix(in oklab, var(--red) 14%, transparent)" : "var(--gl2)", border: `1px solid ${od ? "color-mix(in oklab, var(--red) 32%, transparent)" : "var(--gb2)"}` } });
+    if (t.time) badges.push({ label: "2:30pm", icon: "#i-clock", hasIcon: true, style: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 500, padding: "3px 9px", borderRadius: 999, fontFamily: "'Geist Mono',monospace", color: "var(--gold)", background: "color-mix(in oklab, var(--gold) 14%, transparent)", border: "1px solid color-mix(in oklab, var(--gold) 30%, transparent)" } });
+    if (t.rep) badges.push({ label: t.rep, icon: "#i-repeat", hasIcon: true, style: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 500, padding: "3px 9px", borderRadius: 999, color: "var(--tx3)", background: "var(--gl2)", border: "1px solid var(--gb2)", textTransform: "capitalize" } });
+    if (cat) badges.push({ label: cat.name, icon: "", hasIcon: false, style: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 500, padding: "3px 9px", borderRadius: 999, color: `var(--c${ci}t)`, background: `var(--c${ci}b)`, border: `1px solid color-mix(in oklab, var(--c${ci}) 34%, transparent)` } });
+    badges.forEach((b) => { b.style.whiteSpace = "nowrap"; });
+    return {
+      id: t.id, text: t.text, done: t.done, badges,
+      bursting: s.burst === t.id,
+      burstStyle: { position: "absolute", inset: -6, borderRadius: "50%", border: "2px solid var(--ac)", animation: "burst .62s cubic-bezier(.22,1,.36,1) forwards", pointerEvents: "none" },
+      slotStyle: { position: "relative", borderRadius: 22, animation: `rowIn .4s cubic-bezier(.22,1,.36,1) ${idx * 0.035}s both` },
+      actionsStyle: { position: "absolute", inset: 0, borderRadius: 22, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", background: "var(--gl2)", border: "1px solid var(--gb2)", opacity: Math.min(1, Math.abs(sw) / 40) },
+      swipeDown: mob ? this.swipeStart(t.id) : () => {},
+      dragDown: this.dragStart(t.id, listKey),
+      rowButtons: !mob && s.editingId !== t.id,
+      handleStyle: { display: s.editingId === t.id || !mob ? "none" : "flex", alignItems: "center", padding: 2, margin: -2, cursor: "grab", touchAction: "none", flexShrink: 0, color: "var(--tx4)", opacity: 0.6 },
+      actionsWrapStyle: { display: s.editingId === t.id ? "none" : "flex", alignItems: "center", gap: 2, flexShrink: 0 },
+      remind: () => this.setState((st) => ({ todos: st.todos.map((x) => x.id === t.id ? { ...x, time: x.time ? null : "14:30" } : x) })),
+      remindStyle: { flexShrink: 0, padding: 5, borderRadius: 9, color: t.time ? "var(--gold)" : "var(--tx4)", background: t.time ? "color-mix(in oklab, var(--gold) 14%, transparent)" : "transparent", transition: "all .25s ease" },
+      remove: () => this.setState((st) => ({ todos: st.todos.filter((x) => x.id !== t.id) })),
+      cardStyle: {
+        position: "relative", display: "flex", alignItems: "flex-start", gap: 11, padding: "14px 13px 14px 10px", borderRadius: 22,
+        background: od ? "linear-gradient(157deg,var(--gh),color-mix(in oklab, var(--red) 8%, var(--gl)))" : "linear-gradient(157deg,var(--gh),var(--gl))",
+        backdropFilter: "blur(22px) saturate(180%)", WebkitBackdropFilter: "blur(22px) saturate(180%)",
+        border: `1px solid ${od ? "color-mix(in oklab, var(--red) 34%, var(--gb))" : "var(--gb)"}`,
+        boxShadow: dg ? "inset 0 1px 0 var(--ghi),0 22px 50px -18px var(--gsh)" : "inset 0 1px 0 var(--ghi),0 10px 28px -20px var(--gsh)",
+        transform: `translate(${sw}px, ${dg}px) scale(${dg ? 1.02 : 1})`,
+        opacity: t.done ? 0.62 : 1,
+        transition: sw || dg ? "none" : `transform .42s ${SPRING}, opacity .3s ease, box-shadow .3s ease`,
+        zIndex: dg ? 30 : 1, touchAction: "pan-y", cursor: "default",
+      },
+      toggle: () => this.toggleTodo(t.id),
+      editing: s.editingId === t.id,
+      notEditing: s.editingId !== t.id,
+      editText: s.editText,
+      onEditText: (e) => this.set({ editText: e.target.value }),
+      onEditKey: (e) => { if (e.key === "Enter") this.saveEdit(); if (e.key === "Escape") this.set({ editingId: null }); },
+      saveEdit: () => this.saveEdit(),
+      cancelEdit: () => this.set({ editingId: null }),
+      edit: (e) => { e.stopPropagation(); this.set({ editingId: t.id, editText: t.text }); },
+      boxStyle: {
+        position: "relative", width: 23, height: 23, borderRadius: "50%", flexShrink: 0, marginTop: 1,
+        display: s.editingId === t.id ? "none" : "flex", alignItems: "center", justifyContent: "center",
+        border: `2px solid ${t.done ? "var(--ac)" : "var(--gb2)"}`,
+        background: t.done ? "linear-gradient(140deg,var(--ac),var(--ac2))" : "transparent",
+        boxShadow: t.done ? "0 4px 14px -5px var(--ac)" : "none",
+        transition: `all .35s ${SPRING}`,
+      },
+      textStyle: { fontSize: 15, lineHeight: 1.4, overflowWrap: "anywhere", textWrap: "pretty", color: t.done ? "var(--tx4)" : "var(--tx)", textDecoration: t.done ? "line-through" : "none", transition: "color .3s ease" },
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const mob = this.mobile();
+    const dark = this.dark();
+    const tab = s.tab;
+    const isApp = s.screen === "app";
+
+    const logoSvg = (size) => React.createElement("svg", { width: size, height: size, viewBox: "0 0 48 48", style: { flexShrink: 0, filter: "drop-shadow(0 4px 14px color-mix(in oklab, var(--ac) 45%, transparent))" } },
+      React.createElement("defs", null,
+        React.createElement("linearGradient", { id: "og", x1: "0", y1: "0", x2: "1", y2: "1" },
+          React.createElement("stop", { offset: "0", stopColor: "var(--ac2)" }),
+          React.createElement("stop", { offset: "1", stopColor: "var(--ac)" }))),
+      React.createElement("ellipse", { cx: 24, cy: 24, rx: 21, ry: 9.5, fill: "none", stroke: "url(#og)", strokeWidth: 2.6, opacity: 0.55, transform: "rotate(-28 24 24)" }),
+      React.createElement("circle", { cx: 24, cy: 24, r: 9, fill: "url(#og)" }),
+      React.createElement("circle", { cx: 24, cy: 24, r: 9, fill: "none", stroke: "rgba(255,255,255,.45)", strokeWidth: 1 }),
+      React.createElement("circle", { cx: 41.5, cy: 15.5, r: 3.4, fill: "var(--ac2)" }));
+
+    const tabsDef = [
+      { key: "work", label: "Work", icon: "#i-briefcase" },
+      { key: "personal", label: "Personal", icon: "#i-user" },
+      { key: "thoughts", label: "Thoughts", icon: "#i-message-circle-more" },
+      { key: "workbench", label: "Projects", icon: "#i-folder-kanban" },
+    ];
+
+    const columns = mob
+      ? (tab === "work" || tab === "personal" ? [this.buildColumn(tab, true)] : [])
+      : [this.buildColumn("work"), this.buildColumn("personal")];
+
+    const activeCount = s.todos.filter((t) => t.list === tab && !t.done).length;
+    const openThoughts = s.thoughts.filter((t) => !t.done).length;
+
+    const groups = [{ key: "un", name: "Unassigned", color: null, items: s.thoughts.filter((t) => !t.person) }]
+      .concat(s.people.map((p) => ({ key: p.id, name: p.name, color: CAT_KEYS.indexOf(p.color), items: s.thoughts.filter((t) => t.person === p.id) })).filter((g) => g.items.length));
+
+    const pill = (on) => ({ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 500, color: on ? "var(--ac)" : "var(--tx3)", background: on ? "var(--acs)" : "var(--gl2)", border: `1px solid ${on ? "var(--ac)" : "var(--gb2)"}`, backdropFilter: "blur(10px)", transition: `all .25s ${SPRING}` });
+
+    return {
+      rootRef: this.rootRef, spriteRef: this.spriteRef,
+      isSignin: s.screen === "signin", isApp, isMobile: mob,
+      logoMark: logoSvg(26), logoLarge: logoSvg(62),
+      signIn: () => this.set({ screen: "app" }),
+      signOut: () => this.set({ screen: "signin", showMenu: false }),
+      goBudget: () => this.set({ screen: "gate", gateState: "prompt" }),
+
+      isGate: s.screen === "gate",
+      gateVerifying: s.gateState === "verifying",
+      gatePrompt: (s.gateState || "prompt") === "prompt",
+      gateDenied: s.gateState === "denied",
+      gateEnable: () => { this.set({ gateState: "verifying" }); setTimeout(() => this.set({ screen: "budget" }), 1200); },
+      gateSkip: () => this.set({ screen: "budget" }),
+      gateBack: () => this.set({ screen: "app" }),
+
+      isBudget: s.screen === "budget",
+      budgetInnerStyle: { maxWidth: 720, margin: "0 auto", padding: mob ? "20px 18px 60px" : "26px 24px 70px" },
+      backFromBudget: () => this.set({ screen: "app" }),
+      budgetIsBills: (s.budgetView || "budget") === "budget",
+      budgetIsLogins: s.budgetView === "logins",
+      showBills: () => this.set({ budgetView: "budget" }),
+      showLogins: () => this.set({ budgetView: "logins" }),
+      billsTabStyle: this.segStyle((s.budgetView || "budget") === "budget"),
+      loginsTabStyle: this.segStyle(s.budgetView === "logins"),
+      period15Style: this.segStyle((s.period || "15") === "15"),
+      period30Style: this.segStyle(s.period === "30"),
+      setP15: () => this.set({ period: "15" }),
+      setP30: () => this.set({ period: "30" }),
+      periodLabel: `the ${s.period === "30" ? "30" : "15"}th`,
+      budgetAccounts: (s.accounts || []).map((a) => {
+        const per = s.period === "30" ? "30" : "15";
+        const spent = (s.bills || []).filter((b) => b.due === per && b.acct === a.id && b.status !== "skip").reduce((x, b) => x + b.amount, 0);
+        const bal = Number(a.bal[per]) || 0;
+        const left = bal - spent;
+        return {
+          name: a.name, balance: money(bal), spent: money(spent), left: money(left),
+          setBalance: (e) => { const v = e.target.value; this.setState((st) => ({ accounts: st.accounts.map((x) => x.id === a.id ? { ...x, bal: { ...x.bal, [per]: v } } : x) })); },
+          setName: (e) => { const v = e.target.value; this.setState((st) => ({ accounts: st.accounts.map((x) => x.id === a.id ? { ...x, name: v } : x) })); },
+          remove: () => this.setState((st) => ({ accounts: st.accounts.filter((x) => x.id !== a.id) })),
+          balanceRaw: a.bal[per],
+          leftStyle: { fontFamily: "'Geist Mono',monospace", fontSize: 13, fontWeight: 600, color: left < 0 ? "var(--red)" : "var(--green)" },
+          cardStyle: { flex: "1 1 180px", minWidth: 0, padding: 15, borderRadius: 22, position: "relative", overflow: "hidden", background: "linear-gradient(157deg,var(--gh),var(--gl))", backdropFilter: "blur(22px) saturate(180%)", WebkitBackdropFilter: "blur(22px) saturate(180%)", border: "1px solid var(--gb)", boxShadow: "inset 0 1px 0 var(--ghi),0 12px 32px -22px var(--gsh)" },
+        };
+      }),
+      budgetBills: this.budgetPeriodBills().filter((b) => s.revealAll || (b.status !== "paid" && b.status !== "skip")).sort((a, b) => b.amount - a.amount).map((b) => ({
+        name: b.name, amount: b.amount, amountLabel: money(b.amount), status: b.status,
+        acct: b.acct,
+        setName: (e) => { const v = e.target.value; this.setState((st) => ({ bills: st.bills.map((x) => x.id === b.id ? { ...x, name: v } : x) })); },
+        hasLink: (s.logins || []).some((l) => l.name === b.name && l.url),
+        setStatus: (e) => { const v = e.target.value; this.setState((st) => ({ bills: st.bills.map((x) => x.id === b.id ? { ...x, status: v } : x) })); },
+        setAmount: (e) => { const v = parseFloat(e.target.value) || 0; this.setState((st) => ({ bills: st.bills.map((x) => x.id === b.id ? { ...x, amount: v } : x) })); },
+        setAcct: (e) => { const v = e.target.value; this.setState((st) => ({ bills: st.bills.map((x) => x.id === b.id ? { ...x, acct: v } : x) })); },
+        remove: () => this.setState((st) => ({ bills: st.bills.filter((x) => x.id !== b.id) })),
+        rowStyle: { padding: 14, borderRadius: 20, display: "flex", flexDirection: "column", gap: 11, background: b.status === "scheduled" ? "linear-gradient(157deg,var(--gh),color-mix(in oklab, var(--gold) 12%, var(--gl)))" : "linear-gradient(157deg,var(--gh),var(--gl))", backdropFilter: "blur(20px) saturate(180%)", WebkitBackdropFilter: "blur(20px) saturate(180%)", border: `1px solid ${b.status === "scheduled" ? "color-mix(in oklab, var(--gold) 38%, var(--gb))" : "var(--gb)"}`, boxShadow: "inset 0 1px 0 var(--ghi),0 10px 28px -22px var(--gsh)", opacity: b.status === "paid" || b.status === "skip" ? 0.62 : 1, transition: "all .3s ease", animation: "rowIn .4s cubic-bezier(.22,1,.36,1) both" },
+        nameStyle: { flex: 1, minWidth: 0, padding: "8px 11px", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer", background: "var(--gl2)", border: "1px solid var(--gb2)", textDecoration: b.status === "paid" || b.status === "skip" ? "line-through" : "none", color: b.status === "paid" || b.status === "skip" ? "var(--tx4)" : "var(--tx)" },
+        statusStyle: { padding: "7px 11px", borderRadius: 11, fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0, color: b.status === "paid" ? "var(--ac)" : b.status === "scheduled" ? "var(--gold)" : "var(--tx3)", background: b.status === "paid" ? "var(--acs)" : b.status === "scheduled" ? "color-mix(in oklab, var(--gold) 14%, transparent)" : "var(--gl2)", border: `1px solid ${b.status === "paid" ? "var(--ac)" : b.status === "scheduled" ? "color-mix(in oklab, var(--gold) 40%, transparent)" : "var(--gb2)"}` },
+      })),
+      openCount: `${this.budgetPeriodBills().filter((b) => b.status === "unpaid" || b.status === "scheduled").length} open`,
+      loginNames: (s.logins || []).map((l) => l.name).sort(),
+      hiddenCount: this.budgetPeriodBills().filter((b) => b.status === "paid" || b.status === "skip").length,
+      hasHidden: !s.revealAll && this.budgetPeriodBills().some((b) => b.status === "paid" || b.status === "skip"),
+      unhideLabel: `Unhide ${this.budgetPeriodBills().filter((b) => b.status === "paid" || b.status === "skip").length} hidden`,
+      unhideAll: () => this.set({ revealAll: true }),
+      resetAll: () => this.setState((st) => ({ bills: st.bills.map((b) => ({ ...b, status: "unpaid" })), revealAll: false })),
+      noBills: this.budgetPeriodBills().filter((b) => s.revealAll || (b.status !== "paid" && b.status !== "skip")).length === 0,
+      newBillName: s.newBillName || "",
+      setNewBillName: (e) => this.set({ newBillName: e.target.value }),
+      newBillAmount: s.newBillAmount || "",
+      setNewBillAmount: (e) => this.set({ newBillAmount: e.target.value }),
+      newBillAcct: s.newBillAcct || "b1",
+      setNewBillAcct: (e) => this.set({ newBillAcct: e.target.value }),
+      addBill: () => {
+        const nm = (s.newBillName || "").trim();
+        const amt = parseFloat(s.newBillAmount);
+        if (!nm || !Number.isFinite(amt)) return;
+        this.setState((st) => ({ newBillName: "", newBillAmount: "", bills: [...st.bills, { id: "bl" + Date.now(), name: nm, amount: amt, acct: st.newBillAcct || "b1", due: st.period === "30" ? "30" : "15", status: "unpaid" }] }));
+      },
+      addBillStyle: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 18px", borderRadius: 13, fontSize: 13, fontWeight: 600, flexShrink: 0, color: (s.newBillName || "").trim() && s.newBillAmount ? "var(--aci)" : "var(--tx4)", background: (s.newBillName || "").trim() && s.newBillAmount ? "linear-gradient(140deg,var(--ac),var(--ac2))" : "var(--gl2)", boxShadow: (s.newBillName || "").trim() && s.newBillAmount ? "0 8px 22px -10px var(--ac)" : "none", transition: `all .3s ${SPRING}` },
+      showAccounts: s.showAccounts !== false,
+      toggleAccounts: () => this.set({ showAccounts: s.showAccounts === false }),
+      accountsFabStyle: { position: "fixed", right: 24, bottom: 24, minWidth: 54, height: 54, padding: "0 18px", borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", gap: 14, zIndex: 45, color: "var(--aci)", background: "linear-gradient(140deg,var(--ac),var(--ac2))", boxShadow: "0 14px 34px -10px var(--ac),inset 0 1px 0 rgba(255,255,255,.4)", transition: `all .4s ${SPRING}` },
+      accountsCollapsed: s.showAccounts === false,
+      accountSummaries: (s.accounts || []).map((a, i) => {
+        const per = s.period === "30" ? "30" : "15";
+        const spent = (s.bills || []).filter((b) => b.due === per && b.acct === a.id && b.status !== "skip").reduce((x, b) => x + b.amount, 0);
+        return { name: a.name, left: money((Number(a.bal[per]) || 0) - spent), showDivider: i > 0 };
+      }),
+      canAddAccount: (s.accounts || []).length < 3,
+      addAccount: () => this.setState((st) => (st.accounts.length >= 3 ? null : ({ accounts: [...st.accounts, { id: "b" + (st.accounts.length + 1) + Date.now(), name: "New account", bal: { "15": "", "30": "" } }] }))),
+      allHandled: this.budgetAllHandled(),
+      handledLine: this.budgetHandledLine(),
+      accountOptions: (s.accounts || []).map((a) => ({ id: a.id, name: a.name })),
+      vaultUnlocked: !!s.vaultUnlocked,
+      vaultLocked: !s.vaultUnlocked,
+      vaultPass: s.vaultPass || "",
+      setVaultPass: (e) => this.set({ vaultPass: e.target.value }),
+      vaultKey: (e) => { if (e.key === "Enter") this.set({ vaultUnlocked: true, vaultPass: "" }); },
+      unlockVault: () => this.set({ vaultUnlocked: true, vaultPass: "" }),
+      unlockFace: () => { this.set({ vaultBusy: true }); setTimeout(() => this.set({ vaultUnlocked: true, vaultBusy: false }), 1100); },
+      vaultBusyLabel: s.vaultBusy ? "Checking…" : "Unlock with Face ID",
+      unlockStyle: { width: "100%", padding: "12px", borderRadius: 14, fontSize: 13.5, fontWeight: 600, color: (s.vaultPass || "").trim() ? "var(--aci)" : "var(--tx4)", background: (s.vaultPass || "").trim() ? "linear-gradient(140deg,var(--ac),var(--ac2))" : "var(--gl2)", transition: `all .3s ${SPRING}` },
+      budgetLogins: (s.logins || []).map((l) => ({
+        name: l.name, url: l.url, username: l.username,
+        password: s.shown && s.shown[l.id] ? l.password : "••••••••••",
+        toggleShow: () => this.setState((st) => ({ shown: { ...(st.shown || {}), [l.id]: !(st.shown || {})[l.id] } })),
+        showIcon: s.shown && s.shown[l.id] ? "#i-eye-off" : "#i-eye",
+        copy: () => {},
+        remove: () => this.setState((st) => ({ logins: st.logins.filter((x) => x.id !== l.id) })),
+      })),
+      loginCount: `${(s.logins || []).length} saved`,
+      goNightly: () => this.set({ screen: "nightly" }),
+      goAccess: () => this.set({ screen: "access" }),
+      noop: () => {}, stop: (e) => e.stopPropagation(),
+      goApp: () => this.set({ screen: "app" }),
+      isStub: s.screen === "budget",
+      stubTitle: "Budget",
+      stubIcon: "#i-wallet",
+
+      isAccess: s.screen === "access",
+      accessInnerStyle: { maxWidth: 640, margin: "0 auto", padding: mob ? "20px 18px 60px" : "26px 24px 70px" },
+      newEmail: s.newEmail || "",
+      setNewEmail: (e) => this.set({ newEmail: e.target.value }),
+      newRole: s.newRole || "household",
+      setNewRole: (e) => this.set({ newRole: e.target.value }),
+      addPerson: () => {
+        const em = (s.newEmail || "").trim().toLowerCase();
+        if (!em || em.indexOf("@") < 0) return;
+        this.setState((st) => ({ newEmail: "", access: [...st.access, { id: "a" + Date.now(), email: em, role: st.newRole || "household", budgetShared: (st.newRole || "household") === "household", sharedWork: false, scope: "" }] }));
+      },
+      addPersonStyle: { width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "12px", borderRadius: 14, fontSize: 13.5, fontWeight: 600, color: (s.newEmail || "").trim() ? "var(--aci)" : "var(--tx4)", background: (s.newEmail || "").trim() ? "linear-gradient(140deg,var(--ac),var(--ac2))" : "var(--gl2)", boxShadow: (s.newEmail || "").trim() ? "0 8px 22px -10px var(--ac)" : "none", transition: `all .3s ${SPRING}` },
+      accessPeople: (s.access || []).map((p) => ({
+        email: p.email,
+        roleLabel: { owner: "Owner", household: "Household", guardian: "Guardian", assistant: "Assistant" }[p.role] || p.role,
+        isOwner: p.role === "owner", notOwner: p.role !== "owner",
+        isHousehold: p.role === "household", isGuardian: p.role === "guardian", isAssistant: p.role === "assistant",
+        role: p.role,
+        setRole: (e) => { const v = e.target.value; this.setState((st) => ({ access: st.access.map((x) => x.id === p.id ? { ...x, role: v, budgetShared: v === "household", sharedWork: false } : x) })); },
+        remove: () => this.setState((st) => ({ access: st.access.filter((x) => x.id !== p.id) })),
+        budgetLabel: `Shared budget: ${p.budgetShared ? "Approved" : "Not approved"}`,
+        toggleBudget: () => this.setState((st) => ({ access: st.access.map((x) => x.id === p.id ? { ...x, budgetShared: !x.budgetShared } : x) })),
+        budgetStyle: pill(p.budgetShared),
+        sharedWorkLabel: `Shared Work + Projects: ${p.sharedWork ? "On" : "Off"}`,
+        toggleSharedWork: () => this.setState((st) => ({ access: st.access.map((x) => x.id === p.id ? { ...x, sharedWork: !x.sharedWork } : x) })),
+        sharedWorkStyle: pill(p.sharedWork),
+        showScope: p.role === "assistant" && p.sharedWork,
+        scope: p.scope || "",
+        setScope: (e) => { const v = e.target.value; this.setState((st) => ({ access: st.access.map((x) => x.id === p.id ? { ...x, scope: v } : x) })); },
+        cardStyle: { padding: 16, borderRadius: 22, marginBottom: 11, background: "linear-gradient(157deg,var(--gh),var(--gl))", backdropFilter: "blur(22px) saturate(180%)", WebkitBackdropFilter: "blur(22px) saturate(180%)", border: "1px solid var(--gb)", boxShadow: "inset 0 1px 0 var(--ghi),0 12px 32px -22px var(--gsh)", animation: "rowIn .4s cubic-bezier(.22,1,.36,1) both" },
+      })),
+      workCats: s.cats.filter((c) => c.list === "work").map((c) => ({ id: c.id, name: `Only "${c.name}"` })),
+      selectStyle: { width: "100%", padding: "11px 13px", borderRadius: 14, fontSize: 13.5, color: "var(--tx)", background: "var(--gl2)", border: "1px solid var(--gb2)", cursor: "pointer" },
+      backFromAccess: () => this.set({ screen: "app" }),
+
+      isNightly: s.screen === "nightly",
+      nightWrapStyle: { position: "relative", zIndex: 2, minHeight: "100vh", background: "radial-gradient(120% 80% at 50% -10%, #1b1830, #0c0a14 62%, #07060c)", color: "#e9e3f2", animation: `screenIn .5s cubic-bezier(.22,1,.36,1)` },
+      nightInnerStyle: { maxWidth: 600, margin: "0 auto", padding: mob ? "20px 18px 60px" : "28px 24px 70px" },
+      moonShadowStyle: { position: "absolute", inset: 0, borderRadius: "50%", background: "#1a1626", transform: `translateX(${-(this.nightProgress() * 100)}%)`, transition: "transform .8s cubic-bezier(.22,1,.36,1)" },
+      nightTitle: this.nightAllDone() ? "That's everything." : "Tonight's focus",
+      nightSub: this.nightAllDone() ? "Sleep well." : `Thursday, July 30${this.nightTonight().length ? ` · ${this.nightDone()} of ${this.nightTonight().length}` : ""}`,
+      nightSubStyle: { margin: "6px 0 0", fontSize: 13.5, color: this.nightAllDone() ? "#e0b872" : "rgba(233,227,242,.5)" },
+      nightCarried: this.nightCarriedCount() > 0,
+      nightCarriedLabel: this.nightCarriedCount() === 1 ? "1 thing carried over from an earlier night" : `${this.nightCarriedCount()} things carried over from earlier nights`,
+      nightItems: this.nightTonight().map((it) => this.buildNightItem(it, false)),
+      nightUpcoming: (s.nightly || []).filter((i) => i.forDate > TODAY).map((it) => this.buildNightItem(it, true)),
+      hasUpcoming: (s.nightly || []).some((i) => i.forDate > TODAY),
+      nightEmpty: this.nightTonight().length === 0,
+      nightDraft: s.nightDraft || "",
+      setNightDraft: (e) => this.set({ nightDraft: e.target.value }),
+      nightKey: (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); this.addNightItem(); } },
+      addNight: () => this.addNightItem(),
+      addNightStyle: { width: 44, height: 44, minWidth: 44, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: (s.nightDraft || "").trim() ? "#12101c" : "rgba(233,227,242,.35)", background: (s.nightDraft || "").trim() ? "linear-gradient(140deg,#f0cf8e,#d5a55f)" : "rgba(255,255,255,.06)", boxShadow: (s.nightDraft || "").trim() ? "0 8px 22px -10px #d5a55f" : "none", transition: `all .3s ${SPRING}` },
+      nightRepeatOpen: !!s.nightRepeatOpen,
+      toggleNightRepeat: () => this.set({ nightRepeatOpen: !s.nightRepeatOpen }),
+      nightRepeatLabel: s.nightRepeat ? s.nightRepeat.charAt(0).toUpperCase() + s.nightRepeat.slice(1) : "Once",
+      nightRepeatPillStyle: this.nightPill(!!s.nightRepeat),
+      nightDatePillStyle: this.nightPill(false),
+      nightRepeatOptions: [null, "daily", "weekly", "monthly"].map((r) => ({
+        label: r ? r.charAt(0).toUpperCase() + r.slice(1) : "Once",
+        pick: () => this.set({ nightRepeat: r }),
+        style: this.nightPill(s.nightRepeat === (r || null)),
+      })),
+      nightTemplates: (s.nightly || []).filter((i) => i.repeat).map((i) => ({ text: i.text, label: `Every ${i.repeat === "daily" ? "night" : i.repeat.replace("ly", "")}` })),
+      hasNightTemplates: (s.nightly || []).some((i) => i.repeat),
+      backFromNight: () => this.set({ screen: "app" }),
+
+      frameStyle: mob
+        ? { width: "100%", maxWidth: 430, minHeight: "100vh", position: "relative" }
+        : { width: "100%", maxWidth: 1400, position: "relative" },
+      pageStyle: { minHeight: "100vh", animation: `screenIn .45s cubic-bezier(.22,1,.36,1)` },
+      topBarStyle: { position: "sticky", top: 0, zIndex: 30, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: mob ? "14px 18px" : "16px 28px", background: "linear-gradient(180deg,var(--gh),transparent)", backdropFilter: "blur(18px) saturate(160%)", WebkitBackdropFilter: "blur(18px) saturate(160%)", borderBottom: "1px solid var(--gb2)" },
+      bodyStyle: { padding: mob ? "22px 18px 130px" : "26px 28px 120px" },
+
+      pageTitle: tab === "thoughts" ? "Clear your head" : tab === "workbench" ? "Projects" : mob ? "Today's focus" : "Today's focus",
+      pageSub: tab === "thoughts"
+        ? `${openThoughts} thing${openThoughts === 1 ? "" : "s"} still on your mind`
+        : tab === "workbench"
+          ? `${s.projects.length} projects in flight`
+          : mob
+            ? `${activeCount} ${activeCount === 1 ? "task" : "tasks"} left in ${tab}`
+            : "Click a column to focus it — that's where + adds",
+      hideFutureStyle: { display: (tab === "thoughts" || tab === "workbench") && mob ? "none" : "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 999, fontSize: 12.5, fontWeight: 500, flexShrink: 0, color: s.hideFuture ? "var(--ac)" : "var(--tx3)", background: s.hideFuture ? "var(--acs)" : "var(--gl)", border: `1px solid ${s.hideFuture ? "var(--ac)" : "var(--gb)"}`, backdropFilter: "blur(14px)", transition: `all .28s ${SPRING}` },
+      hideFutureIcon: s.hideFuture ? "#i-eye-off" : "#i-eye",
+      hideFutureLabel: s.hideFuture ? "Today only" : "All dates",
+      toggleHideFuture: () => this.set({ hideFuture: !s.hideFuture }),
+
+      starWrapStyle: { marginBottom: 18 },
+      brainIdle: s.brain === "idle", brainListening: s.brain === "listening", brainParsing: s.brain === "parsing", brainTyping: s.brain === "typing",
+      brainHeard: s.heard || "Listening…",
+      brainText: s.brainText,
+      setBrainText: (e) => this.set({ brainText: e.target.value }),
+      brainKey: (e) => { if (e.key === "Enter") this.submitBrainNow(); if (e.key === "Escape") this.set({ brain: "idle", brainText: "" }); },
+      startTyping: () => this.set({ brain: "typing" }),
+      cancelBrain: () => this.set({ brain: "idle", brainText: "" }),
+      submitBrain: () => this.submitBrainNow(),
+      startListening: () => {
+        this.set({ brain: "listening", heard: "" });
+        const line = "Remind me to ask Amon about the trailer maintenance next Tuesday";
+        let i = 0;
+        this.tick = setInterval(() => {
+          i += 2;
+          this.set({ heard: line.slice(0, i) });
+          if (i >= line.length) { clearInterval(this.tick); setTimeout(() => this.finishBrain(), 500); }
+        }, 34);
+      },
+      stopListening: () => { clearInterval(this.tick); this.finishBrain(); },
+
+      showLists: isApp && (!mob || tab === "work" || tab === "personal" || tab === "workbench"),
+      columnsStyle: mob ? { display: "block" } : { display: "flex", gap: 16, alignItems: "flex-start" },
+      columns,
+      showWorkbench: !mob || tab === "workbench",
+      focusWorkbench: () => this.set({ focusCol: "workbench" }),
+      workbenchWrapStyle: mob
+        ? { marginTop: 0 }
+        : { flex: "1 1 0", minWidth: 0, padding: 16, borderRadius: 26, background: "linear-gradient(157deg,var(--gh),var(--gl))", backdropFilter: "blur(22px) saturate(180%)", WebkitBackdropFilter: "blur(22px) saturate(180%)", border: `1px solid ${s.focusCol === "workbench" ? "var(--c2)" : "var(--gb)"}`, boxShadow: "inset 0 1px 0 var(--ghi),0 18px 44px -26px var(--gsh)", transition: "border-color .3s ease" },
+      showProjectPanel: !!s.showProjectPanel,
+      toggleProjectPanel: (e) => { e.stopPropagation(); this.set({ showProjectPanel: !s.showProjectPanel }); },
+      projectCats: s.cats.map((c) => {
+        const i = CAT_KEYS.indexOf(c.color);
+        const on = s.projectCat === c.id;
+        return {
+          name: c.name,
+          pick: (e) => { e.stopPropagation(); this.set({ projectCat: on ? null : c.id }); },
+          style: { display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 999, fontSize: 12, fontWeight: 500, color: on ? `var(--c${i}t)` : "var(--tx3)", background: on ? `var(--c${i}b)` : "var(--gl2)", border: `1px solid ${on ? `var(--c${i})` : "var(--gb2)"}`, transition: `all .25s ${SPRING}` },
+          dotStyle: { width: 6, height: 6, borderRadius: 99, flexShrink: 0, background: `var(--c${i})` },
+        };
+      }),
+      projectDeadline: s.projectDeadline || "",
+      setProjectDeadline: (e) => this.set({ projectDeadline: e.target.value }),
+      hasProjectDeadline: !!s.projectDeadline,
+      clearProjectDeadline: (e) => { e.stopPropagation(); this.set({ projectDeadline: "" }); },
+      projectDraft: s.projectDraft || "",
+      setProjectDraft: (e) => this.set({ projectDraft: e.target.value }),
+      projectKey: (e) => { if (e.key === "Enter") this.createProject(); },
+      createProject: () => this.createProject(),
+      createProjectStyle: { width: "100%", padding: "11px 14px", borderRadius: 14, fontSize: 13, fontWeight: 600, color: (s.projectDraft || "").trim() ? "var(--aci)" : "var(--tx4)", background: (s.projectDraft || "").trim() ? "linear-gradient(140deg,var(--ac),var(--ac2))" : "var(--gl2)", boxShadow: (s.projectDraft || "").trim() ? "0 8px 22px -10px var(--ac)" : "none", transition: `all .3s ${SPRING}` },
+      wbWorkStyle: pill(s.wbFilter === "work"),
+      wbPersonalStyle: pill(s.wbFilter === "personal"),
+      filterWork: (e) => { e.stopPropagation(); this.set({ wbFilter: s.wbFilter === "work" ? null : "work" }); },
+      filterPersonal: (e) => { e.stopPropagation(); this.set({ wbFilter: s.wbFilter === "personal" ? null : "personal" }); },
+
+      noProjects: s.projects.filter((p) => {
+        if (!s.wbFilter) return true;
+        const c = this.catOf(p.cat);
+        return (c ? c.list : "work") === s.wbFilter;
+      }).length === 0,
+      noProjectsLabel: s.wbFilter ? `No ${s.wbFilter} projects yet.` : "No projects yet — create your first one above.",
+      projects: s.projects.filter((p) => {
+        if (!s.wbFilter) return true;
+        const c = this.catOf(p.cat);
+        return (c ? c.list : "work") === s.wbFilter;
+      }).map((p) => {
+        const done = p.ms.filter((m) => m.done).length;
+        const pct = Math.round((done / p.ms.length) * 100);
+        const ci = this.catVar(p.cat);
+        const cat = this.catOf(p.cat);
+        const open = s.openProject === p.id;
+        return {
+          title: p.title, open,
+          toggleOpen: (e) => { e.stopPropagation(); this.set({ openProject: open ? null : p.id }); },
+          chevStyle: { color: "var(--tx4)", transform: open ? "none" : "rotate(-90deg)", transition: `transform .35s ${SPRING}`, flexShrink: 0 },
+          catName: cat ? cat.name : "",
+          remove: (e) => { e.stopPropagation(); this.setState((st) => ({ projects: st.projects.filter((x) => x.id !== p.id), todos: st.todos.filter((t) => !p.ms.some((m) => m.id === t.msId)) })); },
+          catStyle: { display: cat ? "inline-flex" : "none", fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 999, flexShrink: 0, color: `var(--c${ci}t)`, background: `var(--c${ci}b)`, border: `1px solid color-mix(in oklab, var(--c${ci}) 34%, transparent)` },
+          barStyle: { width: `${pct}%`, height: "100%", borderRadius: 99, background: "linear-gradient(90deg,var(--ac),var(--ac2))", boxShadow: "0 0 14px -2px var(--ac)", transition: `width .7s ${SPRING}` },
+          meta: p.deadline ? `${pct}% · ${done}/${p.ms.length} milestones · due ${fmt(p.deadline)}` : `${pct}% · ${done}/${p.ms.length} milestones`,
+          msDraft: (s.msDrafts && s.msDrafts[p.id]) || "",
+          setMsDraft: (e) => { const v = e.target.value; this.setState((st) => ({ msDrafts: { ...(st.msDrafts || {}), [p.id]: v } })); },
+          msKey: (e) => { if (e.key === "Enter") this.addMilestone(p.id); },
+          addMs: (e) => { e.stopPropagation(); this.addMilestone(p.id); },
+          milestones: p.ms.map((m) => ({
+            text: m.text, done: m.done, due: fmt(m.due),
+            toggle: (e) => { e.stopPropagation(); this.setState((st) => ({ projects: st.projects.map((pp) => pp.id === p.id ? { ...pp, ms: pp.ms.map((mm) => mm.id === m.id ? { ...mm, done: !mm.done } : mm) } : pp), todos: st.todos.map((t) => t.msId === m.id ? { ...t, done: !m.done } : t) })); },
+            promoted: !!m.promoted,
+            notPromoted: !m.promoted,
+            promote: (e) => { e.stopPropagation(); this.promoteMilestone(p.id, m.id); },
+            unpromote: (e) => { e.stopPropagation(); this.unpromoteMilestone(p.id, m.id); },
+            remove: (e) => { e.stopPropagation(); this.setState((st) => ({ projects: st.projects.map((pp) => pp.id === p.id ? { ...pp, ms: pp.ms.filter((mm) => mm.id !== m.id) } : pp), todos: st.todos.filter((t) => t.msId !== m.id) })); },
+            boxStyle: { width: 19, height: 19, borderRadius: 7, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", border: `1.5px solid ${m.done ? "var(--ac)" : "var(--gb2)"}`, background: m.done ? "linear-gradient(140deg,var(--ac),var(--ac2))" : "transparent", boxShadow: m.done ? "0 3px 10px -4px var(--ac)" : "none", transition: `all .3s ${SPRING}` },
+            textStyle: { flex: 1, minWidth: 0, fontSize: 13.5, color: m.done ? "var(--tx4)" : "var(--tx2)", textDecoration: m.done ? "line-through" : "none" },
+          })),
+        };
+      }),
+
+      showThoughtsInline: isApp && ((mob && tab === "thoughts") || (!mob && !!s.showThoughts)),
+      thoughtsWrapStyle: mob
+        ? { display: "block" }
+        : { position: "fixed", top: 0, right: 0, bottom: 0, width: 460, maxWidth: "92vw", zIndex: 60, overflowY: "auto", padding: "26px 22px 40px", background: "linear-gradient(200deg,var(--gh),var(--gl))", backdropFilter: "blur(34px) saturate(200%)", WebkitBackdropFilter: "blur(34px) saturate(200%)", borderLeft: "1px solid var(--gb)", boxShadow: "-24px 0 70px -30px var(--gsh)", animation: `sheetIn .001s, screenIn .4s cubic-bezier(.22,1,.36,1)` },
+      showThoughtsClose: !mob,
+      closeThoughts: () => this.set({ showThoughts: false }),
+      showThoughtsFab: isApp && !mob,
+      thoughtsFabStyle: { position: "fixed", right: 30, bottom: 100, width: 52, height: 52, borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 45, color: s.showThoughts ? "var(--aci)" : "var(--tx2)", background: s.showThoughts ? "linear-gradient(140deg,var(--ac),var(--ac2))" : "linear-gradient(157deg,var(--gh),var(--gl))", backdropFilter: "blur(22px) saturate(180%)", border: "1px solid var(--gb)", boxShadow: s.showThoughts ? "0 12px 30px -10px var(--ac)" : "inset 0 1px 0 var(--ghi),0 12px 32px -18px var(--gsh)", transition: `all .38s ${SPRING}` },
+      toggleThoughts: () => this.set({ showThoughts: !s.showThoughts }),
+      thoughtDraft: s.thoughtDraft,
+      setThoughtDraft: (e) => this.set({ thoughtDraft: e.target.value }),
+      addThought: () => {
+        if (!s.thoughtDraft.trim()) return;
+        this.setState((st) => ({ thoughts: [...st.thoughts, { id: "th" + Date.now(), text: st.thoughtDraft.trim(), person: st.thoughtPerson, due: null, done: false, age: "just now", stale: false }], thoughtDraft: "" }));
+      },
+      captureStyle: { marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, padding: "9px 17px", borderRadius: 13, fontSize: 13, fontWeight: 600, color: s.thoughtDraft.trim() ? "var(--aci)" : "var(--tx4)", background: s.thoughtDraft.trim() ? "linear-gradient(140deg,var(--ac),var(--ac2))" : "var(--gl2)", boxShadow: s.thoughtDraft.trim() ? "0 8px 22px -10px var(--ac)" : "none", transition: `all .3s ${SPRING}` },
+      personChips: [{ id: null, name: "No one", color: -1 }].concat(s.people.map((p) => ({ id: p.id, name: p.name, color: CAT_KEYS.indexOf(p.color) }))).map((p) => {
+        const on = s.thoughtPerson === p.id;
+        const cv = p.color < 0 ? null : `var(--c${p.color})`;
+        return {
+          name: p.name,
+          select: () => this.set({ thoughtPerson: p.id }),
+          style: { display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 999, fontSize: 12, fontWeight: 500, color: on ? (cv ? `var(--c${p.color}t)` : "var(--ac)") : "var(--tx3)", background: on ? (cv ? `var(--c${p.color}b)` : "var(--acs)") : "var(--gl2)", border: `1px solid ${on ? (cv || "var(--ac)") : "var(--gb2)"}`, transition: `all .25s ${SPRING}` },
+          dotStyle: { width: 6, height: 6, borderRadius: 99, background: cv || "var(--tx4)", flexShrink: 0, display: cv ? "block" : "none" },
+        };
+      }),
+      thoughtGroups: groups.map((g) => ({
+        name: g.name, count: g.items.length, deletable: g.key !== "un", empty: g.items.length === 0, emptyLabel: "Nothing here",
+        dotStyle: g.color === null ? { width: 7, height: 7, borderRadius: 99, background: "var(--tx4)" } : { width: 7, height: 7, borderRadius: 99, background: `var(--c${g.color})`, boxShadow: `0 0 10px -1px var(--c${g.color})` },
+        nameStyle: { fontSize: 11.5, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: g.color === null ? "var(--tx3)" : `var(--c${g.color}t)` },
+        items: g.items.map((t) => ({
+          text: t.text, done: t.done,
+          toggle: () => this.setState((st) => ({ thoughts: st.thoughts.map((x) => x.id === t.id ? { ...x, done: !x.done } : x) })),
+          remove: () => this.setState((st) => ({ thoughts: st.thoughts.filter((x) => x.id !== t.id) })),
+          cardStyle: { display: "flex", alignItems: "flex-start", gap: 11, padding: "14px 13px", borderRadius: 22, background: "linear-gradient(157deg,var(--gh),var(--gl))", backdropFilter: "blur(22px) saturate(180%)", WebkitBackdropFilter: "blur(22px) saturate(180%)", border: `1px solid ${t.stale && !t.done ? "color-mix(in oklab, var(--gold) 36%, var(--gb))" : "var(--gb)"}`, boxShadow: "inset 0 1px 0 var(--ghi),0 10px 28px -20px var(--gsh)", opacity: t.done ? 0.6 : 1, animation: "rowIn .4s cubic-bezier(.22,1,.36,1) both" },
+          boxStyle: { width: 23, height: 23, borderRadius: "50%", flexShrink: 0, marginTop: 1, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${t.done ? "var(--ac)" : "var(--gb2)"}`, background: t.done ? "linear-gradient(140deg,var(--ac),var(--ac2))" : "transparent", boxShadow: t.done ? "0 4px 14px -5px var(--ac)" : "none", transition: `all .35s ${SPRING}` },
+          textStyle: { fontSize: 15, lineHeight: 1.4, color: t.done ? "var(--tx4)" : "var(--tx)", textDecoration: t.done ? "line-through" : "none" },
+          badge: t.due ? (overdue(t.due, t.done) ? `Overdue · ${fmt(t.due)}` : fmt(t.due)) : (t.stale ? `Sitting ${t.age}` : t.age),
+          badgeIcon: t.due ? "#i-calendar" : "#i-clock",
+          badgeStyle: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 500, padding: "3px 9px", borderRadius: 999, fontFamily: "'Geist Mono',monospace", color: t.stale || overdue(t.due, t.done) ? "var(--gold)" : "var(--tx3)", background: t.stale || overdue(t.due, t.done) ? "color-mix(in oklab, var(--gold) 14%, transparent)" : "var(--gl2)", border: `1px solid ${t.stale || overdue(t.due, t.done) ? "color-mix(in oklab, var(--gold) 30%, transparent)" : "var(--gb2)"}` },
+        })),
+      })),
+      openManagePeople: () => this.set({ showManagePeople: true }),
+
+      tabs: tabsDef.map((tb) => {
+        const on = tab === tb.key;
+        return {
+          label: tb.label, icon: tb.icon,
+          go: () => this.set({ tab: tb.key }),
+          style: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, minWidth: 74, padding: "9px 8px 8px", borderRadius: 20, color: on ? "var(--aci)" : "var(--tx3)", background: on ? "linear-gradient(140deg,var(--ac),var(--ac2))" : "transparent", boxShadow: on ? "0 8px 20px -8px var(--ac)" : "none", transition: `all .38s ${SPRING}` },
+          labelStyle: { fontSize: 10.5, fontWeight: 600, letterSpacing: ".01em" },
+        };
+      }),
+
+      showFab: isApp && (mob ? tab === "work" || tab === "personal" : s.focusCol !== "workbench") && !(!mob && s.showThoughts),
+      fabStyle: { position: "fixed", right: mob ? 20 : 30, bottom: mob ? 100 : 30, width: 58, height: 58, borderRadius: 22, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 45, color: "var(--aci)", background: "linear-gradient(140deg,var(--ac),var(--ac2))", boxShadow: "0 14px 34px -10px var(--ac),inset 0 1px 0 rgba(255,255,255,.4)", overflow: "hidden", transition: `transform .4s ${SPRING}` },
+      openAdd: () => this.set({ showAdd: true, addTarget: mob ? tab : s.focusCol }),
+      closeAdd: () => this.set({ showAdd: false, draft: "" }),
+      showAdd: s.showAdd,
+      draft: s.draft,
+      setDraft: (e) => this.set({ draft: e.target.value }),
+      draftKey: (e) => { if (e.key === "Enter") this.commitAddNow(); },
+      commitAdd: () => this.commitAddNow(),
+      addPlaceholder: `Add to ${s.addTarget === "work" ? "Work" : "Personal"}…`,
+      addBtnStyle: { width: 40, height: 40, borderRadius: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: s.draft.trim() ? "var(--aci)" : "var(--tx4)", background: s.draft.trim() ? "linear-gradient(140deg,var(--ac),var(--ac2))" : "var(--gl2)", boxShadow: s.draft.trim() ? "0 8px 22px -10px var(--ac)" : "none", transition: `all .3s ${SPRING}` },
+      repeatOptions: ["none", "daily", "weekly", "monthly", "custom"].map((r) => ({
+        label: r === "none" ? "No repeat" : r.charAt(0).toUpperCase() + r.slice(1),
+        pick: () => this.set({ draftRep: r }),
+        style: pill(s.draftRep === r),
+      })),
+      draftCats: [{ id: null, name: "None", color: -1 }].concat(s.cats.filter((c) => c.list === s.addTarget).map((c) => ({ id: c.id, name: c.name, color: CAT_KEYS.indexOf(c.color) }))).map((c) => {
+        const on = s.draftCat === c.id;
+        return {
+          name: c.name,
+          pick: () => this.set({ draftCat: c.id }),
+          style: { display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 999, fontSize: 12, fontWeight: 500, color: on ? (c.color < 0 ? "var(--ac)" : `var(--c${c.color}t)`) : "var(--tx3)", background: on ? (c.color < 0 ? "var(--acs)" : `var(--c${c.color}b)`) : "var(--gl2)", border: `1px solid ${on ? (c.color < 0 ? "var(--ac)" : `var(--c${c.color})`) : "var(--gb2)"}`, transition: `all .25s ${SPRING}` },
+          dotStyle: { width: 6, height: 6, borderRadius: 99, flexShrink: 0, display: c.color < 0 ? "none" : "block", background: c.color < 0 ? "transparent" : `var(--c${c.color})` },
+        };
+      }),
+
+      showMenu: s.showMenu,
+      toggleMenu: () => this.set({ showMenu: !s.showMenu, showPalette: false }),
+      closeMenu: () => this.set({ showMenu: false }),
+      menuStyle: { position: "absolute", top: mob ? 58 : 62, right: mob ? 16 : 26, width: 246, padding: 8, borderRadius: 22, animation: `popIn .3s ${SPRING}`, background: "linear-gradient(157deg,var(--gh),var(--gl))", backdropFilter: "blur(30px) saturate(200%)", WebkitBackdropFilter: "blur(30px) saturate(200%)", border: "1px solid var(--gb)", boxShadow: "inset 0 1px 0 var(--ghi),0 24px 60px -24px var(--gsh)" },
+      showPalette: s.showPalette,
+      togglePalette: () => this.set({ showPalette: !s.showPalette }),
+      paletteChevStyle: { marginLeft: "auto", color: "var(--tx4)", transform: s.showPalette ? "none" : "rotate(-90deg)", transition: `transform .3s ${SPRING}` },
+      palettes: Object.keys(THEMES).map((id) => {
+        const on = this.themeId() === id;
+        const t = THEMES[id];
+        return {
+          label: t.label, active: on,
+          pick: () => this.set({ themeId: id }),
+          style: { width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", borderRadius: 12, fontSize: 12.5, fontWeight: on ? 600 : 500, color: on ? "var(--ac)" : "var(--tx2)", background: on ? "var(--acs)" : "transparent", transition: `all .25s ${SPRING}` },
+          swatchStyle: { width: 15, height: 15, borderRadius: 99, flexShrink: 0, background: `linear-gradient(140deg, oklch(0.72 0.17 ${t.bh[0]}), oklch(0.66 0.18 ${t.bh[1]}), oklch(0.75 0.15 ${t.bh[2]}))`, boxShadow: "inset 0 0 0 1px rgba(255,255,255,.4)" },
+        };
+      }),
+      setLight: () => this.set({ mode: "light" }),
+      setDark: () => this.set({ mode: "dark" }),
+      lightStyle: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "7px 0", borderRadius: 10, fontSize: 11.5, fontWeight: 600, color: dark ? "var(--tx3)" : "var(--ac)", background: dark ? "transparent" : "var(--g2)", transition: `all .25s ${SPRING}` },
+      darkStyle: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "7px 0", borderRadius: 10, fontSize: 11.5, fontWeight: 600, color: dark ? "var(--ac)" : "var(--tx3)", background: dark ? "var(--g2)" : "transparent", transition: `all .25s ${SPRING}` },
+      budgetRequestLabel: s.budgetRequested ? "Budget request pending" : "Request shared budget",
+      requestBudget: () => { if (s.budgetRequested) return; this.set({ budgetRequested: true }); setTimeout(() => this.set({ showMenu: false }), 900); },
+      budgetRequestStyle: { width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "9px 11px", borderRadius: 12, fontSize: 13, fontWeight: 500, cursor: s.budgetRequested ? "default" : "pointer", color: s.budgetRequested ? "var(--ac)" : "var(--tx2)", background: s.budgetRequested ? "var(--acs)" : "transparent", transition: `all .3s ${SPRING}` },
+      budgetRequestIcon: s.budgetRequested ? "#i-check" : "#i-wallet",
+      openNotify: () => this.set({ showMenu: false, showNotify: true, notifyStep: 1 }),
+      showNotify: !!s.showNotify,
+      closeNotify: () => this.set({ showNotify: false, notifyStep: 1 }),
+      notifyStepLabel: `Step ${s.notifyStep || 1} of 3`,
+      notifyStep1: (s.notifyStep || 1) === 1,
+      notifyStep2: s.notifyStep === 2,
+      notifyStep3: s.notifyStep === 3,
+      botToken: s.botToken || "",
+      setBotToken: (e) => this.set({ botToken: e.target.value }),
+      chatId: s.chatId || "",
+      setChatId: (e) => this.set({ chatId: e.target.value }),
+      notifyNext: () => this.set({ notifyStep: 2 }),
+      notifyBack: () => this.set({ notifyStep: 1 }),
+      notifySave: () => this.set({ notifyStep: 3 }),
+      notifyNextStyle: { width: "100%", padding: "12px", borderRadius: 14, fontSize: 13, fontWeight: 600, color: (s.botToken || "").trim() ? "var(--aci)" : "var(--tx4)", background: (s.botToken || "").trim() ? "linear-gradient(140deg,var(--ac),var(--ac2))" : "var(--gl2)", boxShadow: (s.botToken || "").trim() ? "0 8px 22px -10px var(--ac)" : "none", transition: `all .3s ${SPRING}` },
+      notifySaveStyle: { flex: 1, padding: "12px", borderRadius: 14, fontSize: 13, fontWeight: 600, color: (s.chatId || "").trim() ? "var(--aci)" : "var(--tx4)", background: (s.chatId || "").trim() ? "linear-gradient(140deg,var(--ac),var(--ac2))" : "var(--gl2)", boxShadow: (s.chatId || "").trim() ? "0 8px 22px -10px var(--ac)" : "none", transition: `all .3s ${SPRING}` },
+
+      showManageCats: s.showManageCats, showManagePeople: s.showManagePeople,
+      closeModals: () => this.set({ showManageCats: false, showManagePeople: false }),
+      scrimStyle: { position: "fixed", inset: 0, zIndex: 90, background: "var(--scrim)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 22, animation: "fadeIn .22s ease" },
+      modalStyle: { width: "100%", maxWidth: 400, maxHeight: "72vh", overflowY: "auto", padding: 22, borderRadius: 28, animation: `popIn .35s ${SPRING}`, background: "linear-gradient(157deg,var(--gh),var(--gl))", backdropFilter: "blur(34px) saturate(200%)", WebkitBackdropFilter: "blur(34px) saturate(200%)", border: "1px solid var(--gb)", boxShadow: "inset 0 1px 0 var(--ghi),0 30px 70px -28px var(--gsh)" },
+      manageCats: s.cats.filter((c) => c.list === s.addTarget).map((c) => ({ name: c.name, dotStyle: { width: 8, height: 8, borderRadius: 99, background: `var(--c${CAT_KEYS.indexOf(c.color)})`, boxShadow: `0 0 10px -1px var(--c${CAT_KEYS.indexOf(c.color)})` } })),
+      people: s.people.map((p) => ({ name: p.name, dotStyle: { width: 8, height: 8, borderRadius: 99, background: `var(--c${CAT_KEYS.indexOf(p.color)})`, boxShadow: `0 0 10px -1px var(--c${CAT_KEYS.indexOf(p.color)})` } })),
+    };
+  }
+
+  finishBrain() {
+    this.set({ brain: "parsing" });
+    setTimeout(() => this.setState((st) => ({
+      brain: "idle", heard: "", brainText: "", tab: "thoughts",
+      thoughts: [...st.thoughts, { id: "th" + Date.now(), text: "Ask Amon about the trailer maintenance", person: "pe1", due: "2026-08-04", done: false, age: "just now", stale: false }],
+    })), 1100);
+  }
+  submitBrainNow() {
+    if (!this.state.brainText.trim()) return;
+    const text = this.state.brainText.trim();
+    this.set({ brain: "parsing" });
+    setTimeout(() => this.setState((st) => ({ brain: "idle", brainText: "", tab: "thoughts", thoughts: [...st.thoughts, { id: "th" + Date.now(), text, person: null, due: null, done: false, age: "just now", stale: false }] })), 1000);
+  }
+  segStyle(on) {
+    return { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, flex: 1, padding: "9px 16px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer", color: on ? "var(--aci)" : "var(--tx3)", background: on ? "linear-gradient(140deg,var(--ac),var(--ac2))" : "transparent", boxShadow: on ? "0 8px 20px -10px var(--ac)" : "none", transition: `all .35s ${SPRING}` };
+  }
+  budgetPeriodBills() {
+    const per = this.state.period === "30" ? "30" : "15";
+    return (this.state.bills || []).filter((b) => b.due === per);
+  }
+  budgetAllHandled() {
+    const b = this.budgetPeriodBills();
+    return b.length > 0 && b.every((x) => x.status === "paid" || x.status === "skip");
+  }
+  budgetHandledLine() {
+    const b = this.budgetPeriodBills();
+    const paid = b.filter((x) => x.status === "paid");
+    const skip = b.filter((x) => x.status === "skip");
+    return `${paid.length} paid · ${skip.length} no payment needed · ${money(paid.reduce((s, x) => s + x.amount, 0))} total`;
+  }
+  nightList() {
+    if (!this.state.nightly) return [];
+    return this.state.nightly;
+  }
+  nightTonight() { return this.nightList().filter((i) => i.forDate <= TODAY); }
+  nightDone() { return this.nightTonight().filter((i) => i.done).length; }
+  nightProgress() { const t = this.nightTonight(); return t.length ? this.nightDone() / t.length : 0; }
+  nightAllDone() { const t = this.nightTonight(); return t.length > 0 && this.nightDone() === t.length; }
+  nightCarriedCount() { return this.nightTonight().filter((i) => i.rolled && !i.done).length; }
+  nightPill(on) {
+    return { display: "flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 999, fontSize: 12.5, fontWeight: 500, cursor: "pointer", color: on ? "#e8c184" : "rgba(233,227,242,.55)", background: on ? "rgba(232,193,132,.12)" : "rgba(255,255,255,.05)", border: `1px solid ${on ? "rgba(232,193,132,.5)" : "rgba(255,255,255,.1)"}`, transition: `all .25s ${SPRING}` };
+  }
+  buildNightItem(it, muted) {
+    const carried = it.rolled && !it.done;
+    return {
+      text: it.text, done: it.done, repeating: !!it.repeat, carried, muted,
+      dateLabel: muted ? fmt(it.forDate) : "",
+      toggle: () => this.setState((st) => ({ nightly: st.nightly.map((x) => x.id === it.id ? { ...x, done: !x.done } : x) })),
+      remove: () => this.setState((st) => ({ nightly: st.nightly.filter((x) => x.id !== it.id) })),
+      rowStyle: { display: "flex", alignItems: "flex-start", gap: 13, padding: "14px 2px", borderBottom: "1px solid rgba(255,255,255,.07)" },
+      boxStyle: { width: 21, height: 21, minWidth: 21, borderRadius: "50%", marginTop: 1, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#12101c", border: `1.5px solid ${it.done ? "#e8c184" : "rgba(255,255,255,.22)"}`, background: it.done ? "linear-gradient(140deg,#f0cf8e,#d5a55f)" : "transparent", boxShadow: it.done ? "0 4px 14px -5px #d5a55f" : "none", transition: `all .35s ${SPRING}` },
+      textStyle: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 1.45, color: it.done ? "rgba(233,227,242,.35)" : muted ? "rgba(233,227,242,.55)" : "#e9e3f2", textDecoration: it.done ? "line-through" : "none" },
+    };
+  }
+  addNightItem() {
+    const v = (this.state.nightDraft || "").trim();
+    if (!v) return;
+    this.setState((st) => ({
+      nightDraft: "", nightRepeatOpen: false, nightRepeat: null,
+      nightly: [...(st.nightly || []), { id: "n" + Date.now(), text: v, done: false, forDate: TODAY, rolled: false, repeat: st.nightRepeat || null }],
+    }));
+  }
+  promoteMilestone(pid, mid) {
+    this.setState((st) => {
+      const p = st.projects.find((x) => x.id === pid);
+      const m = p && p.ms.find((x) => x.id === mid);
+      if (!m || m.promoted) return null;
+      const cat = st.cats.find((c) => c.id === p.cat);
+      const list = cat ? cat.list : "work";
+      return {
+        tab: list, focusCol: list,
+        todos: [...st.todos, { id: "t" + Date.now(), list, text: m.text, due: m.due, cat: p.cat, done: m.done, msId: mid }],
+        projects: st.projects.map((x) => x.id === pid ? { ...x, ms: x.ms.map((y) => y.id === mid ? { ...y, promoted: true } : y) } : x),
+      };
+    });
+  }
+  unpromoteMilestone(pid, mid) {
+    this.setState((st) => ({
+      todos: st.todos.filter((t) => t.msId !== mid),
+      projects: st.projects.map((x) => x.id === pid ? { ...x, ms: x.ms.map((y) => y.id === mid ? { ...y, promoted: false } : y) } : x),
+    }));
+  }
+  addMilestone(pid) {
+    const v = ((this.state.msDrafts || {})[pid] || "").trim();
+    if (!v) return;
+    this.setState((st) => ({
+      msDrafts: { ...(st.msDrafts || {}), [pid]: "" },
+      projects: st.projects.map((p) => p.id === pid ? { ...p, ms: [...p.ms, { id: "m" + Date.now(), text: v, due: null, done: false }] } : p),
+    }));
+  }
+  createProject() {
+    const v = (this.state.projectDraft || "").trim();
+    if (!v) return;
+    this.setState((st) => {
+      const id = "pr" + Date.now();
+      return { projectDraft: "", projectCat: null, projectDeadline: "", showProjectPanel: false, openProject: id,
+        projects: [...st.projects, { id, title: v, cat: st.projectCat || null, deadline: st.projectDeadline || null, ms: [] }] };
+    });
+  }
+  saveEdit() {
+    const id = this.state.editingId;
+    const v = (this.state.editText || "").trim();
+    if (!id || !v) { this.set({ editingId: null }); return; }
+    this.setState((st) => ({ editingId: null, todos: st.todos.map((t) => (t.id === id ? { ...t, text: v } : t)) }));
+  }
+  commitAddNow() {
+    const s = this.state;
+    if (!s.draft.trim()) return;
+    this.setState((st) => ({
+      todos: [...st.todos, { id: "t" + Date.now(), list: st.addTarget, text: st.draft.trim(), due: TODAY, cat: st.draftCat, done: false, rep: st.draftRep === "none" ? null : st.draftRep }],
+      draft: "", draftCat: null, draftRep: "none", showAdd: false,
+    }));
+  }
+}
+
+</script>
+</body>
+</html>
