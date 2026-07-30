@@ -470,6 +470,9 @@ function TodoApp({ user, access }) {
   const people = useUserCollection(uid, "people");
 
   const isDesktop = useIsDesktop();
+  // Swipe is mobile-only, so anywhere it isn't the interaction — desktop, or a
+  // narrow window driven by a mouse — rows show explicit clock/trash buttons.
+  const showRowButtons = isDesktop || HOVER_CAPABLE;
   const [activeList, setActiveList] = useState("work");
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [addTarget, setAddTarget] = useState("work"); // which list the open add panel writes to
@@ -1421,6 +1424,7 @@ if (page === "nightly") {
                     key={thought.id}
                     highlighted={overdue || stale}
                     tone="gold"
+                    showRowButtons
                     done={thought.done}
                     text={thought.text}
                     due={thought.due}
@@ -1431,11 +1435,11 @@ if (page === "nightly") {
                     badge={
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {thought.due ? (
-                          <Badge warn={overdue} icon={Calendar}>
+                          <Badge tone={overdue ? "red" : "neutral"} icon={Calendar}>
                             {overdue ? `Overdue · ${fmtDate(thought.due)}` : fmtDate(thought.due)}
                           </Badge>
                         ) : (
-                          <Badge warn={stale} icon={Clock}>
+                          <Badge tone={stale ? "gold" : "neutral"} icon={Clock}>
                             {stale ? `Sitting ${daysSince(thought.createdAt)}d · ${relativeTime(thought.createdAt)}` : relativeTime(thought.createdAt)}
                           </Badge>
                         )}
@@ -1779,6 +1783,7 @@ if (page === "nightly") {
                       key={thought.id}
                       highlighted={overdue || stale}
                       tone="gold"
+                      showRowButtons
                       done={thought.done}
                       text={thought.text}
                       due={thought.due}
@@ -1789,11 +1794,11 @@ if (page === "nightly") {
                       badge={
                         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                           {thought.due ? (
-                            <Badge warn={overdue} icon={Calendar}>
+                            <Badge tone={overdue ? "red" : "neutral"} icon={Calendar}>
                               {overdue ? `Overdue · ${fmtDate(thought.due)}` : fmtDate(thought.due)}
                             </Badge>
                           ) : (
-                            <Badge warn={stale} icon={Clock}>
+                            <Badge tone={stale ? "gold" : "neutral"} icon={Clock}>
                               {stale ? `Sitting ${daysSince(thought.createdAt)}d · ${relativeTime(thought.createdAt)}` : relativeTime(thought.createdAt)}
                             </Badge>
                           )}
