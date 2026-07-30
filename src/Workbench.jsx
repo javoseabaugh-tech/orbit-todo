@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, orderBy, query, serverTimestamp, updateDoc,
+  addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where,
 } from "firebase/firestore";
 import { Plus, Trash2, ChevronDown, X, ArrowUpRight, Users } from "lucide-react";
 import { db } from "./firebase";
@@ -13,6 +13,7 @@ export default function Workbench({ uid, categories, todos, sharedUid, sharedCat
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftCategoryId, setDraftCategoryId] = useState(null);
+  const [draftDeadline, setDraftDeadline] = useState("");
   // Tracks which uid the expanded project belongs to, so the milestone
   // listener reads from the right account.
   const [expanded, setExpanded] = useState(null);   // { id, uid } | null
@@ -33,7 +34,11 @@ export default function Workbench({ uid, categories, todos, sharedUid, sharedCat
       setSharedProjects([]);
       return;
     }
-    const q = query(collection(db, "users", sharedUid, "workbench"), orderBy("createdAt", "desc"));
+    const q = query(
+      collection(db, "users", sharedUid, "workbench"),
+      where("categoryId", "==", sharedCategoryId),
+      orderBy("createdAt", "desc")
+    );
     return onSnapshot(
       q,
       (snap) => {
@@ -75,11 +80,20 @@ export default function Workbench({ uid, categories, todos, sharedUid, sharedCat
     await addDoc(collection(db, "users", uid, "workbench"), {
       title,
       categoryId: draftCategoryId,
+      deadline: draftDeadline || null,
       createdAt: serverTimestamp(),
     });
     setDraftTitle("");
     setDraftCategoryId(null);
+    setDraftDeadline("");
     setShowAddPanel(false);
+  }
+
+  // Set or clear a project's deadline. Editable anytime from the expanded
+  // view, so existing projects can get one too — not only new ones.
+  async function setProjectDeadline(project, value) {
+    if (project._shared) return;
+    await updateDoc(doc(db, "users", uid, "workbench", project.id), { deadline: value || null });
   }
 
   async function deleteProject(project) {
@@ -113,6 +127,19 @@ export default function Workbench({ uid, categories, todos, sharedUid, sharedCat
     await addDoc(collection(db, "users", uid, "workbench", project.id, "milestones"), {
       text, due: due || null, done: false, order: existing.length,
     });
+  }
+
+  // Edit a milestone's text and/or due date. Keeps a promoted todo in sync,
+  // the same way toggleMilestone keeps `done` in sync.
+  async function editMilestone(project, milestone, text, due) {
+    if (project._shared) return;
+    await updateDoc(
+      doc(db, "users", uid, "workbench", project.id, "milestones", milestone.id),
+      { text, due: due || null }
+    );
+    if (milestone.promotedTodoId) {
+      await updateDoc(doc(db, "users", uid, "todos", milestone.promotedTodoId), { text, due: due || null });
+    }
   }
 
   // Allowed on shared projects — rules permit an update touching only `done`.
@@ -180,10 +207,19 @@ export default function Workbench({ uid, categories, todos, sharedUid, sharedCat
     return list.find((c) => c.id === project.categoryId);
   }
 
-  const visibleProjects = filterBucket
+  const filteredProjects = filterBucket
     ? projects.filter((p) => categoryBucket(p.categoryId) === filterBucket)
     : projects;
-
+  // Soonest deadline first; projects with no deadline sink to the bottom.
+  // Sort is stable, so same-deadline projects keep their newest-first order.
+  const visibleProjects = [...filteredProjects].sort((a, b) => {
+    const ad = a.deadline || "";
+    const bd = b.deadline || "";
+    if (ad && bd) return ad < bd ? -1 : ad > bd ? 1 : 0;
+    if (ad) return -1;
+    if (bd) return 1;
+    return 0;
+  });
   function progressFor(projectId) {
     const ms = milestonesByProject[projectId];
     if (!ms || ms.length === 0) return 0;
@@ -241,6 +277,20 @@ export default function Workbench({ uid, categories, todos, sharedUid, sharedCat
                 {cat.name}
               </button>
             ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: theme.textMuted }}>Deadline (optional)</span>
+            <input
+              type="date"
+              value={draftDeadline}
+              onChange={(e) => setDraftDeadline(e.target.value)}
+              style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: "6px 8px", fontSize: 12 }}
+            />
+            {draftDeadline && (
+              <button onClick={() => setDraftDeadline("")} style={{ color: theme.textFaint, fontSize: 11, fontWeight: 600, padding: 2 }}>
+                Clear
+              </button>
+            )}
           </div>
           <button
             onClick={addProject}
@@ -305,41 +355,42 @@ export default function Workbench({ uid, categories, todos, sharedUid, sharedCat
                 <div style={{ width: `${progress}%`, height: "100%", background: theme.accentPlum, transition: "width 0.2s ease" }} />
               </div>
               <div style={{ fontSize: 11, color: theme.textFaint, marginTop: 4 }}>
-                {progress}% complete{milestones.length ? ` - ${milestones.filter((m) => m.done).length}/${milestones.length} milestones` : ""}
+                {progress}% complete{milestones.length ? ` - ${milestones.filter((m) => m.done).length}/${milestones.length} milestones` : ""}{project.deadline ? ` · due ${project.deadline}` : ""}
               </div>
 
               {isExpanded && (
                 <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${theme.borderSoft}` }}>
-                  {milestones.map((m) => (
-                    <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
-                      <button onClick={() => toggleMilestone(project, m)} style={{ width: 18, height: 18, borderRadius: 6, border: `1.5px solid ${m.done ? theme.accentPlum : theme.border}`, background: m.done ? theme.accentPlum : "transparent", flexShrink: 0 }} />
-                      <span style={{ flex: 1, fontSize: 13, color: theme.textSecondary, textDecoration: m.done ? "line-through" : "none" }}>{m.text}</span>
-                      {m.due && <span style={{ fontSize: 11, color: theme.textFaint }}>{m.due}</span>}
-                      {!shared && (m.promotedTodoId ? (
-                        <button
-                          onClick={() => unpromoteMilestone(project, m)}
-                          title="Remove from todo list"
-                          style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: theme.accentPlum, fontWeight: 700, padding: 2 }}
-                        >
-                          In daily <X size={11} />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => promoteMilestone(project, m)}
-                          title={`Promote to ${promoteTarget === "work" ? "Work" : "Personal"}`}
-                          style={{ color: theme.textFaint, padding: 2 }}
-                        >
-                          <ArrowUpRight size={13} />
-                        </button>
-                      ))}
-                      {!shared && (
-                        <button onClick={() => deleteMilestone(project, m)} style={{ color: theme.budgetBorder, padding: 2 }}>
-                          <X size={13} />
+                  {!shared && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: theme.textMuted }}>Deadline</span>
+                      <input
+                        type="date"
+                        value={project.deadline || ""}
+                        onChange={(e) => setProjectDeadline(project, e.target.value)}
+                        style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: "5px 8px", fontSize: 12 }}
+                      />
+                      {project.deadline && (
+                        <button onClick={() => setProjectDeadline(project, "")} style={{ color: theme.textFaint, fontSize: 11, fontWeight: 600, padding: 2 }}>
+                          Clear
                         </button>
                       )}
                     </div>
+                  )}
+                  {milestones.map((m) => (
+                    <MilestoneRow
+                      key={m.id}
+                      milestone={m}
+                      shared={shared}
+                      deadline={project.deadline}
+                      promoteTarget={promoteTarget}
+                      onToggle={() => toggleMilestone(project, m)}
+                      onPromote={() => promoteMilestone(project, m)}
+                      onUnpromote={() => unpromoteMilestone(project, m)}
+                      onDelete={() => deleteMilestone(project, m)}
+                      onEdit={(text, due) => editMilestone(project, m, text, due)}
+                    />
                   ))}
-                  {!shared && <MilestoneAddRow onAdd={(text, due) => addMilestone(project, text, due)} />}
+                  {!shared && <MilestoneAddRow deadline={project.deadline} onAdd={(text, due) => addMilestone(project, text, due)} />}
                   {shared && milestones.length === 0 && (
                     <div style={{ fontSize: 12, color: theme.textFainter, padding: "6px 0" }}>
                       No milestones yet.
@@ -355,7 +406,89 @@ export default function Workbench({ uid, categories, todos, sharedUid, sharedCat
   );
 }
 
-function MilestoneAddRow({ onAdd }) {
+function MilestoneRow({ milestone, shared, deadline, promoteTarget, onToggle, onPromote, onUnpromote, onDelete, onEdit }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(milestone.text);
+  const [due, setDue] = useState(milestone.due || "");
+
+  function startEdit() {
+    if (shared) return;
+    setText(milestone.text);
+    setDue(milestone.due || "");
+    setEditing(true);
+  }
+  function save() {
+    const t = text.trim();
+    if (!t) { setEditing(false); return; }
+    onEdit(t, due || null);
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <div style={{ display: "flex", gap: 6, padding: "6px 0", alignItems: "center" }}>
+        <input
+          autoFocus
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
+          style={{ flex: 1, minWidth: 0, border: `1px solid ${theme.border}`, borderRadius: 8, padding: "6px 8px", fontSize: 13 }}
+        />
+        <input
+          type="date"
+          value={due}
+          max={deadline || undefined}
+          onChange={(e) => setDue(e.target.value)}
+          style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: "6px 8px", fontSize: 12 }}
+        />
+        <button onClick={save} style={{ background: theme.accentPlum, color: theme.cardBg, borderRadius: 8, padding: "6px 9px", fontSize: 11, fontWeight: 700 }}>
+          Save
+        </button>
+        <button onClick={() => setEditing(false)} style={{ color: theme.textFaint, fontSize: 11, fontWeight: 600, padding: 2 }}>
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
+      <button onClick={onToggle} style={{ width: 18, height: 18, borderRadius: 6, border: `1.5px solid ${milestone.done ? theme.accentPlum : theme.border}`, background: milestone.done ? theme.accentPlum : "transparent", flexShrink: 0 }} />
+      <span
+        onClick={startEdit}
+        title={!shared ? "Tap to edit" : undefined}
+        style={{ flex: 1, fontSize: 13, color: theme.textSecondary, textDecoration: milestone.done ? "line-through" : "none", cursor: shared ? "default" : "pointer" }}
+      >
+        {milestone.text}
+      </span>
+      {milestone.due && <span style={{ fontSize: 11, color: theme.textFaint }}>{milestone.due}</span>}
+      {!shared && (milestone.promotedTodoId ? (
+        <button
+          onClick={onUnpromote}
+          title="Remove from todo list"
+          style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: theme.accentPlum, fontWeight: 700, padding: 2 }}
+        >
+          In daily <X size={11} />
+        </button>
+      ) : (
+        <button
+          onClick={onPromote}
+          title={`Promote to ${promoteTarget === "work" ? "Work" : "Personal"}`}
+          style={{ color: theme.textFaint, padding: 2 }}
+        >
+          <ArrowUpRight size={13} />
+        </button>
+      ))}
+      {!shared && (
+        <button onClick={onDelete} style={{ color: theme.budgetBorder, padding: 2 }}>
+          <X size={13} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function MilestoneAddRow({ deadline, onAdd }) {
   const [text, setText] = useState("");
   const [due, setDue] = useState("");
   function submit() {
@@ -371,9 +504,9 @@ function MilestoneAddRow({ onAdd }) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && submit()}
-        style={{ flex: 1, border: `1px solid ${theme.border}`, borderRadius: 8, padding: "6px 8px", fontSize: 13 }}
+        style={{ flex: 1, minWidth: 0, border: `1px solid ${theme.border}`, borderRadius: 8, padding: "6px 8px", fontSize: 13 }}
       />
-      <input type="date" value={due} onChange={(e) => setDue(e.target.value)} style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: "6px 8px", fontSize: 12 }} />
+      <input type="date" value={due} max={deadline || undefined} onChange={(e) => setDue(e.target.value)} style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: "6px 8px", fontSize: 12 }} />
       <button onClick={submit} style={{ background: theme.accentPlum, color: theme.cardBg, borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 700 }}>
         <Plus size={14} />
       </button>

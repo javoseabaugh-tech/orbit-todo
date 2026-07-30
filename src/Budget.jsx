@@ -209,7 +209,12 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
     }));
   }
   function deleteAccount(accountId) {
-    if (!window.confirm("Delete this account? This can't be undone.")) return;
+    setConfirmDelete(accountId);
+  }
+  function confirmDeleteAccount() {
+    const accountId = confirmDelete;
+    setConfirmDelete(null);
+    if (!accountId) return;
     setState((s) => ({
       ...s,
       accounts: s.accounts.filter((a) => a.id !== accountId),
@@ -219,15 +224,18 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
   function addAccount() {
     setState((s) => {
       if (s.accounts.length >= 3) return s;
-      const nextNum = s.accounts.length + 1;
-      const nextId = `a${nextNum}`;
+      const used = new Set(s.accounts.map((a) => a.id));
+      const nextId = ["a1", "a2", "a3"].find((id) => !used.has(id));
+      if (!nextId) return s;
       return {
         ...s,
-        accounts: [...s.accounts, { id: nextId, name: `Bank Account ${nextNum}`, balances: { "15": 0, "30": 0 } }],
+        accounts: [...s.accounts, { id: nextId, name: `Bank Account ${nextId.slice(1)}`, balances: { "15": 0, "30": 0 } }],
       };
     });
   }
   const [showAccounts, setShowAccounts] = useState(true);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   function addBill() {
     const amount = parseFloat(newBill.amount);
@@ -451,10 +459,10 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
   }
 
   function resetAllToUnpaid() {
-    const ok = window.confirm(
-      "Reset every bill on both the 15th and the 30th back to Unpaid? This clears Scheduled, No payment needed, and Payment complete statuses on all of them."
-    );
-    if (!ok) return;
+    setConfirmReset(true);
+  }
+  function doResetAllToUnpaid() {
+    setConfirmReset(false);
     setState((s) => ({
       ...s,
       bills: s.bills.map((b) => ({ ...b, status: "unpaid", paidAt: null })),
@@ -536,8 +544,8 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
           width: 140px; height: 140px;
           border-radius: 999px;
           background: radial-gradient(circle, ${theme.borderSoft}, transparent 70%);
+          pointer-events: none;
         }
-
         .main-tab-toggle {
           display: inline-flex;
           padding: 4px;
@@ -1492,6 +1500,71 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
               style={{ border: "none", background: "transparent", color: theme.textMuted, fontSize: 13, cursor: "pointer", padding: "6px 0" }}
             >
               Not now
+            </button>
+          </div>
+        </div>
+      )}
+      {confirmDelete && (
+        <div
+          onClick={() => setConfirmDelete(null)}
+          style={{ position: "fixed", inset: 0, background: theme.prefersDark ? "rgba(0,0,0,0.75)" : "rgba(43,36,32,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 200 }}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="card p-5" style={{ maxWidth: 340, textAlign: "center" }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: "50%", margin: "0 auto 14px",
+              background: "rgba(220,38,38,0.10)", display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <Trash2 size={22} color={theme.accentRed} />
+            </div>
+            <h2 className="font-display font-semibold text-base" style={{ marginBottom: 6 }}>Delete this account?</h2>
+            <p className="text-sm" style={{ color: theme.textMuted, marginBottom: 16 }}>
+              This can't be undone. Any bills assigned to it will be left without an account.
+            </p>
+            <button
+              onClick={confirmDeleteAccount}
+              className="w-full px-4 py-2.5 rounded-lg text-sm flex items-center justify-center gap-2"
+              style={{ marginBottom: 8, background: theme.accentRed, color: "#fff", border: "none", cursor: "pointer", fontWeight: 600 }}
+            >
+              <Trash2 size={16} />
+              Delete account
+            </button>
+            <button
+              onClick={() => setConfirmDelete(null)}
+              style={{ border: "none", background: "transparent", color: theme.textMuted, fontSize: 13, cursor: "pointer", padding: "6px 0" }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {confirmReset && (
+        <div
+          onClick={() => setConfirmReset(false)}
+          style={{ position: "fixed", inset: 0, background: theme.prefersDark ? "rgba(0,0,0,0.75)" : "rgba(43,36,32,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 200 }}
+        >
+          <div onClick={(e) => e.stopPropagation()} className="card p-5" style={{ maxWidth: 360, textAlign: "center" }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: "50%", margin: "0 auto 14px",
+              background: "rgba(220,38,38,0.10)", display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <AlertCircle size={22} color={theme.accentRed} />
+            </div>
+            <h2 className="font-display font-semibold text-base" style={{ marginBottom: 6 }}>Reset all bills to Unpaid?</h2>
+            <p className="text-sm" style={{ color: theme.textMuted, marginBottom: 16 }}>
+              This resets every bill on both the 15th and the 30th back to Unpaid, clearing all Scheduled, No payment needed, and Payment complete statuses.
+            </p>
+            <button
+              onClick={doResetAllToUnpaid}
+              className="w-full px-4 py-2.5 rounded-lg text-sm flex items-center justify-center gap-2"
+              style={{ marginBottom: 8, background: theme.accentRed, color: "#fff", border: "none", cursor: "pointer", fontWeight: 600 }}
+            >
+              Reset all to Unpaid
+            </button>
+            <button
+              onClick={() => setConfirmReset(false)}
+              style={{ border: "none", background: "transparent", color: theme.textMuted, fontSize: 13, cursor: "pointer", padding: "6px 0" }}
+            >
+              Cancel
             </button>
           </div>
         </div>

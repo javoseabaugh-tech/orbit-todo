@@ -3,13 +3,13 @@ import SwipeToDelete from "./SwipeToDelete";
 import { useEffect, useRef, useState } from "react";
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import {
-  addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
+  addDoc, collection, deleteDoc, doc, documentId, getDocs, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
 } from "firebase/firestore";
 import {
   Plus, Briefcase, User, Calendar, Check, Trash2,
   GripVertical, Inbox, X, MessageCircleMore, UserPlus, Clock, Pencil, LogOut,
   ChevronDown, Search, Tag, Settings, Repeat, FolderKanban,
-  Moon,
+  Moon, Eye, EyeOff,
 } from "lucide-react";
 import { auth, googleProvider, db } from "./firebase";
 import BrainDumpButton from "./BrainDump";
@@ -44,6 +44,13 @@ function isOverdue(dueDate, done) {
   return new Date(dueDate + "T00:00:00") < today;
 }
 
+function isFutureDate(dueDate) {
+  if (!dueDate) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return new Date(dueDate + "T00:00:00") > today;
+}
+
 // Firestore Timestamp -> millis, tolerating pending server timestamps (null while unsynced)
 function toMillis(ts) {
   if (!ts) return Date.now();
@@ -66,21 +73,32 @@ function relativeTime(ts) {
 }
 
 // ---------- Firestore live-collection hook ----------
-function useUserCollection(uid, name) {
+function useUserCollection(uid, name, filter) {
   const [items, setItems] = useState([]);
   useEffect(() => {
     if (!uid) {
       setItems([]);
       return;
     }
-    const q = query(collection(db, "users", uid, name), orderBy("createdAt", "asc"));
+    let q;
+    if (filter?.docId) {
+      q = query(collection(db, "users", uid, name), where(documentId(), "==", filter.docId));
+    } else if (filter?.categoryField) {
+      q = query(
+        collection(db, "users", uid, name),
+        where("categoryId", "==", filter.categoryField),
+        orderBy("createdAt", "asc")
+      );
+    } else {
+      q = query(collection(db, "users", uid, name), orderBy("createdAt", "asc"));
+    }
     const unsub = onSnapshot(
       q,
       (snap) => setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
       (err) => console.error(`${name} snapshot error`, err)
     );
     return () => unsub();
-  }, [uid, name]);
+  }, [uid, name, filter?.docId, filter?.categoryField]);
   return items;
 }
 
@@ -220,15 +238,16 @@ function TodoApp({ user, access }) {
   const sharingWork = access?.sharedWorkAccess === true && !!ownerUid && ownerUid !== uid;
   const workUid = sharingWork ? ownerUid : uid;
   const ownTodos = useUserCollection(uid, "todos");
-  const sharedTodos = useUserCollection(sharingWork ? ownerUid : null, "todos");
+  const sharedTodos = useUserCollection(sharingWork ? ownerUid : null, "todos", { categoryField: access?.sharedWorkCategoryId });
   const ownCategories = useUserCollection(uid, "categories");
-  const sharedCategories = useUserCollection(sharingWork ? ownerUid : null, "categories");
+  const sharedCategories = useUserCollection(sharingWork ? ownerUid : null, "categories", { docId: access?.sharedWorkCategoryId });
   const thoughts = useUserCollection(uid, "thoughts");
   const people = useUserCollection(uid, "people");
 
   const [activeList, setActiveList] = useState("work");
   const [categoryFilter, setCategoryFilter] = useState([]); // array of category ids; empty = show all
   const [showAddPanel, setShowAddPanel] = useState(false);
+  const [addTarget, setAddTarget] = useState("work"); // which list the open add panel writes to
   const [settingTimeFor, setSettingTimeFor] = useState(null);
   const [draftTimeValue, setDraftTimeValue] = useState("");
   const [pendingBudgetRequest, setPendingBudgetRequest] = useState(null);
@@ -253,6 +272,16 @@ function TodoApp({ user, access }) {
   const [showManageCats, setShowManageCats] = useState(false);
   const [showManagePeople, setShowManagePeople] = useState(false);
 
+  // ---------- Desktop side-by-side layout (>=900px, CSS-driven) ----------
+  // Which column last had a click — used as the target for the shared "+"
+  // button. Independent per-column category filters and manage-categories
+  // modal target, since each column filters on its own. Workbench has no
+  // entry in desktopCategoryFilters since it doesn't use category chips.
+  const [focusedColumn, setFocusedColumn] = useState("work");
+  const [desktopCategoryFilters, setDesktopCategoryFilters] = useState({ work: [], personal: [] });
+  const [desktopManageCatsFor, setDesktopManageCatsFor] = useState(null);
+  const [showThoughtsPanel, setShowThoughtsPanel] = useState(false);
+
   const [thoughtDraft, setThoughtDraft] = useState("");
   const [thoughtDue, setThoughtDue] = useState("");
   const thoughtDueRef = useRef(null);
@@ -263,6 +292,21 @@ function TodoApp({ user, access }) {
   const [dragOverZone, setDragOverZone] = useState(null);
   const draggedId = useRef(null);
   const draggedKind = useRef(null);
+  const draggedTodoRef = useRef(null);
+  const [todoDragState, setTodoDragState] = useState(null);
+
+  // Hide/show future-dated todos. Persisted on the user's own access doc so
+  // it stays in sync across devices (same doc already used for uid
+  // self-registration). Overdue and undated todos always stay visible —
+  // only strictly-future due dates get hidden.
+  const hideFutureTodos = access?.hideFutureTodos === true;
+  async function toggleHideFutureTodos() {
+    try {
+      await setDoc(doc(db, "access", emailToDocId(user.email)), { hideFutureTodos: !hideFutureTodos }, { merge: true });
+    } catch (err) {
+      console.error("hideFutureTodos toggle error", err);
+    }
+  }
 
   const listMeta = {
     work: { label: "Work", icon: Briefcase, color: PALETTE.blue },
@@ -272,24 +316,42 @@ function TodoApp({ user, access }) {
   };
 
   // ---------- Work / Personal ----------
-  const activeUid = activeList === "work" ? workUid : uid;
-  const activeTodosSource = activeList === "work" && sharingWork ? sharedTodos : ownTodos;
-  const activeCategoriesSource = activeList === "work" && sharingWork ? sharedCategories : ownCategories;
-  // 1. Get the shared items and filter them strictly by the approved category
-  const filteredShared = sharedTodos
-    .filter((t) => t.list === "work" && t.categoryId === access?.sharedWorkCategoryId)
-    .map((t) => ({ ...t, isShared: true }));
+  // Generalized per-list helpers. The mobile view below keeps using
+  // activeList-scoped currentTodos/currentCategories (unchanged output —
+  // just now sourced from these), while the desktop columns call these
+  // directly for "work"/"personal"/"workbench" independently and
+  // simultaneously.
+  function uidForList(listKey) {
+    return listKey === "work" && sharingWork ? ownerUid : uid;
+  }
+  function todosForList(listKey) {
+    if (listKey === "work" && sharingWork) {
+      const own = ownTodos.filter((t) => t.list === "work");
+      const shared = sharedTodos
+        .filter((t) => t.list === "work" && t.categoryId === access?.sharedWorkCategoryId)
+        .map((t) => ({ ...t, isShared: true }));
+      return [...own, ...shared];
+    }
+    return ownTodos.filter((t) => t.list === listKey);
+  }
+  function categoriesForList(listKey) {
+    const source = listKey === "work" && sharingWork ? sharedCategories : ownCategories;
+    return source.filter((c) => c.list === listKey);
+  }
+  function dateFilterList(items) {
+    return hideFutureTodos ? items.filter((t) => !isFutureDate(t.due)) : items;
+  }
 
-  // 2. Get the Assistant's OWN items
-  // If we are in the 'work' list, show ALL their work tasks regardless of category
-  const filteredOwn = ownTodos.filter((t) => t.list === activeList);
-
-  // 3. Combine them
-  const currentTodos = (activeList === "work" && sharingWork)
-    ? [...filteredOwn, ...filteredShared]
-    : filteredOwn;
-  const currentCategories = activeCategoriesSource.filter((c) => c.list === activeList);
+  const activeUid = uidForList(activeList);
+  const currentTodos = todosForList(activeList);
+  const currentCategories = categoriesForList(activeList);
   const activeCount = currentTodos.filter((t) => !t.done).length;
+
+  // Date-filtered view respecting the hide-future-todos toggle. Overdue and
+  // undated todos are never hidden by this — only due dates strictly after
+  // today. Category chips and the rendered list both derive from this.
+  const dateFilteredTodos = dateFilterList(currentTodos);
+
   // Suggest an existing category as the user types a new task, debounced
   // so it doesn't fire on every keystroke. Never overrides a category the
   // person already picked themselves.
@@ -309,41 +371,51 @@ function TodoApp({ user, access }) {
     return () => clearTimeout(handle);
   }, [draft]);
 
-  async function addCategory() {
-    const name = newCatName.trim();
-    if (!name) return null;
-    
-    // We use activeUid so it saves to the OWNER'S list if they are in the shared Work tab
-    const ref = await addDoc(collection(db, "users", activeUid, "categories"), { 
-      list: activeList, 
-      name, 
-      color: PALETTE_ORDER[currentCategories.length % 4], 
-      createdAt: serverTimestamp() 
+  async function addCategoryToList(listKey, name) {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    const targetUid = uidForList(listKey);
+    const existingCount = categoriesForList(listKey).length;
+    const ref = await addDoc(collection(db, "users", targetUid, "categories"), {
+      list: listKey,
+      name: trimmed,
+      color: PALETTE_ORDER[existingCount % 4],
+      createdAt: serverTimestamp(),
     });
-    
-    setNewCatName("");
-    setShowNewCat(false);
     return ref.id;
   }
 
+  async function addCategory() {
+    const id = await addCategoryToList(activeList, newCatName);
+    if (id) {
+      setNewCatName("");
+      setShowNewCat(false);
+    }
+    return id;
+  }
+
   async function addCategoryAndSelect() {
-    const id = await addCategory();
-    if (id) setDraftCategoryId(id);
+    const id = await addCategoryToList(addTarget, newCatName);
+    if (id) {
+      setNewCatName("");
+      setShowNewCat(false);
+      setDraftCategoryId(id);
+    }
     setShowMoreCats(false);
   }
 
-  async function deleteCategory(catId) {
-    // Delete the category from the Owner's list (activeUid)
-    await deleteDoc(doc(db, "users", activeUid, "categories", catId));
-    
-    // Find all todos (private and shared) that were in this category
-    const affected = currentTodos.filter((t) => t.categoryId === catId);
-    
-    // Update them all to have no category, correctly targeting 'ownerUid' or 'uid'
+  async function deleteCategoryFromList(listKey, catId) {
+    const targetUid = uidForList(listKey);
+    await deleteDoc(doc(db, "users", targetUid, "categories", catId));
+    const affected = todosForList(listKey).filter((t) => t.categoryId === catId);
     await Promise.all(affected.map((t) => {
-      const targetUid = t.isShared ? ownerUid : uid;
-      return updateDoc(doc(db, "users", targetUid, "todos", t.id), { categoryId: null });
+      const tUid = t.isShared ? ownerUid : uid;
+      return updateDoc(doc(db, "users", tUid, "todos", t.id), { categoryId: null });
     }));
+  }
+
+  async function deleteCategory(catId) {
+    await deleteCategoryFromList(activeList, catId);
   }
 
   function computeNextDue(currentDue, recurrence) {
@@ -355,35 +427,40 @@ function TodoApp({ user, access }) {
     return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
   }
 
-  async function addTodo() {
-    const text = draft.trim();
-    if (!text) return;
-    
-    // Assistants use the shared Category ID, but save the task to their own private list (uid)
-    const finalCategoryId = draftCategoryId; 
-
+  // Generalized add — writes to the caller-specified list. Always saves to
+  // the signed-in user's own private list (uid), matching the original:
+  // assistants keep their own copy even when adding into a shared category.
+  async function addTodoToList(listKey, { text, due, categoryId, recurrence }) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
     try {
       await addDoc(collection(db, "users", uid, "todos"), {
-        list: activeList,
-        text,
-        categoryId: finalCategoryId,
-        due: draftDue || null,
+        list: listKey,
+        text: trimmed,
+        categoryId: categoryId || null,
+        due: due || null,
         done: false,
-        recurrence: draftRecurrence
-  ? draftRecurrence.type === "custom"
-    ? { type: "custom", intervalDays: Number(draftRecurrence.intervalDays) || 1 }
-    : draftRecurrence
-  : null,
+        recurrence: recurrence
+          ? recurrence.type === "custom"
+            ? { type: "custom", intervalDays: Number(recurrence.intervalDays) || 1 }
+            : recurrence
+          : null,
         createdAt: serverTimestamp(),
       });
-      setDraft("");
-      setDraftDue("");
-      setDraftCategoryId(null);
-      setDraftRecurrence(null);
-      setShowAddPanel(false);
     } catch (err) {
       alert("Error saving: " + err.message);
     }
+  }
+
+  async function addTodo() {
+    await addTodoToList(addTarget, {
+      text: draft, due: draftDue, categoryId: draftCategoryId, recurrence: draftRecurrence,
+    });
+    setDraft("");
+    setDraftDue("");
+    setDraftCategoryId(null);
+    setDraftRecurrence(null);
+    setShowAddPanel(false);
   }
 
   async function toggleDone(todo) {
@@ -542,33 +619,117 @@ function TodoApp({ user, access }) {
     if (kind === "thought") assignPerson(id, targetId);
   }
 
+  // Same-due-date drag-to-reorder for todos, implemented with Pointer
+  // Events (not native HTML5 drag-and-drop) so it behaves consistently on
+  // both mouse and touch/mobile, and so the dragged row visually follows
+  // the pointer instead of relying on the browser's native drag ghost
+  // (which broke down once dragging only started from the small handle).
+  function startTodoReorderDrag(e, todo, sortedList) {
+    if (typeof e.button === "number" && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const groupKey = todo.due || null;
+    const group = sortedList.filter((t) => (t.due || null) === groupKey);
+    if (group.length < 2) return;
+
+    const rects = {};
+    group.forEach((t) => {
+      const el = document.querySelector(`[data-todo-id="${CSS.escape(String(t.id))}"]`);
+      if (el) rects[t.id] = el.getBoundingClientRect();
+    });
+    const startY = e.clientY;
+    let overId = todo.id;
+    const prevUserSelect = document.body.style.userSelect;
+    document.body.style.userSelect = "none";
+
+    function pickOverId(pointerY) {
+      const entries = group.map((t) => ({ id: t.id, rect: rects[t.id] })).filter((x) => x.rect);
+      if (!entries.length) return overId;
+      const first = entries[0], last = entries[entries.length - 1];
+      if (pointerY <= first.rect.top + first.rect.height / 2) return first.id;
+      if (pointerY >= last.rect.top + last.rect.height / 2) return last.id;
+      for (const en of entries) {
+        if (pointerY >= en.rect.top && pointerY < en.rect.top + en.rect.height) return en.id;
+      }
+      return overId;
+    }
+
+    function onMove(ev) {
+      const deltaY = ev.clientY - startY;
+      overId = pickOverId(ev.clientY);
+      setTodoDragState({ id: todo.id, deltaY, overId });
+    }
+
+    async function onUp() {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      document.body.style.userSelect = prevUserSelect;
+      setTodoDragState(null);
+      if (overId != null && overId !== todo.id) {
+        const ids = group.map((t) => t.id);
+        const fromIdx = ids.indexOf(todo.id);
+        const toIdx = ids.indexOf(overId);
+        if (fromIdx !== -1 && toIdx !== -1) {
+          const reordered = [...group];
+          const [moved] = reordered.splice(fromIdx, 1);
+          reordered.splice(toIdx, 0, moved);
+          await Promise.all(reordered.map((t, i) => {
+            const targetUid = t.isShared ? t.ownerUid : uid;
+            return updateDoc(doc(db, "users", targetUid, "todos", t.id), { order: (i + 1) * 10 });
+          }));
+        }
+      }
+    }
+
+    setTodoDragState({ id: todo.id, deltaY: 0, overId: todo.id });
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }
+
   function sortTodosFlat(items) {
     return [...items].sort((a, b) => {
       if (a.done !== b.done) return a.done ? 1 : -1;
-      if (a.due && b.due) return a.due.localeCompare(b.due);
-      if (a.due) return -1;
-      if (b.due) return 1;
+      if (a.due && b.due && a.due !== b.due) return a.due.localeCompare(b.due);
+      if (a.due && !b.due) return -1;
+      if (!a.due && b.due) return 1;
+      // Same due date (or both undated) - respect manual drag order within that
+      // group, falling back to creation order for todos never manually reordered.
+      const aOrder = typeof a.order === "number" ? a.order : null;
+      const bOrder = typeof b.order === "number" ? b.order : null;
+      if (aOrder !== null || bOrder !== null) {
+        if (aOrder === null) return 1;
+        if (bOrder === null) return -1;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+      }
       return toMillis(a.createdAt) - toMillis(b.createdAt);
     });
   }
 
   const filteredTodos = categoryFilter.length === 0
-    ? currentTodos
-    : currentTodos.filter((t) => categoryFilter.includes(t.categoryId));
+    ? dateFilteredTodos
+    : dateFilteredTodos.filter((t) => categoryFilter.includes(t.categoryId));
   const sortedTodos = sortTodosFlat(filteredTodos);
 
   // Recently used = categories whose most recently created todo is newest.
   // Categories never used sink to the end.
-  function recentCategories(limit) {
+  function recentCategoriesForList(listKey, limit) {
+    const listTodos = todosForList(listKey);
+    const listCats = categoriesForList(listKey);
     const lastUsed = {};
-    currentTodos.forEach((t) => {
+    listTodos.forEach((t) => {
       if (!t.categoryId) return;
       const ms = toMillis(t.createdAt);
       if (!lastUsed[t.categoryId] || ms > lastUsed[t.categoryId]) lastUsed[t.categoryId] = ms;
     });
-    return [...currentCategories]
+    return [...listCats]
       .sort((a, b) => (lastUsed[b.id] || -1) - (lastUsed[a.id] || -1))
       .slice(0, limit);
+  }
+  function recentCategories(limit) {
+    return recentCategoriesForList(activeList, limit);
   }
 
   function sortByDue(items) {
@@ -607,6 +768,183 @@ function TodoApp({ user, access }) {
   const isThoughts = activeList === "thoughts";
   const isWorkbench = activeList === "workbench";
 
+  // Renders one desktop column (Work or Personal) — independent category
+  // filter, independent list, but shares toggleDone/removeTodo/editTodo/
+  // setTimeSensitive with the mobile view since those operate on a single
+  // todo object and don't depend on activeList.
+  function renderTodoColumn(listKey) {
+    const meta = listMeta[listKey];
+    const Icon = meta.icon;
+    const colTodos = todosForList(listKey);
+    const colCategories = categoriesForList(listKey);
+    const colDateFiltered = dateFilterList(colTodos);
+    const colFilter = desktopCategoryFilters[listKey] || [];
+    const colFiltered = colFilter.length === 0
+      ? colDateFiltered
+      : colDateFiltered.filter((t) => colFilter.includes(t.categoryId));
+    const colSorted = sortTodosFlat(colFiltered);
+    const colActiveCount = colTodos.filter((t) => !t.done).length;
+    const focused = focusedColumn === listKey;
+
+    function setColFilter(updater) {
+      setDesktopCategoryFilters((prev) => ({ ...prev, [listKey]: updater(prev[listKey] || []) }));
+    }
+
+    return (
+      <div
+        key={listKey}
+        onClick={() => setFocusedColumn(listKey)}
+        style={{
+          flex: 1, minWidth: 0, background: theme.cardBg, borderRadius: 18,
+          border: focused ? `2px solid ${meta.color.dot}` : "2px solid transparent",
+          padding: 14, transition: "border-color 0.15s ease",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <Icon size={16} color={meta.color.text} />
+          <span style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 600, fontSize: 15, color: theme.textPrimary }}>{meta.label}</span>
+          <span style={{ fontSize: 12, color: theme.textFaint, marginLeft: "auto" }}>{colActiveCount} left</span>
+          <button
+            onClick={(e) => { e.stopPropagation(); setDesktopManageCatsFor(listKey); }}
+            style={{ border: "none", background: "transparent", color: theme.textFaint, fontSize: 11, fontWeight: 600, cursor: "pointer", padding: 4 }}
+          >
+            Categories
+          </button>
+        </div>
+        {colCategories.filter((cat) => colDateFiltered.some((t) => t.categoryId === cat.id && !t.done)).length > 0 && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+            {colCategories.filter((cat) => colDateFiltered.some((t) => t.categoryId === cat.id && !t.done)).map((cat) => {
+              const chipActive = colFilter.includes(cat.id);
+              const palette = PALETTE[cat.color] || PALETTE.blue;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setColFilter((prev) => prev.includes(cat.id) ? prev.filter((id) => id !== cat.id) : [...prev, cat.id]);
+                  }}
+                  style={{
+                    padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                    border: chipActive ? `1px solid ${palette.dot}` : "1px solid #E6DACB",
+                    background: chipActive ? palette.bg : "transparent",
+                    color: chipActive ? palette.text : theme.textFaint,
+                  }}
+                >
+                  {cat.name}
+                </button>
+              );
+            })}
+            {colFilter.length > 0 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setColFilter(() => []); }}
+                style={{ padding: "3px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600, cursor: "pointer", border: "none", background: "transparent", color: theme.oldOrangeText }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {colSorted.length === 0 && (
+            <div style={{ fontSize: 13, color: theme.textFainter, padding: "20px 10px", border: "1px dashed #E6DACB", borderRadius: 14, textAlign: "center" }}>
+              Nothing here.
+            </div>
+          )}
+          {colSorted.map((todo) => {
+            const overdue = isOverdue(todo.due, todo.done);
+            const category = colCategories.find((c) => c.id === todo.categoryId);
+            if (settingTimeFor === todo.id) {
+              return (
+                <div key={todo.id} style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 14, padding: 12, display: "flex", alignItems: "center", gap: 10 }}>
+                  <Clock size={16} color={theme.goldDark} style={{ flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, color: theme.textPrimary, flex: 1, minWidth: 0 }} className="truncate">{todo.text}</span>
+                  <input
+                    type="time"
+                    autoFocus
+                    value={draftTimeValue}
+                    onChange={(e) => setDraftTimeValue(e.target.value)}
+                    style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: "6px 8px", fontSize: 13 }}
+                  />
+                  <button
+                    onClick={() => setTimeSensitive(todo, draftTimeValue)}
+                    disabled={!draftTimeValue}
+                    style={{ background: theme.goldDark, color: theme.cardBg, borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: 700, cursor: draftTimeValue ? "pointer" : "default", opacity: draftTimeValue ? 1 : 0.5 }}
+                  >
+                    Set
+                  </button>
+                  {todo.timeSensitive && (
+                    <button
+                      onClick={() => clearTimeSensitive(todo)}
+                      style={{ color: theme.accentRed, fontSize: 12, fontWeight: 700, padding: "6px 8px" }}
+                    >
+                      Remove
+                    </button>
+                  )}
+                  <button onClick={() => { setSettingTimeFor(null); setDraftTimeValue(""); }} style={{ color: theme.textMuted, padding: 4 }}>
+                    <X size={16} />
+                  </button>
+                </div>
+              );
+            }
+            return (
+              <SwipeToDelete key={todo.id} reordering={todoDragState?.id === todo.id} onDelete={() => removeTodo(todo.id)} onSwipeRight={() => { setSettingTimeFor(todo.id); setDraftTimeValue(todo.notifyAt ? todo.notifyAt.slice(11, 16) : ""); }}>
+                <TaskCard
+                  highlighted={overdue}
+                  accentColor={meta.color}
+                  done={todo.done}
+                  text={todo.text}
+                  due={todo.due}
+                  categoryId={todo.categoryId || null}
+                  categories={colCategories}
+                  todoId={todo.id}
+                  onReorderPointerDown={(e) => startTodoReorderDrag(e, todo, colSorted)}
+                  isDragging={todoDragState?.id === todo.id}
+                  dragDeltaY={todoDragState?.id === todo.id ? todoDragState.deltaY : 0}
+                  isDropTarget={!!todoDragState && todoDragState.overId === todo.id && todoDragState.id !== todo.id}
+                  hideTrash
+                  onToggle={() => toggleDone(todo)}
+                  onRemove={() => removeTodo(todo.id)}
+                  onEdit={(text, due, categoryId) => editTodo(todo.id, text, due, categoryId)}
+                  badge={
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                      {todo.due && (
+                        <Badge warn={overdue} icon={Calendar}>
+                          {overdue ? `Overdue · ${fmtDate(todo.due)}` : fmtDate(todo.due)}
+                        </Badge>
+                      )}
+                      {todo.timeSensitive && todo.notifyAt && (
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: theme.paleYellowBg2, color: theme.goldText, display: "flex", alignItems: "center", gap: 3 }}>
+                          <Clock size={11} />
+                          {(() => {
+                            const [h, m] = todo.notifyAt.slice(11, 16).split(":").map(Number);
+                            const ampm = h >= 12 ? "pm" : "am";
+                            const h12 = h % 12 || 12;
+                            return `${h12}:${String(m).padStart(2, "0")}${ampm}`;
+                          })()}
+                        </span>
+                      )}
+                      {todo.recurrence && (
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: theme.oldGreenBg, color: theme.oldGreenText, display: "flex", alignItems: "center", gap: 3 }}>
+                          <Repeat size={11} />
+                          {todo.recurrence.type}
+                        </span>
+                      )}
+                      {category && (
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: PALETTE[category.color].bg, color: PALETTE[category.color].text }}>
+                          {category.name}
+                        </span>
+                      )}
+                    </div>
+                  }
+                />
+              </SwipeToDelete>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   if (page === "budget") {
     const budgetDocRef = (access?.role === "guardian" || access?.role === "assistant")
       ? doc(db, "personalBudgets", uid)
@@ -643,9 +981,20 @@ if (page === "nightly") {
         input:focus, textarea:focus, button:focus-visible { outline: 2px solid #2E7BFA; outline-offset: 2px; }
         input::placeholder, textarea::placeholder { color: #A89A8C; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        .orbit-desktop-only, .orbit-desktop-columns, .orbit-desktop-fab { display: none; }
+        @media (min-width: 900px) {
+          .orbit-mobile-only { display: none; }
+          .orbit-desktop-only { display: block; }
+          .orbit-desktop-columns { display: flex; }
+          .orbit-desktop-fab { display: flex; }
+        }
+      .orbit-page-container { max-width: 680px; margin: 0 auto; padding: 24px 18px 64px; }
+        @media (min-width: 900px) {
+          .orbit-page-container { max-width: 1360px; }
+        }
       `}</style>
 
-      <div style={{ maxWidth: 680, margin: "0 auto", padding: "24px 18px 64px" }}>
+      <div className="orbit-page-container">
         <div style={{ position: "sticky", top: 0, zIndex: 20, background: theme.gradB, marginLeft: -18, marginRight: -18, paddingLeft: 18, paddingRight: 18, paddingTop: 24, marginTop: -24, paddingBottom: 8 }}>
         {/* Brand row */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
@@ -712,7 +1061,7 @@ if (page === "nightly") {
         </div>
 
         {/* Header */}
-        <div style={{ marginBottom: 18 }}>
+        <div className="orbit-mobile-only" style={{ marginBottom: 18 }}>
           <h1 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 30, fontWeight: 600, letterSpacing: "-0.01em", color: theme.textPrimary, margin: 0 }}>
             {isThoughts ? "Clear Your Head" : "Today's Focus"}
           </h1>
@@ -722,7 +1071,35 @@ if (page === "nightly") {
               : `${activeCount} ${activeCount === 1 ? "task" : "tasks"} left in ${listMeta[activeList].label.toLowerCase()}`}
           </p>
         </div>
+        <div className="orbit-desktop-only" style={{ marginBottom: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <h1 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 30, fontWeight: 600, letterSpacing: "-0.01em", color: theme.textPrimary, margin: 0 }}>
+              Today's Focus
+            </h1>
+            <button
+              onClick={toggleHideFutureTodos}
+              title={hideFutureTodos ? "Showing today & overdue only — click to show all dates" : "Showing all dates — click to hide future todos"}
+              style={{
+                display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
+                border: hideFutureTodos ? `1px solid ${theme.accentPlum}` : "1px solid #E6DACB",
+                background: hideFutureTodos ? theme.oldPlumBg : theme.cardBg,
+                color: hideFutureTodos ? theme.accentPlum : theme.textFaint,
+                fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "6px 12px", borderRadius: 999,
+              }}
+            >
+              {hideFutureTodos ? <EyeOff size={13} /> : <Eye size={13} />}
+              {hideFutureTodos ? "Today only" : "All dates"}
+            </button>
+          </div>
+          <p style={{ color: theme.textMuted, fontSize: 14, marginTop: 4 }}>
+            Click a column to focus it — that's where the + button adds
+          </p>
+        </div>
 
+        {/* Mobile: single active list with tab switcher. Hidden on desktop
+            (>=900px) via the .orbit-mobile-only CSS rule below, replaced
+            there by the side-by-side columns. */}
+        <div className="orbit-mobile-only">
         {/* List switcher */}
         <div style={{ display: "flex", gap: 8, background: theme.borderSoft, padding: 6, borderRadius: 16, marginBottom: 16, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
           {Object.entries(listMeta).map(([key, meta]) => {
@@ -755,7 +1132,21 @@ if (page === "nightly") {
           />
         </div>
         {!isThoughts && !isWorkbench && (
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <button
+              onClick={toggleHideFutureTodos}
+              title={hideFutureTodos ? "Showing today & overdue only — tap to show all dates" : "Showing all dates — tap to hide future todos"}
+              style={{
+                display: "flex", alignItems: "center", gap: 5,
+                border: hideFutureTodos ? `1px solid ${theme.accentPlum}` : "1px solid transparent",
+                background: hideFutureTodos ? theme.oldPlumBg : "transparent",
+                color: hideFutureTodos ? theme.accentPlum : theme.textFaint,
+                fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "4px 10px", borderRadius: 999,
+              }}
+            >
+              {hideFutureTodos ? <EyeOff size={13} /> : <Eye size={13} />}
+              {hideFutureTodos ? "Today only" : "All dates"}
+            </button>
             <button
               onClick={() => setShowManageCats(true)}
               style={{ border: "none", background: "transparent", color: theme.textFaint, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 4 }}
@@ -764,9 +1155,9 @@ if (page === "nightly") {
             </button>
           </div>
         )}
-        {!isThoughts && currentCategories.filter((cat) => currentTodos.some((t) => t.categoryId === cat.id && !t.done)).length > 0 && (
+        {!isThoughts && currentCategories.filter((cat) => dateFilteredTodos.some((t) => t.categoryId === cat.id && !t.done)).length > 0 && (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-            {currentCategories.filter((cat) => currentTodos.some((t) => t.categoryId === cat.id && !t.done)).map((cat) => {
+            {currentCategories.filter((cat) => dateFilteredTodos.some((t) => t.categoryId === cat.id && !t.done)).map((cat) => {
               const active = categoryFilter.includes(cat.id);
               const palette = PALETTE[cat.color] || PALETTE.blue;
               return (
@@ -797,12 +1188,14 @@ if (page === "nightly") {
           </div>
         )}
         </div>
+        </div>
 
+        <div className="orbit-mobile-only">
         {!isThoughts && !isWorkbench && (
           <>
             {!isThoughts && !isWorkbench && (
               <button
-                onClick={() => setShowAddPanel(true)}
+                onClick={() => { setAddTarget(activeList); setShowAddPanel(true); }}
                 style={{
                   position: "fixed", bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28,
                   border: "none", background: listMeta[activeList].color.dot, color: theme.cardBg,
@@ -812,104 +1205,6 @@ if (page === "nightly") {
               >
                 <Plus size={26} />
               </button>
-            )}
-            {showAddPanel && (
-              <div
-                onClick={() => setShowAddPanel(false)}
-                style={{ position: "fixed", inset: 0, background: "rgba(43,36,32,0.35)", zIndex: 49 }}
-              >
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  style={{
-                    position: "fixed", left: 0, right: 0, bottom: 0, background: theme.cardBg,
-                    borderRadius: "20px 20px 0 0", padding: 18, boxShadow: "0 -4px 20px rgba(58,44,30,0.15)",
-                    zIndex: 50, maxWidth: 680, margin: "0 auto",
-                  }}
-                >
-                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <input
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") { addTodo(); setShowAddPanel(false); } }}
-                      placeholder={`Add a ${listMeta[activeList].label.toLowerCase()} task...`}
-                      style={{ flex: 1, border: "none", fontSize: 15, padding: "8px 4px", color: theme.textPrimary, background: "transparent" }}
-                      autoFocus
-                    />
-                    <button
-                      onClick={() => { addTodo(); setShowAddPanel(false); }}
-                      disabled={!draft.trim()}
-                      style={{
-                        display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 10, border: "none",
-                        background: draft.trim() ? listMeta[activeList].color.dot : theme.border, color: theme.cardBg,
-                        cursor: draft.trim() ? "pointer" : "default", transition: "background 0.15s ease", flexShrink: 0,
-                      }}
-                    >
-                      <Plus size={18} />
-                    </button>
-                  </div>
-                  <div style={{ display: "flex", gap: 10, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${theme.dividerSoft}`, alignItems: "center" }}>
-                    <Calendar size={14} color={theme.textFaint} style={{ cursor: "pointer" }} onClick={() => draftDueRef.current?.showPicker?.()} />
-                    <input ref={draftDueRef} type="date" value={draftDue} onChange={(e) => setDraftDue(e.target.value)} style={{ border: "none", fontSize: 13, color: theme.textSecondary, background: "transparent" }} />
-                  </div>
-                  <div style={{ display: "flex", gap: 6, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${theme.dividerSoft}`, alignItems: "center", flexWrap: "wrap" }}>
-                    <Repeat size={14} color={theme.textFaint} />
-                    {["none", "daily", "weekly", "monthly", "custom"].map((opt) => {
-                      const active = opt === "none" ? !draftRecurrence : draftRecurrence?.type === opt;
-                      return (
-                        <button
-                          key={opt}
-                          onClick={() => setDraftRecurrence(
-  opt === "none"
-    ? null
-    : opt === "custom"
-      ? { type: "custom", intervalDays: draftRecurrence?.intervalDays || 2 }
-      : { type: opt }
-)}
-                        style={{
-                              padding: "4px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                            border: active ? `1px solid ${theme.accentPlum}` : `1px solid ${theme.border}`,
-                            background: active ? theme.oldPlumBg : "transparent",
-                            color: active ? theme.accentPlum : theme.textMuted,
-                          }}
-                        >
-                          {opt === "none" ? "No repeat" : opt.charAt(0).toUpperCase() + opt.slice(1)}
-                        </button>
-                      );
-                    })}
-                    {draftRecurrence?.type === "custom" && (
-                      <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: theme.textMuted }}>
-                        every
-                        <input
-                          type="number"
-                          min="1"
-                          value={draftRecurrence.intervalDays ?? ""}
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            setDraftRecurrence({ type: "custom", intervalDays: raw === "" ? "" : parseInt(raw, 10) });
-                        }}
-                          style={{ width: 40, border: `1px solid ${theme.border}`, borderRadius: 6, padding: "2px 4px", fontSize: 12 }}
-                        />
-                        days
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ paddingTop: 10, marginTop: 10, borderTop: `1px solid ${theme.dividerSoft}` }}>
-                    <CategoryPicker
-                      categories={currentCategories}
-                      recent={recentCategories(4)}
-                      selectedId={draftCategoryId}
-                      onSelect={setDraftCategoryId}
-                      showMore={showMoreCats}
-                      setShowMore={setShowMoreCats}
-                      showNewCat={showNewCat}
-                      setShowNewCat={setShowNewCat}
-                      newCatName={newCatName}
-                      setNewCatName={setNewCatName}
-                      onCreateCategory={addCategoryAndSelect}
-                    />
-                  </div>
-                </div>
-              </div>
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {sortedTodos.length === 0 && (
@@ -954,7 +1249,7 @@ if (page === "nightly") {
                   );
                 }
                 return (
-                  <SwipeToDelete key={todo.id} onDelete={() => removeTodo(todo.id)} onSwipeRight={() => { setSettingTimeFor(todo.id); setDraftTimeValue(todo.notifyAt ? todo.notifyAt.slice(11, 16) : ""); }}>
+                  <SwipeToDelete key={todo.id} reordering={todoDragState?.id === todo.id} onDelete={() => removeTodo(todo.id)} onSwipeRight={() => { setSettingTimeFor(todo.id); setDraftTimeValue(todo.notifyAt ? todo.notifyAt.slice(11, 16) : ""); }}>
                     <TaskCard
                       highlighted={overdue}
                       accentColor={listMeta[activeList].color}
@@ -963,6 +1258,11 @@ if (page === "nightly") {
                       due={todo.due}
                       categoryId={todo.categoryId || null}
                       categories={currentCategories}
+                      todoId={todo.id}
+                      onReorderPointerDown={(e) => startTodoReorderDrag(e, todo, sortedTodos)}
+                      isDragging={todoDragState?.id === todo.id}
+                      dragDeltaY={todoDragState?.id === todo.id ? todoDragState.deltaY : 0}
+                      isDropTarget={!!todoDragState && todoDragState.overId === todo.id && todoDragState.id !== todo.id}
                       hideTrash
                       onToggle={() => toggleDone(todo)}
                       onRemove={() => removeTodo(todo.id)}
@@ -1146,6 +1446,319 @@ if (page === "nightly") {
         )}
         {isWorkbench && (
           <Workbench uid={uid} categories={ownCategories} todos={ownTodos} sharedUid={sharingWork ? ownerUid : null} sharedCategoryId={access?.sharedWorkCategoryId} sharedCategories={sharedCategories} />
+        )}
+        </div>
+        {/* end orbit-mobile-only */}
+
+        {/* Add-task panel: shared between the mobile FAB and the desktop
+            focused-column FAB. Writes to whichever list `addTarget` names. */}
+        {showAddPanel && (
+          <div
+            onClick={() => setShowAddPanel(false)}
+            style={{ position: "fixed", inset: 0, background: "rgba(43,36,32,0.35)", zIndex: 49 }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: "fixed", left: 0, right: 0, bottom: 0, background: theme.cardBg,
+                borderRadius: "20px 20px 0 0", padding: 18, boxShadow: "0 -4px 20px rgba(58,44,30,0.15)",
+                zIndex: 50, maxWidth: 680, margin: "0 auto",
+              }}
+            >
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <input
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { addTodo(); setShowAddPanel(false); } }}
+                  placeholder={`Add a ${listMeta[addTarget].label.toLowerCase()} task...`}
+                  style={{ flex: 1, border: "none", fontSize: 15, padding: "8px 4px", color: theme.textPrimary, background: "transparent" }}
+                  autoFocus
+                />
+                <button
+                  onClick={() => { addTodo(); setShowAddPanel(false); }}
+                  disabled={!draft.trim()}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 10, border: "none",
+                    background: draft.trim() ? listMeta[addTarget].color.dot : theme.border, color: theme.cardBg,
+                    cursor: draft.trim() ? "pointer" : "default", transition: "background 0.15s ease", flexShrink: 0,
+                  }}
+                >
+                  <Plus size={18} />
+                </button>
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${theme.dividerSoft}`, alignItems: "center" }}>
+                <Calendar size={14} color={theme.textFaint} style={{ cursor: "pointer" }} onClick={() => draftDueRef.current?.showPicker?.()} />
+                <input ref={draftDueRef} type="date" value={draftDue} onChange={(e) => setDraftDue(e.target.value)} style={{ border: "none", fontSize: 13, color: theme.textSecondary, background: "transparent" }} />
+              </div>
+              <div style={{ display: "flex", gap: 6, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${theme.dividerSoft}`, alignItems: "center", flexWrap: "wrap" }}>
+                <Repeat size={14} color={theme.textFaint} />
+                {["none", "daily", "weekly", "monthly", "custom"].map((opt) => {
+                  const active = opt === "none" ? !draftRecurrence : draftRecurrence?.type === opt;
+                  return (
+                    <button
+                      key={opt}
+                      onClick={() => setDraftRecurrence(
+  opt === "none"
+    ? null
+    : opt === "custom"
+      ? { type: "custom", intervalDays: draftRecurrence?.intervalDays || 2 }
+      : { type: opt }
+)}
+                    style={{
+                          padding: "4px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                        border: active ? `1px solid ${theme.accentPlum}` : `1px solid ${theme.border}`,
+                        background: active ? theme.oldPlumBg : "transparent",
+                        color: active ? theme.accentPlum : theme.textMuted,
+                      }}
+                    >
+                      {opt === "none" ? "No repeat" : opt.charAt(0).toUpperCase() + opt.slice(1)}
+                    </button>
+                  );
+                })}
+                {draftRecurrence?.type === "custom" && (
+                  <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: theme.textMuted }}>
+                    every
+                    <input
+                      type="number"
+                      min="1"
+                      value={draftRecurrence.intervalDays ?? ""}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        setDraftRecurrence({ type: "custom", intervalDays: raw === "" ? "" : parseInt(raw, 10) });
+                    }}
+                      style={{ width: 40, border: `1px solid ${theme.border}`, borderRadius: 6, padding: "2px 4px", fontSize: 12 }}
+                    />
+                    days
+                  </span>
+                )}
+              </div>
+              <div style={{ paddingTop: 10, marginTop: 10, borderTop: `1px solid ${theme.dividerSoft}` }}>
+                <CategoryPicker
+                  categories={categoriesForList(addTarget)}
+                  recent={recentCategoriesForList(addTarget, 4)}
+                  selectedId={draftCategoryId}
+                  onSelect={setDraftCategoryId}
+                  showMore={showMoreCats}
+                  setShowMore={setShowMoreCats}
+                  showNewCat={showNewCat}
+                  setShowNewCat={setShowNewCat}
+                  newCatName={newCatName}
+                  setNewCatName={setNewCatName}
+                  onCreateCategory={addCategoryAndSelect}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Desktop (>=900px): Work/Personal/Workbench side by side. Each
+            column has its own category filter; clicking a column focuses it
+            (border highlight) as the target for the shared + button below. */}
+        <div className="orbit-desktop-columns" style={{ gap: 16, alignItems: "flex-start" }}>
+          {renderTodoColumn("work")}
+          {renderTodoColumn("personal")}
+          <div
+            onClick={() => setFocusedColumn("workbench")}
+            style={{
+              flex: 1, minWidth: 0, background: theme.cardBg, borderRadius: 18,
+              border: focusedColumn === "workbench" ? `2px solid ${PALETTE.orange.dot}` : "2px solid transparent",
+              padding: 14, transition: "border-color 0.15s ease",
+            }}
+          >
+            <Workbench uid={uid} categories={ownCategories} todos={ownTodos} sharedUid={sharingWork ? ownerUid : null} sharedCategoryId={access?.sharedWorkCategoryId} sharedCategories={sharedCategories} />
+          </div>
+        </div>
+
+        {desktopManageCatsFor && (
+          <div className="orbit-desktop-only">
+            <ManageCategoriesModal
+              categories={categoriesForList(desktopManageCatsFor)}
+              onClose={() => setDesktopManageCatsFor(null)}
+              onDelete={(catId) => deleteCategoryFromList(desktopManageCatsFor, catId)}
+            />
+          </div>
+        )}
+
+        {/* Desktop-only floating buttons: Thoughts toggle above, shared +
+            below (hidden while Workbench is focused, since it has its own
+            add-project flow). */}
+        <button
+          className="orbit-desktop-fab"
+          onClick={() => setShowThoughtsPanel((v) => !v)}
+          title="Thoughts"
+          style={{
+            position: "fixed", bottom: 90, right: 24, width: 52, height: 52, borderRadius: 26,
+            border: "none", background: showThoughtsPanel ? PALETTE.yellow.dot : theme.cardBg,
+            color: showThoughtsPanel ? theme.cardBg : PALETTE.yellow.text,
+            alignItems: "center", justifyContent: "center",
+            boxShadow: "0 4px 12px rgba(58,44,30,0.2)", cursor: "pointer", zIndex: 41,
+          }}
+        >
+          <MessageCircleMore size={22} />
+        </button>
+        {focusedColumn !== "workbench" && (
+          <button
+            className="orbit-desktop-fab"
+            onClick={() => { setAddTarget(focusedColumn); setShowAddPanel(true); }}
+            style={{
+              position: "fixed", bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28,
+              border: "none", background: listMeta[focusedColumn].color.dot, color: theme.cardBg,
+              alignItems: "center", justifyContent: "center",
+              boxShadow: "0 4px 12px rgba(58,44,30,0.25)", cursor: "pointer", zIndex: 40,
+            }}
+          >
+            <Plus size={26} />
+          </button>
+        )}
+
+        {showThoughtsPanel && (
+          <div
+            className="orbit-desktop-only"
+            onClick={() => setShowThoughtsPanel(false)}
+            style={{ position: "fixed", inset: 0, background: "rgba(43,36,32,0.35)", zIndex: 59 }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: "fixed", top: 0, right: 0, bottom: 0, width: 420, maxWidth: "90vw",
+                background: theme.gradB, boxShadow: "-4px 0 20px rgba(58,44,30,0.15)",
+                zIndex: 60, padding: "24px 18px", overflowY: "auto",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 20, fontWeight: 600, color: theme.textPrimary, margin: 0 }}>Clear Your Head</h2>
+                <button onClick={() => setShowThoughtsPanel(false)} style={{ border: "none", background: "transparent", color: theme.textFaint, cursor: "pointer", padding: 4 }}>
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div style={{ background: theme.cardBg, borderRadius: 18, padding: 14, boxShadow: "0 1px 3px rgba(58,44,30,0.06), 0 1px 2px rgba(58,44,30,0.04)", marginBottom: 16, border: "1px solid #EFE6D9" }}>
+                <textarea
+                  value={thoughtDraft}
+                  onChange={(e) => setThoughtDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addThought(); }
+                  }}
+                  placeholder="What's on your mind? Get it out of your head..."
+                  rows={2}
+                  style={{ width: "100%", border: "none", fontSize: 15, padding: "8px 4px", color: theme.textPrimary, background: "transparent", resize: "none", fontFamily: "inherit" }}
+                />
+
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingTop: 10, borderTop: `1px solid ${theme.dividerSoft}`, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginRight: 4 }}>
+                    <Calendar size={14} color={theme.textFaint} style={{ cursor: "pointer" }} onClick={() => thoughtDueRef.current?.showPicker?.()} />
+                    <input
+                      ref={thoughtDueRef}
+                      type="date"
+                      value={thoughtDue}
+                      onChange={(e) => setThoughtDue(e.target.value)}
+                      style={{ border: "none", fontSize: 13, color: theme.textSecondary, background: "transparent" }}
+                    />
+                  </div>
+                  <span style={{ fontSize: 12, color: theme.textFaint, marginRight: 2 }}>Talk to:</span>
+
+                  <PersonChip label="No one yet" selected={thoughtPersonId === null} onClick={() => setThoughtPersonId(null)} />
+                  {people.map((p) => (
+                    <PersonChip key={p.id} label={p.name} color={PALETTE[p.color]} selected={thoughtPersonId === p.id} onClick={() => setThoughtPersonId(p.id)} />
+                  ))}
+
+                  {showNewPerson ? (
+                    <InlineCreate
+                      value={newPersonName}
+                      onChange={setNewPersonName}
+                      onConfirm={confirmNewPersonForCapture}
+                      onCancel={() => { setShowNewPerson(false); setNewPersonName(""); }}
+                      placeholder="Name"
+                      small
+                    />
+                  ) : (
+                    <button
+                      onClick={() => setShowNewPerson(true)}
+                      style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, padding: "5px 10px", borderRadius: 999, border: "1px dashed #C4B7A9", background: "transparent", color: theme.textMuted, cursor: "pointer" }}
+                    >
+                      <UserPlus size={12} />
+                      New person
+                    </button>
+                  )}
+
+                  <button
+                    onClick={addThought}
+                    disabled={!thoughtDraft.trim()}
+                    style={{
+                      marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700,
+                      padding: "8px 16px", borderRadius: 10, border: "none",
+                      background: thoughtDraft.trim() ? PALETTE.yellow.dot : theme.border,
+                      color: thoughtDraft.trim() ? theme.oldYellowText : theme.cardBg,
+                      cursor: thoughtDraft.trim() ? "pointer" : "default",
+                    }}
+                  >
+                    <Plus size={15} />
+                    Capture
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <span style={{ fontSize: 12, color: theme.textFaint }}>Drag a thought onto a name to reassign it</span>
+                <button
+                  onClick={() => setShowManagePeople(true)}
+                  style={{ border: "none", background: "transparent", color: theme.textFaint, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 4 }}
+                >
+                  Manage people
+                </button>
+              </div>
+
+              <GroupList
+                groups={thoughtGroups}
+                kind="thought"
+                dragOverZone={dragOverZone}
+                setDragOverZone={setDragOverZone}
+                onDrop={handleDrop}
+                onDeleteGroup={deletePerson}
+                emptyUnsortedLabel="Nothing unassigned"
+                emptyGroupLabel="Drop thoughts here"
+                renderItem={(thought) => {
+                  const overdue = isOverdue(thought.due, thought.done);
+                  const stale = !thought.done && !thought.due && daysSince(thought.createdAt) >= STALE_DAYS;
+                  return (
+                    <TaskCard
+                      key={thought.id}
+                      highlighted={overdue || stale}
+                      accentColor={PALETTE.yellow}
+                      done={thought.done}
+                      text={thought.text}
+                      due={thought.due}
+                      onToggle={() => toggleThoughtDone(thought)}
+                      onRemove={() => removeThought(thought.id)}
+                      onEdit={(text, due) => editThought(thought.id, text, due)}
+                      onDragStart={(e) => handleDragStart(e, thought.id, "thought")}
+                      badge={
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {thought.due ? (
+                            <Badge warn={overdue} icon={Calendar}>
+                              {overdue ? `Overdue · ${fmtDate(thought.due)}` : fmtDate(thought.due)}
+                            </Badge>
+                          ) : (
+                            <Badge warn={stale} icon={Clock}>
+                              {stale ? `Sitting ${daysSince(thought.createdAt)}d · ${relativeTime(thought.createdAt)}` : relativeTime(thought.createdAt)}
+                            </Badge>
+                          )}
+                        </div>
+                      }
+                    />
+                  );
+                }}
+              />
+
+              {showManagePeople && (
+                <ManagePeopleModal
+                  people={people}
+                  onClose={() => setShowManagePeople(false)}
+                  onDelete={deletePerson}
+                />
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -1389,7 +2002,7 @@ function GroupList({ groups, kind, dragOverZone, setDragOverZone, onDrop, onDele
 }
 
 
-function TaskCard({ text, due, done, categoryId, categories, onToggle, onRemove, onEdit, onDragStart, badge, highlighted, accentColor, hideTrash }) {
+function TaskCard({ text, due, done, categoryId, categories, onToggle, onRemove, onEdit, todoId, onReorderPointerDown, isDragging, dragDeltaY, isDropTarget, badge, highlighted, accentColor, hideTrash }) {
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(text);
   const [editDue, setEditDue] = useState(due || "");
@@ -1419,17 +2032,29 @@ function TaskCard({ text, due, done, categoryId, categories, onToggle, onRemove,
 
   return (
     <div
-      draggable={!editing && !!onDragStart}
-      onDragStart={onDragStart}
+      data-todo-id={todoId}
       style={{
         display: "flex", alignItems: "flex-start", gap: 10,
-        background: highlighted && !editing ? theme.softBg : theme.cardBg,
-        border: highlighted && !editing ? "1px solid #F7C99A" : editing ? "1px solid #D9CDBE" : "1px solid #EFE6D9",
+        background: isDropTarget ? theme.softBg : highlighted && !editing ? theme.softBg : theme.cardBg,
+        border: isDropTarget ? "1px dashed #C99A5A" : highlighted && !editing ? "1px solid #F7C99A" : editing ? "1px solid #D9CDBE" : "1px solid #EFE6D9",
         borderRadius: 14, padding: "12px 12px 12px 8px",
-        animation: "fadeIn 0.2s ease", boxShadow: "0 1px 2px rgba(58,44,30,0.03)", cursor: editing ? "default" : onDragStart ? "grab" : "default",
+        animation: "fadeIn 0.2s ease",
+        boxShadow: isDragging ? "0 8px 20px rgba(58,44,30,0.18)" : "0 1px 2px rgba(58,44,30,0.03)",
+        transform: isDragging ? `translateY(${dragDeltaY}px) scale(1.01)` : "none",
+        position: "relative",
+        zIndex: isDragging ? 50 : "auto",
+        transition: isDragging ? "none" : "box-shadow 0.15s ease",
       }}
     >
-      {onDragStart && <GripVertical size={14} color={theme.borderStrong} style={{ marginTop: 4, flexShrink: 0 }} />}
+      {onReorderPointerDown && (
+          <span
+            data-drag-handle="true"
+            onPointerDown={onReorderPointerDown}
+            style={{ cursor: editing ? "default" : isDragging ? "grabbing" : "grab", display: "flex", alignItems: "center", justifyContent: "center", marginTop: 2, marginLeft: -8, flexShrink: 0, padding: 8, touchAction: "none", WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none" }}
+          >
+            <GripVertical size={16} color={theme.borderStrong} />
+          </span>
+      )}
 
       {!editing && (
         <button
