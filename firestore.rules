@@ -8,44 +8,84 @@ service cloud.firestore {
     function ownerUid() {
       return get(/databases/$(database)/documents/meta/owner).data.uid;
     }
+
+    // Todos — shared access is scoped to the one approved category at the
+    // rule level. Reads require the doc's categoryId to match; creates
+    // require the new doc's categoryId to match; updates require it to
+    // match before AND after, so a todo can't be moved into or out of the
+    // shared category by a non-owner.
     match /users/{userId}/todos/{todoId} {
-      allow read, write: if request.auth != null && (
+      allow read: if request.auth != null && (
         request.auth.uid == userId ||
-        (myAccess().sharedWorkAccess == true && userId == ownerUid())
+        (myAccess().sharedWorkAccess == true
+          && userId == ownerUid()
+          && resource.data.categoryId == myAccess().sharedWorkCategoryId)
       );
-    }
-    match /users/{userId}/categories/{catId} {
-      allow read, write: if request.auth != null && (
+      allow create: if request.auth != null && (
         request.auth.uid == userId ||
-        (myAccess().sharedWorkAccess == true && userId == ownerUid())
+        (myAccess().sharedWorkAccess == true
+          && userId == ownerUid()
+          && request.resource.data.categoryId == myAccess().sharedWorkCategoryId)
+      );
+      allow update: if request.auth != null && (
+        request.auth.uid == userId ||
+        (myAccess().sharedWorkAccess == true
+          && userId == ownerUid()
+          && resource.data.categoryId == myAccess().sharedWorkCategoryId
+          && request.resource.data.categoryId == myAccess().sharedWorkCategoryId)
+      );
+      allow delete: if request.auth != null && (
+        request.auth.uid == userId ||
+        (myAccess().sharedWorkAccess == true
+          && userId == ownerUid()
+          && resource.data.categoryId == myAccess().sharedWorkCategoryId)
       );
     }
 
-    // Workbench projects — the owner's become readable to anyone with shared
-    // Work access, matching how todos and categories already work. Category
-    // scoping is applied in the client, not here. Writes stay with the owner.
+    // Categories — shared access can only touch the single approved
+    // category doc (its document ID must equal sharedWorkCategoryId).
+    match /users/{userId}/categories/{catId} {
+      allow read, write: if request.auth != null && (
+        request.auth.uid == userId ||
+        (myAccess().sharedWorkAccess == true
+          && userId == ownerUid()
+          && catId == myAccess().sharedWorkCategoryId)
+      );
+    }
+
+    // Workbench projects — shared reads limited to projects tagged with
+    // the approved category. Untagged projects (categoryId null) never
+    // match, so they stay owner-only. Writes stay with the owner.
     match /users/{userId}/workbench/{projectId} {
       allow read: if request.auth != null && (
         request.auth.uid == userId ||
-        (myAccess().sharedWorkAccess == true && userId == ownerUid())
+        (myAccess().sharedWorkAccess == true
+          && userId == ownerUid()
+          && resource.data.categoryId == myAccess().sharedWorkCategoryId)
       );
       allow write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Milestones — same read rule. Someone with shared access may flip the
-    // `done` field and nothing else; creating and deleting stay owner-only.
-    // affectedKeys().hasOnly(["done"]) is what enforces "complete but not
-    // delete, and no editing the text either".
+    // Milestones — a milestone has no categoryId of its own, so the rule
+    // looks up the parent project's categoryId with get(). Shared access
+    // may flip `done` and nothing else; creating and deleting stay
+    // owner-only.
     match /users/{userId}/workbench/{projectId}/milestones/{milestoneId} {
+      function projectCategoryId() {
+        return get(/databases/$(database)/documents/users/$(userId)/workbench/$(projectId)).data.categoryId;
+      }
       allow read: if request.auth != null && (
         request.auth.uid == userId ||
-        (myAccess().sharedWorkAccess == true && userId == ownerUid())
+        (myAccess().sharedWorkAccess == true
+          && userId == ownerUid()
+          && projectCategoryId() == myAccess().sharedWorkCategoryId)
       );
       allow create, delete: if request.auth != null && request.auth.uid == userId;
       allow update: if request.auth != null && (
         request.auth.uid == userId ||
         (myAccess().sharedWorkAccess == true
           && userId == ownerUid()
+          && projectCategoryId() == myAccess().sharedWorkCategoryId
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["done"]))
       );
     }
