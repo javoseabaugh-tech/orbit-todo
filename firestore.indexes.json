@@ -4,19 +4,70 @@
       "collectionGroup": "todos",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "notified", "order": "ASCENDING" },
-        { "fieldPath": "timeSensitive", "order": "ASCENDING" },
-        { "fieldPath": "notifyAt", "order": "ASCENDING" }
-      ]
+        {
+          "fieldPath": "notified",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timeSensitive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "notifyAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
     },
     {
       "collectionGroup": "todos",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "notified", "order": "ASCENDING" },
-        { "fieldPath": "timeSensitive", "order": "ASCENDING" },
-        { "fieldPath": "notifyAt", "order": "ASCENDING" }
-      ]
+        {
+          "fieldPath": "categoryId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "list",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "todos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "notified",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timeSensitive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "notifyAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
     }
   ],
   "fieldOverrides": []
