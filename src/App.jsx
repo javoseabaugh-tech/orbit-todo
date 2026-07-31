@@ -1542,7 +1542,7 @@ if (page === "nightly") {
 
       <div style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 0, display: "flex", justifyContent: "center" }}>
         <div style={{
-          width: "100%", maxWidth: isDesktop ? 1400 : twoCol ? 900 : 430,
+          width: "100%", maxWidth: isDesktop ? 1400 : twoCol ? 900 : 720,
           display: "flex", flexDirection: "column", minHeight: 0,
           animation: `screenIn .45s ${EASE_OUT}`,
         }}>
