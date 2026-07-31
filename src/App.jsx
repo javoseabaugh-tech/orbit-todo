@@ -417,7 +417,7 @@ function TodoApp({ user, access }) {
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [sortingList, setSortingList] = useState(null);
   const [captureOpen, setCaptureOpen] = useState(true);
-  const [collapsedFilters, setCollapsedFilters] = useState({});
+  const [expandedFilters, setExpandedFilters] = useState({});
   const [addTarget, setAddTarget] = useState("work"); // which list the open add panel writes to
   const [settingTimeFor, setSettingTimeFor] = useState(null);
   const [draftTimeValue, setDraftTimeValue] = useState("");
@@ -1026,15 +1026,16 @@ function TodoApp({ user, access }) {
       setDesktopCategoryFilters((prev) => ({ ...prev, [listKey]: updater(prev[listKey] || []) }));
     }
 
-    // Category filters collapse per list, so a long chip row can give its height
-    // back to the tasks. The active-filter count stays on the toggle so a
-    // filtered list never looks unfiltered while the chips are hidden.
-    const filtersOpen = collapsedFilters[listKey] !== true;
+    // Category filters stay hidden per list by default so the chip row never
+    // steals height from the tasks until asked for. The active-filter count
+    // stays on the toggle so a filtered list never looks unfiltered while the
+    // chips are hidden.
+    const filtersOpen = expandedFilters[listKey] === true;
     const filtersButton = chipCategories.length > 0 && (
       <button
         onClick={(e) => {
           e.stopPropagation();
-          setCollapsedFilters((prev) => ({ ...prev, [listKey]: filtersOpen }));
+          setExpandedFilters((prev) => ({ ...prev, [listKey]: !filtersOpen }));
         }}
         title={filtersOpen ? "Hide category filters" : "Show category filters"}
         style={{
