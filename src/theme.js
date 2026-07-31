@@ -29,6 +29,8 @@
 //     tracking the active theme, which the handoff asked for but left unbuilt.
 //   * `SUPPORTS_BLUR` + `flattenWhite()` — the solid-tint fallback for browsers
 //     without backdrop-filter (handoff perf mitigation 3).
+//   * `mixColor()` — the tint helper, moved here from ui.jsx so it can compute
+//     color-mix() by hand on the browsers that lack it.
 //   * `BLUR_LIST_LIMIT` + `glass.cardFlat` — long lists drop their own cards
 //     out of the blur (handoff perf mitigation 2).
 // ---------------------------------------------------------------------------
@@ -46,14 +48,9 @@ const L = (l, c, h) => `oklch(${l} ${c} ${h})`;
 const catHues = (h) => [h, h + 72, h + 152, h + 224].map((x) => ((x % 360) + 360) % 360);
 
 // --- colour maths ----------------------------------------------------------
-// Only ever receives strings built by L() above, so the shape is known.
-function oklchToRgb(str) {
-  const parts = /oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)/.exec(str);
-  if (!parts) return null;
-  const [lig, chroma, hue] = [+parts[1], +parts[2], +parts[3]];
-  const rad = (hue * Math.PI) / 180;
-  const a = chroma * Math.cos(rad), b = chroma * Math.sin(rad);
-  // oklab -> LMS -> linear sRGB (Björn Ottosson's matrices).
+// Björn Ottosson's oklab matrices, both directions. Everything else here is
+// built on this pair.
+function oklabToRgb([lig, a, b]) {
   const l = (lig + 0.3963377774 * a + 0.2158037573 * b) ** 3;
   const m = (lig - 0.1055613458 * a - 0.0638541728 * b) ** 3;
   const s = (lig - 0.0894841775 * a - 1.291485548 * b) ** 3;
@@ -66,6 +63,31 @@ function oklchToRgb(str) {
     ch(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
     ch(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s),
   ];
+}
+
+function rgbToOklab([r, g, b]) {
+  const lin = (v) => {
+    v /= 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  const [R, G, B] = [lin(r), lin(g), lin(b)];
+  const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B);
+  const m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B);
+  const s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B);
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ];
+}
+
+// Only ever receives strings built by L() above, so the shape is known.
+function oklchToRgb(str) {
+  const parts = /oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)/.exec(str);
+  if (!parts) return null;
+  const [lig, chroma, hue] = [+parts[1], +parts[2], +parts[3]];
+  const rad = (hue * Math.PI) / 180;
+  return oklabToRgb([lig, chroma * Math.cos(rad), chroma * Math.sin(rad)]);
 }
 
 const toHex = (rgb) => "#" + rgb.map((v) => v.toString(16).padStart(2, "0")).join("");
@@ -82,6 +104,69 @@ function flattenWhite(baseOklch, rgba) {
   const alpha = parseFloat(/([\d.]+)\s*\)$/.exec(rgba)?.[1] ?? "0");
   if (!base) return rgba;
   return toHex(base.map((c) => Math.round(alpha * 255 + (1 - alpha) * c)));
+}
+
+// --- color-mix support -----------------------------------------------------
+// `mix()` in ui.jsx is the tint helper behind every accent border, badge fill
+// and hover state. It emits color-mix(), which landed later than
+// backdrop-filter in every engine — so any browser hitting the blur fallback
+// above lacks this too. There it fails worse than the blur does: an
+// unparseable value invalidates the whole declaration, so tinted borders
+// vanish outright and the overdue-card fill falls through to transparent.
+//
+// The fallback computes the same mix in JS and emits rgba().
+const SUPPORTS_COLOR_MIX =
+  typeof CSS === "undefined" || !CSS.supports
+    ? true
+    : CSS.supports("color", "color-mix(in oklab, red 50%, blue)");
+
+// Handles every colour shape this file and the screens actually produce:
+// oklch() tokens, the rgba() glass fills, hex from the blur fallback, and the
+// `transparent` keyword. Returns [r, g, b, a] with a in 0..1, or null.
+function parseColor(str) {
+  if (typeof str !== "string") return null;
+  const s = str.trim();
+  if (s === "transparent") return [0, 0, 0, 0];
+  if (s.startsWith("oklch(")) {
+    const rgb = oklchToRgb(s);
+    return rgb ? [...rgb, 1] : null;
+  }
+  if (s.startsWith("#")) {
+    const h = s.slice(1);
+    const full = h.length === 3 || h.length === 4
+      ? h.split("").map((c) => c + c).join("")
+      : h;
+    if (full.length !== 6 && full.length !== 8) return null;
+    const n = full.match(/../g).map((p) => parseInt(p, 16));
+    if (n.some(Number.isNaN)) return null;
+    return [n[0], n[1], n[2], full.length === 8 ? n[3] / 255 : 1];
+  }
+  if (s.startsWith("rgb")) {
+    const nums = s.match(/[\d.]+/g);
+    if (!nums || nums.length < 3) return null;
+    return [+nums[0], +nums[1], +nums[2], nums.length > 3 ? +nums[3] : 1];
+  }
+  return null;
+}
+
+// color-mix(in oklab, color pct%, over) computed by hand. Interpolation is
+// alpha-premultiplied, per the CSS spec — that's what makes mixing into
+// `transparent` fade a colour out rather than drag it toward black.
+export function mixColor(color, pct, over = "transparent") {
+  const css = `color-mix(in oklab, ${color} ${pct}%, ${over})`;
+  if (SUPPORTS_COLOR_MIX) return css;
+
+  const A = parseColor(color), B = parseColor(over);
+  if (!A || !B) return css; // unknown shape — leave it to the browser
+
+  const p = Math.min(1, Math.max(0, pct / 100)), q = 1 - p;
+  const alpha = A[3] * p + B[3] * q;
+  if (alpha <= 0) return "rgba(0, 0, 0, 0)";
+
+  const labA = rgbToOklab(A), labB = rgbToOklab(B);
+  const lab = labA.map((v, i) => (v * A[3] * p + labB[i] * B[3] * q) / alpha);
+  const [r, g, b] = oklabToRgb(lab);
+  return `rgba(${r}, ${g}, ${b}, ${Math.round(alpha * 1000) / 1000})`;
 }
 
 // --- backdrop-filter support ----------------------------------------------

@@ -8,7 +8,7 @@
 // from the same values instead of each re-deriving them.
 // ---------------------------------------------------------------------------
 import { useState } from "react";
-import { theme, SPRING, prefersDark } from "./theme";
+import { theme, SPRING, prefersDark, mixColor as mix } from "./theme";
 
 export const DISPLAY = "'Bricolage Grotesque', system-ui, sans-serif";
 export const MONO = "'Geist Mono', ui-monospace, monospace";
@@ -19,10 +19,11 @@ export function display(size, letterSpacing = "-.02em") {
 }
 
 // Every accent tint in the design is a percentage of a theme colour over
-// transparency, which keeps them legible in both light and dark.
-export function mix(color, pct, over = "transparent") {
-  return `color-mix(in oklab, ${color} ${pct}%, ${over})`;
-}
+// transparency, which keeps them legible in both light and dark. The
+// implementation lives in theme.js next to the rest of the colour maths,
+// because it falls back to computing the mix by hand where color-mix() is
+// missing — re-exported here so screens keep importing tints from one place.
+export { mix };
 
 // Accent-filled when on, plain glass when off — tabs, filters, toggles.
 export function pillStyle(on) {
