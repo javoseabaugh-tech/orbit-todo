@@ -41,20 +41,34 @@ const STALE_DAYS = 7;
 // sit on top of the list, so the last row needs room to come out from under.
 const LIST_TAIL = "calc(120px + env(safe-area-inset-bottom))";
 
-const DESKTOP_QUERY = "(min-width: 1100px)";
-function useIsDesktop() {
-  const [isDesktop, setIsDesktop] = useState(
-    () => typeof window !== "undefined" && !!window.matchMedia && window.matchMedia(DESKTOP_QUERY).matches
-  );
+const COLS_WIDE_QUERY = "(min-width: 1100px)"; // Work · Personal · Projects
+const COLS_MED_QUERY = "(min-width: 760px)";   // Work · Personal
+// How many todo columns fit the window: 3 (full desktop), 2 (Work + Personal
+// side by side, bottom tab bar still present for the other sections), or 1
+// (mobile — a single list plus the tab bar). Driven by width so the layout
+// grows smoothly instead of snapping straight from mobile to three columns.
+function useColumns() {
+  const read = () => {
+    if (typeof window === "undefined" || !window.matchMedia) return 1;
+    if (window.matchMedia(COLS_WIDE_QUERY).matches) return 3;
+    if (window.matchMedia(COLS_MED_QUERY).matches) return 2;
+    return 1;
+  };
+  const [cols, setCols] = useState(read);
   useEffect(() => {
     if (!window.matchMedia) return;
-    const mq = window.matchMedia(DESKTOP_QUERY);
-    const onChange = (e) => setIsDesktop(e.matches);
-    setIsDesktop(mq.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
+    const wide = window.matchMedia(COLS_WIDE_QUERY);
+    const med = window.matchMedia(COLS_MED_QUERY);
+    const onChange = () => setCols(read());
+    onChange();
+    wide.addEventListener("change", onChange);
+    med.addEventListener("change", onChange);
+    return () => {
+      wide.removeEventListener("change", onChange);
+      med.removeEventListener("change", onChange);
+    };
   }, []);
-  return isDesktop;
+  return cols;
 }
 
 const GLOBAL_CSS = `
@@ -409,7 +423,10 @@ function TodoApp({ user, access }) {
   const thoughts = useUserCollection(uid, "thoughts");
   const people = useUserCollection(uid, "people");
 
-  const isDesktop = useIsDesktop();
+  const cols = useColumns();
+  const isDesktop = cols === 3;  // full three-column desktop layout
+  const twoCol = cols === 2;     // Work + Personal side by side
+  const panelCols = cols >= 2;   // render each list as a titled column panel
   // Swipe is mobile-only, so anywhere it isn't the interaction — desktop, or a
   // narrow window driven by a mouse — rows show explicit clock/trash buttons.
   const showRowButtons = isDesktop || HOVER_CAPABLE;
@@ -1017,7 +1034,7 @@ function TodoApp({ user, access }) {
       : colDateFiltered.filter((t) => colFilter.includes(t.categoryId));
     const colSorted = sortTodosFlat(colFiltered);
     const colActiveCount = colTodos.filter((t) => !t.done).length;
-    const focused = focusedColumn === listKey;
+    const focused = isDesktop && focusedColumn === listKey;
     const chipCategories = colCategories.filter((cat) =>
       colDateFiltered.some((t) => t.categoryId === cat.id && !t.done)
     );
@@ -1076,7 +1093,7 @@ function TodoApp({ user, access }) {
       <div
         key={listKey}
         onClick={isDesktop ? () => setFocusedColumn(listKey) : undefined}
-        style={isDesktop ? {
+        style={panelCols ? {
           ...glass.panel, flex: "1 1 0", minWidth: 0, padding: 16, borderRadius: 26,
           display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden",
           border: `1px solid ${focused ? accent : theme.glassBorder}`,
@@ -1086,7 +1103,7 @@ function TodoApp({ user, access }) {
           transition: "border-color .3s ease, box-shadow .3s ease",
         } : { minWidth: 0, flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}
       >
-        {isDesktop ? (
+        {panelCols ? (
           <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
             <Icon size={15} color={accent} />
             <span style={display(16)}>{meta.label}</span>
@@ -1155,7 +1172,7 @@ function TodoApp({ user, access }) {
           className="orbit-scroll"
           style={{
             flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 9,
-            paddingBottom: isDesktop ? 4 : LIST_TAIL,
+            paddingBottom: panelCols ? 4 : LIST_TAIL,
           }}
         >
           {colSorted.length === 0 && (
@@ -1525,7 +1542,7 @@ if (page === "nightly") {
 
       <div style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 0, display: "flex", justifyContent: "center" }}>
         <div style={{
-          width: "100%", maxWidth: isDesktop ? 1400 : 430,
+          width: "100%", maxWidth: isDesktop ? 1400 : twoCol ? 900 : 430,
           display: "flex", flexDirection: "column", minHeight: 0,
           animation: `screenIn .45s ${EASE_OUT}`,
         }}>
@@ -1626,7 +1643,16 @@ if (page === "nightly") {
               </div>
             ) : (
               <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-                {(activeList === "work" || activeList === "personal") && renderTodoColumn(activeList)}
+                {(activeList === "work" || activeList === "personal") && (
+                  twoCol ? (
+                    // Mid-width: Work and Personal share the row as equal columns,
+                    // clearing the floating tab bar at the bottom.
+                    <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 16, alignItems: "stretch", paddingBottom: LIST_TAIL }}>
+                      {renderTodoColumn("work")}
+                      {renderTodoColumn("personal")}
+                    </div>
+                  ) : renderTodoColumn(activeList)
+                )}
                 {isThoughts && renderThoughts(LIST_TAIL)}
                 {isWorkbench && (
                   <Workbench uid={uid} categories={ownCategories} todos={ownTodos} sharedUid={sharingWork ? ownerUid : null} sharedCategoryId={access?.sharedWorkCategoryId} sharedCategories={sharedCategories} listTail={LIST_TAIL} />
