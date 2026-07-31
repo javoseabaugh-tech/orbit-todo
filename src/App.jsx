@@ -1530,12 +1530,16 @@ if (page === "nightly") {
           animation: `screenIn .45s ${EASE_OUT}`,
         }}>
 
-          {/* Top bar — logo and wordmark left, destinations and account right */}
+          {/* Top bar — logo and wordmark left, destinations and account right.
+              The glass background bleeds up into the status-bar / notch area via
+              safe-area-inset-top, while the row itself stays padded below it so
+              the buttons are never covered. */}
           <div style={{
             ...glass.bar,
             position: "relative", zIndex: 30, flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
             padding: isDesktop ? "16px 28px" : "14px 18px",
+            paddingTop: isDesktop ? 16 : "calc(14px + env(safe-area-inset-top))",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
               <OrbitMark size={26} />
