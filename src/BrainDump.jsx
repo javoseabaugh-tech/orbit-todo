@@ -2,23 +2,49 @@ import { motion } from "framer-motion";
 import { useRef, useState } from "react";
 import { Sparkles, AlertCircle, Keyboard, Paperclip, ArrowUp, X } from "lucide-react";
 import { parseBrainDump, parseBrainDumpImage } from "./gemini";
+import { theme, SPRING } from "./theme";
+import { accentButtonStyle } from "./ui";
 
 const SpeechRecognitionAPI =
   typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
 
-const GOLD_GRADIENT = "linear-gradient(135deg, #F4CB6A 0%, #D9A441 50%, #B9852B 100%)";
+// Star used to be gold on cream. It now rides the active theme accent like
+// every other emphasised control — colours only; the states are unchanged.
+const ACCENT_GRADIENT = `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})`;
+const GLASS_FILL = `linear-gradient(157deg, ${theme.glassHigh}, ${theme.glassFill})`;
+const ICON_BUTTON = {
+  width: 34, height: 34, borderRadius: 12, flexShrink: 0,
+  display: "flex", alignItems: "center", justifyContent: "center",
+  color: theme.textMuted, background: theme.glassFill,
+  border: `1px solid ${theme.glassBorder}`,
+  backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
+  cursor: "pointer",
+};
+const GLASS_CHROME = {
+  background: GLASS_FILL,
+  border: `1px solid ${theme.glassBorder}`,
+  backdropFilter: "blur(18px) saturate(180%)",
+  WebkitBackdropFilter: "blur(18px) saturate(180%)",
+  boxShadow: `inset 0 1px 0 ${theme.glassSpec}`,
+};
 
-function StarBadge({ pulsing, size = 26 }) {
+function StarBadge({ ring, size = 26 }) {
   return (
     <span
       style={{
-        width: size, height: size, borderRadius: "50%", background: GOLD_GRADIENT,
+        position: "relative", width: size, height: size, borderRadius: "50%", background: ACCENT_GRADIENT,
         display: "flex", alignItems: "center", justifyContent: "center",
-        boxShadow: "0 1px 4px rgba(185,133,43,0.45)", flexShrink: 0,
-        animation: pulsing ? "starPulse 1.4s ease-in-out infinite" : "none",
+        boxShadow: `0 4px 14px -5px ${theme.accentPlum}`, flexShrink: 0,
       }}
     >
-      <Sparkles size={size * 0.5} color="#fff" strokeWidth={2.5} />
+      {ring && (
+        <span style={{
+          position: "absolute", inset: -4, borderRadius: "50%",
+          border: `1.5px solid ${theme.accentPlum}`, opacity: 0.4,
+          animation: "glowPulse 2.4s ease-in-out infinite",
+        }} />
+      )}
+      <Sparkles size={size * 0.5} color={theme.accentInk} strokeWidth={2.5} />
     </span>
   );
 }
@@ -135,9 +161,60 @@ export default function BrainDumpButton({ knownPeopleNames, onResult }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {mode === "typing" ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#FEFBF3", border: "1px solid #EFE1C0", borderRadius: 14, padding: "8px 8px 8px 14px" }}>
-          <StarBadge size={22} />
+      {mode === "recording" ? (
+        // Listening: accent-ringed card with the live transcript.
+        <div style={{
+          display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", borderRadius: 20,
+          background: GLASS_FILL, border: `1px solid ${theme.accentPlum}`,
+          backdropFilter: "blur(20px) saturate(180%)", WebkitBackdropFilter: "blur(20px) saturate(180%)",
+          boxShadow: `inset 0 1px 0 ${theme.glassSpec}, 0 0 0 4px ${theme.accentSoft}`,
+        }}>
+          <span style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 22, flexShrink: 0 }}>
+            {[0, 0.12, 0.24, 0.36, 0.48].map((delay) => (
+              <i
+                key={delay}
+                style={{
+                  display: "block", width: 3, height: 22, borderRadius: 2,
+                  background: theme.accentPlum,
+                  animation: `listen .7s ease-in-out ${delay}s infinite`,
+                }}
+              />
+            ))}
+          </span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: theme.textSecondary, fontStyle: "italic" }}>
+            {liveText || "Listening…"}
+          </span>
+          <button
+            onClick={stopRecording}
+            style={{ ...accentButtonStyle(true), padding: "7px 14px", borderRadius: 999, fontSize: 12, fontWeight: 600, flexShrink: 0 }}
+          >
+            Stop
+          </button>
+        </div>
+      ) : parsing ? (
+        // Parsing: spinner while Star sorts the capture out.
+        <div style={{
+          display: "flex", alignItems: "center", gap: 12, padding: "13px 18px", borderRadius: 20,
+          background: GLASS_FILL, border: `1px solid ${theme.glassBorder}`,
+          backdropFilter: "blur(20px) saturate(180%)", WebkitBackdropFilter: "blur(20px) saturate(180%)",
+          boxShadow: `inset 0 1px 0 ${theme.glassSpec}`,
+        }}>
+          <span style={{
+            width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
+            border: `2px solid ${theme.accentSoft}`, borderTopColor: theme.accentPlum,
+            animation: "spin .8s linear infinite",
+          }} />
+          <span style={{ fontSize: 13.5, color: theme.textSecondary }}>Star is sorting that out…</span>
+        </div>
+      ) : mode === "typing" ? (
+        // Typing: inline input with an accent send button.
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10, padding: "8px 8px 8px 14px", borderRadius: 18,
+          background: GLASS_FILL, border: `1px solid ${theme.glassBorder}`,
+          backdropFilter: "blur(20px) saturate(180%)", WebkitBackdropFilter: "blur(20px) saturate(180%)",
+          boxShadow: `inset 0 1px 0 ${theme.glassSpec}`,
+        }}>
+          <Sparkles size={16} color={theme.accentPlum} style={{ flexShrink: 0 }} />
           <input
             autoFocus
             value={typedText}
@@ -146,103 +223,68 @@ export default function BrainDumpButton({ knownPeopleNames, onResult }) {
               if (e.key === "Enter" && typedText.trim()) submitText(typedText.trim());
               if (e.key === "Escape") resetToIdle();
             }}
-            placeholder="Tell Star what's on your mind..."
-            style={{ flex: 1, border: "none", background: "transparent", fontSize: 14, color: "#2B2420" }}
+            placeholder="Tell Star what's on your mind…"
+            style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", fontSize: 14, color: theme.textPrimary }}
           />
           <button
             onClick={() => typedText.trim() && submitText(typedText.trim())}
             disabled={!typedText.trim()}
             style={{
-              display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 999, border: "none",
-              background: typedText.trim() ? "#B9852B" : "#E6DACB", color: "#fff", cursor: typedText.trim() ? "pointer" : "default", flexShrink: 0,
+              ...accentButtonStyle(!!typedText.trim()), width: 32, height: 32, borderRadius: "50%",
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
             }}
           >
             <ArrowUp size={15} />
           </button>
-          <button onClick={resetToIdle} style={{ border: "none", background: "transparent", color: "#A89A8C", cursor: "pointer", padding: 4, flexShrink: 0 }}>
+          <button
+            onClick={resetToIdle}
+            style={{ width: 30, height: 30, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: theme.textFainter, cursor: "pointer", flexShrink: 0 }}
+          >
             <X size={15} />
           </button>
         </div>
       ) : (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          {mode === "recording" ? (
-            <button
-              onClick={stopRecording}
-              style={{
-                display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 700,
-                padding: "6px 14px 6px 6px", borderRadius: 999, border: "none",
-                background: "#B8443A", color: "#fff", cursor: "pointer",
-              }}
-            >
-              <StarBadge pulsing />
-              Star's listening — tap to stop
-            </button>
-          ) : (
-            <button
-              onClick={startRecording}
-              disabled={parsing || !SpeechRecognitionAPI}
-              title={SpeechRecognitionAPI ? undefined : "Voice needs Chrome, Edge, or Safari"}
-              style={{
-                display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 700,
-                padding: "6px 14px 6px 6px", borderRadius: 999, border: "1px solid #EFE1C0",
-                background: "#FEFBF3", color: "#8A6D2A", cursor: parsing ? "default" : "pointer",
-                opacity: SpeechRecognitionAPI ? 1 : 0.5,
-              }}
-            >
-              <StarBadge pulsing={parsing} />
-              {parsing ? "Star's thinking..." : "Ask Star"}
-            </button>
-          )}
-
-          {mode !== "recording" && (
-            <>
-              <button
-                onClick={() => setMode("typing")}
-                disabled={parsing}
-                title="Type instead"
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32,
-                  borderRadius: 999, border: "1px solid #EFE6D9", background: "#fff", color: "#8C7F72",
-                  cursor: parsing ? "default" : "pointer",
-                }}
-              >
-                <Keyboard size={14} />
-              </button>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={parsing}
-                title="Attach a photo or screenshot"
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32,
-                  borderRadius: 999, border: "1px solid #EFE6D9", background: "#fff", color: "#8C7F72",
-                  cursor: parsing ? "default" : "pointer",
-                }}
-              >
-                <Paperclip size={14} />
-              </button>
-              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} style={{ display: "none" }} />
-            </>
-          )}
+        // Idle: the Ask Star pill plus the keyboard and paperclip shortcuts.
+        <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+          <button
+            onClick={startRecording}
+            disabled={!SpeechRecognitionAPI}
+            title={SpeechRecognitionAPI ? undefined : "Voice needs Chrome, Edge, or Safari"}
+            style={{
+              ...GLASS_CHROME, display: "flex", alignItems: "center", gap: 10,
+              padding: "8px 18px 8px 8px", borderRadius: 999, fontSize: 13, fontWeight: 600,
+              color: theme.textSecondary, cursor: SpeechRecognitionAPI ? "pointer" : "default",
+              opacity: SpeechRecognitionAPI ? 1 : 0.5,
+              transition: `transform .35s ${SPRING}`,
+            }}
+          >
+            <StarBadge size={28} ring />
+            Ask Star
+          </button>
+          <button
+            onClick={() => setMode("typing")}
+            title="Type instead"
+            style={{ ...ICON_BUTTON }}
+          >
+            <Keyboard size={15} />
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            title="Attach a photo or screenshot"
+            style={{ ...ICON_BUTTON }}
+          >
+            <Paperclip size={15} />
+          </button>
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelected} style={{ display: "none" }} />
         </div>
       )}
 
-      {mode === "recording" && liveText && (
-        <div style={{ fontSize: 12, color: "#8C7F72", fontStyle: "italic", maxWidth: 340 }}>"{liveText}"</div>
-      )}
-
       {mode === "error" && error && (
-        <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#9A4A22" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: theme.accentRed }}>
           <AlertCircle size={12} />
           {error}
         </div>
       )}
-
-      <style>{`
-        @keyframes starPulse {
-          0%, 100% { transform: scale(1); box-shadow: 0 1px 4px rgba(185,133,43,0.45); }
-          50% { transform: scale(1.12); box-shadow: 0 2px 8px rgba(185,133,43,0.6); }
-        }
-      `}</style>
     </div>
   );
 }

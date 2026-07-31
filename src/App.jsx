@@ -1,7 +1,8 @@
 import PaletteMenu from "./PaletteMenu";
 import SwipeToDelete, { HOVER_CAPABLE } from "./SwipeToDelete";
 import { useEffect, useRef, useState } from "react";
-import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { createPortal } from "react-dom";
+import { onAuthStateChanged, signInWithRedirect, signOut } from "firebase/auth";
 import {
   addDoc, collection, deleteDoc, doc, documentId, getDocs, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
 } from "firebase/firestore";
@@ -26,27 +27,20 @@ import Nightly from "./Nightly";
 // every saved category and person in Firestore references those keys directly,
 // so they now index four hues spread around the active theme instead of the
 // old fixed plum/sage/clay/ochre swatches.
-import { PALETTE, theme, glass, SPRING, EASE_OUT, applyThemeVars, prefersDark } from "./theme";
+import { PALETTE, theme, glass, SPRING, EASE_OUT, BLUR_LIST_LIMIT, applyThemeVars, applyThemeColor } from "./theme";
+import {
+  DISPLAY, MONO, display, mix, pillStyle, accentButtonStyle, fieldStyle, quietButtonStyle,
+  IconAction, GlassBackdrop,
+} from "./ui";
 const PALETTE_ORDER = ["blue", "green", "orange", "yellow"];
 const UNSORTED = "__unsorted__";
 const STALE_DAYS = 7;
 
-// ---------- Design tokens ----------
-const DISPLAY = "'Bricolage Grotesque', system-ui, sans-serif";
-const MONO = "'Geist Mono', ui-monospace, monospace";
-
-// Titles: Bricolage 600 with the tight tracking from the design tokens.
-function display(size, letterSpacing = "-.02em") {
-  return { fontFamily: DISPLAY, fontSize: size, fontWeight: 600, letterSpacing };
-}
-
-// Tint helper — every accent tint in the design is a percentage of a theme
-// colour over transparency, which keeps them legible in both light and dark.
-function mix(color, pct, over = "transparent") {
-  return `color-mix(in oklab, ${color} ${pct}%, ${over})`;
-}
-
 // Desktop is 1100px and up: three columns, no swipe, explicit row buttons.
+// Bottom clearance inside every scroll region: the floating tab bar and FAB
+// sit on top of the list, so the last row needs room to come out from under.
+const LIST_TAIL = "calc(120px + env(safe-area-inset-bottom))";
+
 const DESKTOP_QUERY = "(min-width: 1100px)";
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(
@@ -65,6 +59,12 @@ function useIsDesktop() {
 
 const GLOBAL_CSS = `
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* The app is a fixed-height shell: chrome stays put, only the lists scroll.
+     dvh so mobile browser chrome collapsing doesn't clip the tab bar. */
+  .orbit-shell { height: 100vh; height: 100dvh; }
+  .orbit-scroll {
+    overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  }
   input:focus, textarea:focus, select:focus { outline: none; }
   button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
     outline: 2px solid var(--ac); outline-offset: 2px;
@@ -80,11 +80,15 @@ const GLOBAL_CSS = `
   @keyframes screenIn { from { opacity: 0; transform: translateY(14px) scale(.985) } to { opacity: 1; transform: none } }
   @keyframes rowIn { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
   @keyframes sheetIn { from { transform: translateY(102%) } to { transform: translateY(0) } }
+  /* Mobile add-sheet drops from the top instead, so the on-screen keyboard
+     can't cover the field you're typing into. */
+  @keyframes sheetInTop { from { transform: translateY(-102%) } to { transform: translateY(0) } }
   @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
   @keyframes popIn { from { opacity: 0; transform: translateY(-6px) scale(.94) } to { opacity: 1; transform: none } }
   @keyframes burst { 0% { opacity: .9; transform: scale(.4) } 100% { opacity: 0; transform: scale(2.6) } }
   @keyframes tick { 0% { transform: scale(.2) rotate(-25deg); opacity: 0 } 55% { transform: scale(1.3) rotate(6deg); opacity: 1 } 100% { transform: scale(1) rotate(0) } }
   @keyframes shimmer { 0% { transform: translateX(-120%) } 100% { transform: translateX(320%) } }
+  @keyframes listen { 0%,100% { transform: scaleY(.35) } 50% { transform: scaleY(1) } }
   @keyframes spin { to { transform: rotate(360deg) } }
   @keyframes glowPulse { 0%,100% { opacity: .35 } 50% { opacity: .85 } }
   @media (prefers-reduced-motion: reduce) {
@@ -95,61 +99,25 @@ const GLOBAL_CSS = `
   }
 `;
 
-// The drifting colour field every glass surface is frosted over. Fixed and
-// pointer-transparent, so it never participates in layout or hit testing.
-function GlassBackdrop() {
-  const blobs = [
-    { style: { top: "-18vh", left: "-12vw", width: "62vw", height: "62vw" }, color: theme.blobs[0], blur: 90, anim: "drift1 26s", opacity: theme.blobOpacity },
-    { style: { top: "20vh", right: "-16vw", width: "56vw", height: "56vw" }, color: theme.blobs[1], blur: 100, anim: "drift2 32s", opacity: theme.blobOpacity },
-    { style: { bottom: "-22vh", left: "22vw", width: "52vw", height: "52vw" }, color: theme.blobs[2], blur: 96, anim: "drift3 38s", opacity: Math.max(0, theme.blobOpacity - 0.13) },
-  ];
-  return (
-    <div
-      aria-hidden="true"
-      style={{
-        position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", overflow: "hidden",
-        background: `radial-gradient(140% 90% at 50% 0%, ${theme.gradA}, ${theme.gradB} 70%)`,
-      }}
-    >
-      {blobs.map((b, i) => (
-        <div
-          key={i}
-          style={{
-            position: "absolute", borderRadius: "50%", ...b.style,
-            background: b.color, filter: `blur(${b.blur}px)`, opacity: b.opacity,
-            animation: `${b.anim} ease-in-out infinite`,
-          }}
-        />
-      ))}
-      <div style={{
-        position: "absolute", inset: 0, opacity: prefersDark ? 0.035 : 0.02, mixBlendMode: "overlay",
-        backgroundImage:
-          "repeating-linear-gradient(0deg,rgba(255,255,255,.5) 0 1px,transparent 1px 3px)," +
-          "repeating-linear-gradient(90deg,rgba(0,0,0,.5) 0 1px,transparent 1px 3px)",
-      }} />
-    </div>
-  );
-}
-
-// New Orbit mark: accent-gradient disc, tilted orbit ring, satellite dot.
+// The Orbit mark. The source art isn't square (1082x991), so it's boxed at
+// `size` and contained rather than stretched to fit. Only the mark is used —
+// the lockup's "Orbit" wordmark is dark charcoal and would disappear against
+// the dark theme, so the wordmark beside this stays CSS text that follows the
+// theme. Rendered from the 256px build (scripts/make-icons.mjs), which is
+// ample for the 26px bar icon and the 62px sign-in one even at 3x.
 function OrbitMark({ size = 26 }) {
-  const gid = `orbit-mark-${size}`;
   return (
-    <svg
-      width={size} height={size} viewBox="0 0 48 48" aria-hidden="true"
-      style={{ flexShrink: 0, filter: `drop-shadow(0 4px 14px ${mix(theme.accentPlum, 45)})` }}
-    >
-      <defs>
-        <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor={theme.accent2} />
-          <stop offset="1" stopColor={theme.accentPlum} />
-        </linearGradient>
-      </defs>
-      <ellipse cx="24" cy="24" rx="21" ry="9.5" fill="none" stroke={`url(#${gid})`} strokeWidth="2.6" opacity="0.55" transform="rotate(-28 24 24)" />
-      <circle cx="24" cy="24" r="9" fill={`url(#${gid})`} />
-      <circle cx="24" cy="24" r="9" fill="none" stroke="rgba(255,255,255,.45)" strokeWidth="1" />
-      <circle cx="41.5" cy="15.5" r="3.4" fill={theme.accent2} />
-    </svg>
+    <img
+      src="/logo-mark-256.png?v=4"
+      alt=""
+      aria-hidden="true"
+      width={size}
+      height={size}
+      style={{
+        flexShrink: 0, width: size, height: size, objectFit: "contain",
+        filter: `drop-shadow(0 4px 14px ${mix(theme.accentPlum, 45)})`,
+      }}
+    />
   );
 }
 
@@ -174,30 +142,6 @@ function ChromeButton({ title, onClick, children }) {
   );
 }
 
-// Accent-filled when on, plain glass when off — tabs, filters, toggles.
-function pillStyle(on) {
-  return {
-    display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 999,
-    fontSize: 12.5, fontWeight: 500, whiteSpace: "nowrap", cursor: "pointer",
-    color: on ? theme.accentPlum : theme.textMuted,
-    background: on ? theme.accentSoft : theme.inputBg,
-    border: `1px solid ${on ? theme.accentPlum : theme.glassBorder2}`,
-    backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
-    transition: `all .25s ${SPRING}`,
-  };
-}
-
-// Accent-gradient button, dimmed to plain glass until it has something to do.
-function accentButtonStyle(enabled) {
-  return {
-    color: enabled ? theme.accentInk : theme.textFainter,
-    background: enabled ? `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})` : theme.inputBg,
-    boxShadow: enabled ? `0 8px 22px -10px ${theme.accentPlum}` : "none",
-    border: "none", cursor: enabled ? "pointer" : "default",
-    transition: `all .3s ${SPRING}`,
-  };
-}
-
 function fmtDate(d) {
   const date = new Date(d + "T00:00:00");
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -210,19 +154,14 @@ function fmtTime(notifyAt) {
   return `${h % 12 || 12}:${String(m).padStart(2, "0")}${ampm}`;
 }
 
-// Shared field chrome for inputs, selects and textareas.
-function fieldStyle() {
-  return {
-    width: "100%", padding: "11px 13px", borderRadius: 14, fontSize: 13.5,
-    color: theme.textPrimary, background: theme.inputBg,
-    border: `1px solid ${theme.glassBorder2}`,
-  };
+// Minutes past midnight for a time-sensitive todo, or null if it has no time.
+// Used to lead a date group chronologically.
+function timeOfDay(todo) {
+  if (!todo.timeSensitive || !todo.notifyAt) return null;
+  const [h, m] = todo.notifyAt.slice(11, 16).split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
 }
-
-const quietButtonStyle = {
-  border: "none", background: "transparent", color: theme.textFainter,
-  fontSize: 11.5, fontWeight: 500, cursor: "pointer", padding: "3px 7px", borderRadius: 8,
-};
 
 function isOverdue(dueDate, done) {
   if (!dueDate || done) return false;
@@ -349,6 +288,7 @@ export default function App() {
   // flash white on iOS.
   useEffect(() => {
     applyThemeVars(document.documentElement);
+    applyThemeColor();
     document.documentElement.style.setProperty("--gl2", theme.inputBg);
     document.body.style.background = theme.gradB;
     document.body.style.color = theme.textPrimary;
@@ -384,7 +324,7 @@ function SignInScreen({ blocked }) {
   async function handleSignIn() {
     setError(null);
     try {
-      await signInWithPopup(auth, googleProvider);
+      await signInWithRedirect(auth, googleProvider);
     } catch (e) {
       setError("Sign-in failed. Please try again.");
       console.error(e);
@@ -475,6 +415,9 @@ function TodoApp({ user, access }) {
   const showRowButtons = isDesktop || HOVER_CAPABLE;
   const [activeList, setActiveList] = useState("work");
   const [showAddPanel, setShowAddPanel] = useState(false);
+  const [sortingList, setSortingList] = useState(null);
+  const [captureOpen, setCaptureOpen] = useState(true);
+  const [collapsedFilters, setCollapsedFilters] = useState({});
   const [addTarget, setAddTarget] = useState("work"); // which list the open add panel writes to
   const [settingTimeFor, setSettingTimeFor] = useState(null);
   const [draftTimeValue, setDraftTimeValue] = useState("");
@@ -488,6 +431,14 @@ function TodoApp({ user, access }) {
     await createBudgetAccessRequest(user.email);
   }
   const [page, setPage] = useState("main"); // 'main' | 'budget'
+
+  // Every screen is now a fixed-height shell with its own internal scrolling,
+  // so the document must never scroll behind one (that's what produces the
+  // second, rubber-banding scrollbar).
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
 
   const [draft, setDraft] = useState("");
   const [draftDue, setDraftDue] = useState("");
@@ -692,6 +643,27 @@ function TodoApp({ user, access }) {
     setShowAddPanel(false);
   }
 
+  // Backing out of the add sheet throws the draft away, so an accidental tap on
+  // the + leaves nothing behind to clean up next time it opens.
+  function closeAddPanel() {
+    setDraft("");
+    setDraftDue("");
+    setDraftCategoryId(null);
+    setDraftRecurrence(null);
+    setShowNewCat(false);
+    setNewCatName("");
+    setShowMoreCats(false);
+    setShowAddPanel(false);
+  }
+
+  // Esc backs out from anywhere in the sheet, not just the title field.
+  useEffect(() => {
+    if (!showAddPanel) return;
+    const onKey = (e) => { if (e.key === "Escape") closeAddPanel(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showAddPanel]);
+
   async function toggleDone(todo) {
     const targetUid = todo.isShared ? ownerUid : uid;
     const nowDone = !todo.done;
@@ -731,6 +703,44 @@ function TodoApp({ user, access }) {
     const todo = findTodo(id);
     const targetUid = todo?.isShared ? ownerUid : uid;
     await updateDoc(doc(db, "users", targetUid, "todos", id), { text, due, categoryId: categoryId ?? null });
+  }
+
+  // The "Sort by time" button. Restamps `order` within every date of one list:
+  // time-sensitive todos lead, earliest first, then the rest in the order they
+  // were created. Dates themselves are already ordered by the `due` comparison
+  // in sortTodosFlat, so only the within-date sequence needs writing.
+  //
+  // This is the only thing that reorders on its own, and only when pressed —
+  // drags afterwards overwrite `order` freely, and pressing again re-sorts.
+  async function sortListByTime(listKey) {
+    if (sortingList) return;
+    setSortingList(listKey);
+    try {
+      const byDate = new Map();
+      todosForList(listKey).filter((t) => !t.done).forEach((t) => {
+        const key = t.due || "";
+        if (!byDate.has(key)) byDate.set(key, []);
+        byDate.get(key).push(t);
+      });
+
+      const byAge = (a, b) => toMillis(a.createdAt) - toMillis(b.createdAt);
+      const writes = [];
+      byDate.forEach((group) => {
+        const timed = group
+          .filter((t) => timeOfDay(t) !== null)
+          .sort((a, b) => timeOfDay(a) - timeOfDay(b) || byAge(a, b));
+        const untimed = group.filter((t) => timeOfDay(t) === null).sort(byAge);
+        [...timed, ...untimed].forEach((t, i) => {
+          const targetUid = t.isShared ? ownerUid : uid;
+          writes.push(updateDoc(doc(db, "users", targetUid, "todos", t.id), { order: (i + 1) * 10 }));
+        });
+      });
+      await Promise.all(writes);
+    } catch (err) {
+      alert("Could not sort: " + err.message);
+    } finally {
+      setSortingList(null);
+    }
   }
 
   async function setTimeSensitive(todo, timeValue) {
@@ -905,7 +915,7 @@ function TodoApp({ user, access }) {
           const [moved] = reordered.splice(fromIdx, 1);
           reordered.splice(toIdx, 0, moved);
           await Promise.all(reordered.map((t, i) => {
-            const targetUid = t.isShared ? t.ownerUid : uid;
+            const targetUid = t.isShared ? ownerUid : uid;
             return updateDoc(doc(db, "users", targetUid, "todos", t.id), { order: (i + 1) * 10 });
           }));
         }
@@ -926,6 +936,8 @@ function TodoApp({ user, access }) {
       if (!a.due && b.due) return 1;
       // Same due date (or both undated) - respect manual drag order within that
       // group, falling back to creation order for todos never manually reordered.
+      // `order` is written by drags and by the Sort by time button; nothing
+      // reorders on its own.
       const aOrder = typeof a.order === "number" ? a.order : null;
       const bOrder = typeof b.order === "number" ? b.order : null;
       if (aOrder !== null || bOrder !== null) {
@@ -1014,26 +1026,74 @@ function TodoApp({ user, access }) {
       setDesktopCategoryFilters((prev) => ({ ...prev, [listKey]: updater(prev[listKey] || []) }));
     }
 
+    // Category filters collapse per list, so a long chip row can give its height
+    // back to the tasks. The active-filter count stays on the toggle so a
+    // filtered list never looks unfiltered while the chips are hidden.
+    const filtersOpen = collapsedFilters[listKey] !== true;
+    const filtersButton = chipCategories.length > 0 && (
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setCollapsedFilters((prev) => ({ ...prev, [listKey]: filtersOpen }));
+        }}
+        title={filtersOpen ? "Hide category filters" : "Show category filters"}
+        style={{
+          ...quietButtonStyle,
+          display: "flex", alignItems: "center", gap: 5, cursor: "pointer",
+          color: colFilter.length ? theme.accentPlum : theme.textFainter,
+        }}
+      >
+        <Tag size={12} />
+        {colFilter.length ? `Filters · ${colFilter.length}` : "Filters"}
+        <ChevronDown
+          size={13}
+          style={{ transform: filtersOpen ? "rotate(180deg)" : "none", transition: "transform .25s ease" }}
+        />
+      </button>
+    );
+
+    const sortingThis = sortingList === listKey;
+    const sortButton = (
+      <button
+        onClick={(e) => { e.stopPropagation(); sortListByTime(listKey); }}
+        disabled={!!sortingList}
+        title="Put time-sensitive todos first within each date, earliest first"
+        style={{
+          ...quietButtonStyle,
+          display: "flex", alignItems: "center", gap: 5,
+          cursor: sortingList ? "default" : "pointer",
+          opacity: sortingList && !sortingThis ? 0.4 : 1,
+          color: sortingThis ? theme.accentPlum : theme.textFainter,
+        }}
+      >
+        <Clock size={12} />
+        {sortingThis ? "Sorting…" : "Sort by time"}
+      </button>
+    );
+
     return (
       <div
         key={listKey}
         onClick={isDesktop ? () => setFocusedColumn(listKey) : undefined}
         style={isDesktop ? {
           ...glass.panel, flex: "1 1 0", minWidth: 0, padding: 16, borderRadius: 26,
+          display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden",
           border: `1px solid ${focused ? accent : theme.glassBorder}`,
           boxShadow: focused
             ? `inset 0 1px 0 ${theme.glassSpec}, 0 0 0 3px ${mix(accent, 22)}, 0 18px 44px -26px ${theme.glassShadow}`
             : `inset 0 1px 0 ${theme.glassSpec}, 0 18px 44px -26px ${theme.glassShadow}`,
           transition: "border-color .3s ease, box-shadow .3s ease",
-        } : { minWidth: 0 }}
+        } : { minWidth: 0, flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}
       >
         {isDesktop ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
+          <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
             <Icon size={15} color={accent} />
             <span style={display(16)}>{meta.label}</span>
             <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: 11.5, color: theme.textFainter }}>
               {colActiveCount} left
             </span>
+            {filtersButton}
+            {sortButton}
             <button
               onClick={(e) => { e.stopPropagation(); setDesktopManageCatsFor(listKey); }}
               style={quietButtonStyle}
@@ -1042,15 +1102,17 @@ function TodoApp({ user, access }) {
             </button>
           </div>
         ) : (
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+          <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4, marginBottom: 10 }}>
+            {filtersButton}
+            {sortButton}
             <button onClick={() => setDesktopManageCatsFor(listKey)} style={quietButtonStyle}>
               Manage categories
             </button>
           </div>
         )}
 
-        {chipCategories.length > 0 && (
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+        {chipCategories.length > 0 && filtersOpen && (
+          <div style={{ flexShrink: 0, display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
             {chipCategories.map((cat) => {
               const on = colFilter.includes(cat.id);
               const palette = PALETTE[cat.color] || PALETTE.blue;
@@ -1087,7 +1149,14 @@ function TodoApp({ user, access }) {
           </div>
         )}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+        {/* The only scrolling region on this screen. */}
+        <div
+          className="orbit-scroll"
+          style={{
+            flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 9,
+            paddingBottom: isDesktop ? 4 : LIST_TAIL,
+          }}
+        >
           {colSorted.length === 0 && (
             <div style={{ padding: "34px 16px", borderRadius: 20, border: `1px dashed ${theme.glassBorder2}`, textAlign: "center", fontSize: 13, color: theme.textFainter }}>
               {colFilter.length ? "Nothing matches those filters." : "Nothing here yet — tap + to add the first thing."}
@@ -1096,6 +1165,213 @@ function TodoApp({ user, access }) {
           {colSorted.map((todo, idx) => renderTodoRow(todo, colCategories, colSorted, idx))}
         </div>
       </div>
+    );
+  }
+
+  // Thoughts, rendered identically by the mobile tab and the desktop drawer —
+  // one implementation so the two can't drift apart.
+  // Capture card and the "Manage people" row are chrome and stay put; only the
+  // thoughts below them scroll. `listTail` is the bottom padding the scrolling
+  // region needs to clear whatever floats over it (tab bar on mobile).
+  function renderThoughts(listTail) {
+    const captureReady = !!thoughtDraft.trim();
+
+    // Minimised, the capture card collapses to a single tap-to-open bar so the
+    // thought list gets the height back. Any draft is kept, not discarded, and
+    // is previewed on the bar so a half-written thought can't be lost from view.
+    if (!captureOpen) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+          <button
+            onClick={() => setCaptureOpen(true)}
+            title="Expand the capture box"
+            style={{
+              ...glass.card, flexShrink: 0, borderRadius: 24, padding: "13px 16px", marginBottom: 18,
+              display: "flex", alignItems: "center", gap: 10, width: "100%",
+              textAlign: "left", cursor: "pointer",
+            }}
+          >
+            <Plus size={16} color={theme.accentPlum} style={{ flexShrink: 0 }} />
+            <span style={{
+              flex: 1, minWidth: 0, fontSize: 14, overflow: "hidden",
+              textOverflow: "ellipsis", whiteSpace: "nowrap",
+              color: captureReady ? theme.textPrimary : theme.textMuted,
+            }}>
+              {captureReady ? thoughtDraft.trim() : "What's on your mind?"}
+            </span>
+            {captureReady && (
+              <span style={{ flexShrink: 0, fontSize: 11, fontFamily: MONO, color: theme.accentPlum }}>draft</span>
+            )}
+            <ChevronDown size={16} color={theme.textFainter} style={{ flexShrink: 0 }} />
+          </button>
+
+          {renderThoughtsList(listTail)}
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+        <div style={{ ...glass.card, flexShrink: 0, borderRadius: 24, padding: 16, marginBottom: 18 }}>
+          <textarea
+            value={thoughtDraft}
+            onChange={(e) => setThoughtDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addThought(); }
+            }}
+            placeholder="What's on your mind? Get it out of your head…"
+            rows={2}
+            style={{
+              width: "100%", border: "none", background: "transparent", fontFamily: "inherit",
+              fontSize: 15.5, lineHeight: 1.5, color: theme.textPrimary, resize: "none", padding: "4px 2px",
+            }}
+          />
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 10, paddingTop: 12, borderTop: `1px solid ${theme.glassBorder2}` }}>
+            <span
+              onClick={() => thoughtDueRef.current?.showPicker?.()}
+              style={{
+                display: "flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 999,
+                fontSize: 12, color: theme.textMuted, background: theme.inputBg,
+                border: `1px solid ${theme.glassBorder2}`, cursor: "pointer",
+              }}
+            >
+              <Calendar size={13} />
+              <input
+                ref={thoughtDueRef}
+                type="date"
+                value={thoughtDue}
+                onChange={(e) => setThoughtDue(e.target.value)}
+                style={{ border: "none", background: "transparent", fontFamily: MONO, fontSize: 12, color: theme.textSecondary, padding: 0 }}
+              />
+            </span>
+
+            <span style={{ fontSize: 12, color: theme.textFainter }}>Talk to</span>
+
+            <PersonChip label="No one" selected={thoughtPersonId === null} onClick={() => setThoughtPersonId(null)} />
+            {people.map((p) => (
+              <PersonChip key={p.id} label={p.name} color={PALETTE[p.color]} selected={thoughtPersonId === p.id} onClick={() => setThoughtPersonId(p.id)} />
+            ))}
+
+            {showNewPerson ? (
+              <InlineCreate
+                value={newPersonName}
+                onChange={setNewPersonName}
+                onConfirm={confirmNewPersonForCapture}
+                onCancel={() => { setShowNewPerson(false); setNewPersonName(""); }}
+                placeholder="Name"
+                small
+              />
+            ) : (
+              <button
+                onClick={() => setShowNewPerson(true)}
+                style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 500, padding: "6px 12px", borderRadius: 999, border: `1px dashed ${theme.glassBorder2}`, background: "transparent", color: theme.textMuted, cursor: "pointer" }}
+              >
+                <UserPlus size={12} />
+                New person
+              </button>
+            )}
+
+            <button
+              onClick={addThought}
+              disabled={!captureReady}
+              style={{
+                ...accentButtonStyle(captureReady), marginLeft: "auto",
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "9px 17px", borderRadius: 13, fontSize: 13, fontWeight: 600,
+              }}
+            >
+              <Plus size={15} />
+              Capture
+            </button>
+
+            <IconAction
+              onClick={() => setCaptureOpen(false)}
+              title="Minimize the capture box"
+              size={7}
+            >
+              <ChevronDown size={16} style={{ transform: "rotate(180deg)" }} />
+            </IconAction>
+          </div>
+        </div>
+
+        {renderThoughtsList(listTail)}
+      </div>
+    );
+  }
+
+  // The pinned "Manage people" row plus the scrolling thought list — shared by
+  // the expanded and minimised capture states so the two can't drift apart.
+  function renderThoughtsList(listTail) {
+    // Counted across every group, not per group: the compositing cost is what's
+    // on screen, and the groups scroll as one list.
+    const flatThoughts =
+      thoughtGroups.reduce((n, g) => n + g.items.length, 0) > BLUR_LIST_LIMIT;
+    return (
+      <>
+        <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <span style={{ fontSize: 12, color: theme.textFainter }}>Drag a thought onto a name to reassign it</span>
+          <button onClick={() => setShowManagePeople(true)} style={{ ...quietButtonStyle, fontSize: 12 }}>
+            Manage people
+          </button>
+        </div>
+
+        {/* Everything below "Manage people" is the only scrolling region here. */}
+        <div className="orbit-scroll" style={{ flex: 1, minHeight: 0, paddingBottom: listTail }}>
+          <GroupList
+            groups={thoughtGroups}
+            kind="thought"
+            dragOverZone={dragOverZone}
+            setDragOverZone={setDragOverZone}
+            onDrop={handleDrop}
+            onDeleteGroup={deletePerson}
+            emptyUnsortedLabel="Nothing unassigned"
+            emptyGroupLabel="Drop thoughts here"
+            renderItem={(thought, idx) => {
+              const overdue = isOverdue(thought.due, thought.done);
+              const stale = !thought.done && !thought.due && daysSince(thought.createdAt) >= STALE_DAYS;
+              return (
+                <div key={thought.id} style={{ animation: `rowIn .4s ${EASE_OUT} ${Math.min(idx, 12) * 0.035}s both` }}>
+                  <TaskCard
+                    highlighted={stale}
+                    flat={flatThoughts}
+                    tone="gold"
+                    showRowButtons
+                    done={thought.done}
+                    text={thought.text}
+                    due={thought.due}
+                    onToggle={() => toggleThoughtDone(thought)}
+                    onRemove={() => removeThought(thought.id)}
+                    onEdit={(text, due) => editThought(thought.id, text, due)}
+                    onDragStart={(e) => handleDragStart(e, thought.id, "thought")}
+                    badge={
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {thought.due ? (
+                          <Badge tone={overdue ? "gold" : "neutral"} icon={Calendar}>
+                            {overdue ? `Overdue · ${fmtDate(thought.due)}` : fmtDate(thought.due)}
+                          </Badge>
+                        ) : (
+                          <Badge tone={stale ? "gold" : "neutral"} icon={Clock}>
+                            {stale ? `Sitting ${daysSince(thought.createdAt)}d · ${relativeTime(thought.createdAt)}` : relativeTime(thought.createdAt)}
+                          </Badge>
+                        )}
+                      </div>
+                    }
+                  />
+                </div>
+              );
+            }}
+          />
+        </div>
+
+        {showManagePeople && (
+          <ManagePeopleModal
+            people={people}
+            onClose={() => setShowManagePeople(false)}
+            onDelete={deletePerson}
+          />
+        )}
+      </>
     );
   }
 
@@ -1110,12 +1386,15 @@ function TodoApp({ user, access }) {
     const overdue = isOverdue(todo.due, todo.done);
     const category = colCategories.find((c) => c.id === todo.categoryId);
     const slotStyle = { animation: `rowIn .4s ${EASE_OUT} ${Math.min(idx, 12) * 0.035}s both` };
+    // Whole list goes flat together — a mix of blurred and solid cards would
+    // read as two different surfaces sitting side by side.
+    const flat = colSorted.length > BLUR_LIST_LIMIT;
 
     if (settingTimeFor === todo.id) {
       return (
         <div
           key={todo.id}
-          style={{ ...glass.card, ...slotStyle, borderRadius: 22, padding: "12px 13px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}
+          style={{ ...(flat ? glass.cardFlat : glass.card), ...slotStyle, borderRadius: 22, padding: "12px 13px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}
         >
           <Clock size={16} color={theme.goldDot} style={{ flexShrink: 0 }} />
           <span style={{ fontSize: 13.5, color: theme.textPrimary, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -1156,6 +1435,7 @@ function TodoApp({ user, access }) {
     const card = (
       <TaskCard
         highlighted={overdue}
+        flat={flat}
         done={todo.done}
         text={todo.text}
         due={todo.due}
@@ -1233,16 +1513,26 @@ if (page === "nightly") {
   const addAccent = listMeta[addTarget] ? listMeta[addTarget].label : "Work";
 
   return (
-    <div style={{ position: "relative", minHeight: "100vh", color: theme.textPrimary, fontFamily: "'Geist', system-ui, sans-serif" }}>
+    <div
+      className="orbit-shell"
+      style={{
+        position: "relative", overflow: "hidden", display: "flex", flexDirection: "column",
+        color: theme.textPrimary, fontFamily: "'Geist', system-ui, sans-serif",
+      }}
+    >
       <GlassBackdrop />
 
-      <div style={{ position: "relative", zIndex: 1, display: "flex", justifyContent: "center" }}>
-        <div style={{ width: "100%", maxWidth: isDesktop ? 1400 : 430, minHeight: "100vh", animation: `screenIn .45s ${EASE_OUT}` }}>
+      <div style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 0, display: "flex", justifyContent: "center" }}>
+        <div style={{
+          width: "100%", maxWidth: isDesktop ? 1400 : 430,
+          display: "flex", flexDirection: "column", minHeight: 0,
+          animation: `screenIn .45s ${EASE_OUT}`,
+        }}>
 
           {/* Top bar — logo and wordmark left, destinations and account right */}
           <div style={{
             ...glass.bar,
-            position: "sticky", top: 0, zIndex: 30,
+            position: "relative", zIndex: 30, flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
             padding: isDesktop ? "16px 28px" : "14px 18px",
           }}>
@@ -1277,10 +1567,13 @@ if (page === "nightly") {
             </div>
           </div>
 
-          <div style={{ padding: isDesktop ? "26px 28px 120px" : "22px 18px 130px" }}>
+          <div style={{
+            flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
+            padding: isDesktop ? "26px 28px 0" : "22px 18px 0",
+          }}>
 
             {/* Page title + live subtitle + the All dates / Today only pill */}
-            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
+            <div style={{ flexShrink: 0, display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
               <div style={{ minWidth: 0 }}>
                 <h1 style={{ margin: 0, fontFamily: DISPLAY, fontSize: "clamp(30px,6vw,42px)", fontWeight: 600, letterSpacing: "-.035em", lineHeight: 1.02 }}>
                   {pageTitle}
@@ -1300,7 +1593,7 @@ if (page === "nightly") {
             </div>
 
             {/* Ask Star */}
-            <div style={{ marginBottom: 18 }}>
+            <div style={{ flexShrink: 0, marginBottom: 18 }}>
               <BrainDumpButton
                 knownPeopleNames={people.map((p) => p.name)}
                 onResult={handleBrainDumpResult}
@@ -1308,13 +1601,14 @@ if (page === "nightly") {
             </div>
 
             {isDesktop ? (
-              <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+              <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 16, alignItems: "stretch", paddingBottom: 20 }}>
                 {renderTodoColumn("work")}
                 {renderTodoColumn("personal")}
                 <div
                   onClick={() => setFocusedColumn("workbench")}
                   style={{
                     ...glass.panel, flex: "1 1 0", minWidth: 0, padding: 16, borderRadius: 26,
+                    display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden",
                     border: `1px solid ${focusedColumn === "workbench" ? PALETTE.orange.dot : theme.glassBorder}`,
                     boxShadow: focusedColumn === "workbench"
                       ? `inset 0 1px 0 ${theme.glassSpec}, 0 0 0 3px ${mix(PALETTE.orange.dot, 22)}, 0 18px 44px -26px ${theme.glassShadow}`
@@ -1326,143 +1620,13 @@ if (page === "nightly") {
                 </div>
               </div>
             ) : (
-              <>
+              <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
                 {(activeList === "work" || activeList === "personal") && renderTodoColumn(activeList)}
-        {isThoughts && (
-          <>
-            {/* Thought capture card */}
-            <div style={{ background: theme.cardBg, borderRadius: 18, padding: 14, boxShadow: "0 1px 3px rgba(58,44,30,0.06), 0 1px 2px rgba(58,44,30,0.04)", marginBottom: 16, border: "1px solid #EFE6D9" }}>
-              <textarea
-                value={thoughtDraft}
-                onChange={(e) => setThoughtDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addThought(); }
-                }}
-                placeholder="What's on your mind? Get it out of your head..."
-                rows={2}
-                style={{ width: "100%", border: "none", fontSize: 15, padding: "8px 4px", color: theme.textPrimary, background: "transparent", resize: "none", fontFamily: "inherit" }}
-              />
-
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingTop: 10, borderTop: `1px solid ${theme.dividerSoft}`, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginRight: 4 }}>
-                  <Calendar size={14} color={theme.textFaint} style={{ cursor: "pointer" }} onClick={() => thoughtDueRef.current?.showPicker?.()} />
-                  <input
-                    ref={thoughtDueRef}
-                    type="date"
-                    value={thoughtDue}
-                    onChange={(e) => setThoughtDue(e.target.value)}
-                    style={{ border: "none", fontSize: 13, color: theme.textSecondary, background: "transparent" }}
-                  />
-                </div>
-                <span style={{ fontSize: 12, color: theme.textFaint, marginRight: 2 }}>Talk to:</span>
-
-                <PersonChip label="No one yet" selected={thoughtPersonId === null} onClick={() => setThoughtPersonId(null)} />
-                {people.map((p) => (
-                  <PersonChip key={p.id} label={p.name} color={PALETTE[p.color]} selected={thoughtPersonId === p.id} onClick={() => setThoughtPersonId(p.id)} />
-                ))}
-
-                {showNewPerson ? (
-                  <InlineCreate
-                    value={newPersonName}
-                    onChange={setNewPersonName}
-                    onConfirm={confirmNewPersonForCapture}
-                    onCancel={() => { setShowNewPerson(false); setNewPersonName(""); }}
-                    placeholder="Name"
-                    small
-                  />
-                ) : (
-                  <button
-                    onClick={() => setShowNewPerson(true)}
-                    style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, padding: "5px 10px", borderRadius: 999, border: "1px dashed #C4B7A9", background: "transparent", color: theme.textMuted, cursor: "pointer" }}
-                  >
-                    <UserPlus size={12} />
-                    New person
-                  </button>
-                )}
-
-                <button
-                  onClick={addThought}
-                  disabled={!thoughtDraft.trim()}
-                  style={{
-                    marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700,
-                    padding: "8px 16px", borderRadius: 10, border: "none",
-                    background: thoughtDraft.trim() ? PALETTE.yellow.dot : theme.border,
-                    color: thoughtDraft.trim() ? theme.oldYellowText : theme.cardBg,
-                    cursor: thoughtDraft.trim() ? "pointer" : "default",
-                  }}
-                >
-                  <Plus size={15} />
-                  Capture
-                </button>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <span style={{ fontSize: 12, color: theme.textFaint }}>Drag a thought onto a name to reassign it</span>
-              <button
-                onClick={() => setShowManagePeople(true)}
-                style={{ border: "none", background: "transparent", color: theme.textFaint, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 4 }}
-              >
-                Manage people
-              </button>
-            </div>
-
-            <GroupList
-              groups={thoughtGroups}
-              kind="thought"
-              dragOverZone={dragOverZone}
-              setDragOverZone={setDragOverZone}
-              onDrop={handleDrop}
-              onDeleteGroup={deletePerson}
-              emptyUnsortedLabel="Nothing unassigned"
-              emptyGroupLabel="Drop thoughts here"
-              renderItem={(thought) => {
-                const overdue = isOverdue(thought.due, thought.done);
-                const stale = !thought.done && !thought.due && daysSince(thought.createdAt) >= STALE_DAYS;
-                return (
-                  <TaskCard
-                    key={thought.id}
-                    highlighted={overdue || stale}
-                    tone="gold"
-                    showRowButtons
-                    done={thought.done}
-                    text={thought.text}
-                    due={thought.due}
-                    onToggle={() => toggleThoughtDone(thought)}
-                    onRemove={() => removeThought(thought.id)}
-                    onEdit={(text, due) => editThought(thought.id, text, due)}
-                    onDragStart={(e) => handleDragStart(e, thought.id, "thought")}
-                    badge={
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        {thought.due ? (
-                          <Badge tone={overdue ? "red" : "neutral"} icon={Calendar}>
-                            {overdue ? `Overdue · ${fmtDate(thought.due)}` : fmtDate(thought.due)}
-                          </Badge>
-                        ) : (
-                          <Badge tone={stale ? "gold" : "neutral"} icon={Clock}>
-                            {stale ? `Sitting ${daysSince(thought.createdAt)}d · ${relativeTime(thought.createdAt)}` : relativeTime(thought.createdAt)}
-                          </Badge>
-                        )}
-                      </div>
-                    }
-                  />
-                );
-              }}
-            />
-
-            {showManagePeople && (
-              <ManagePeopleModal
-                people={people}
-                onClose={() => setShowManagePeople(false)}
-                onDelete={deletePerson}
-              />
-            )}
-          </>
-        )}
+                {isThoughts && renderThoughts(LIST_TAIL)}
                 {isWorkbench && (
-                  <Workbench uid={uid} categories={ownCategories} todos={ownTodos} sharedUid={sharingWork ? ownerUid : null} sharedCategoryId={access?.sharedWorkCategoryId} sharedCategories={sharedCategories} />
+                  <Workbench uid={uid} categories={ownCategories} todos={ownTodos} sharedUid={sharingWork ? ownerUid : null} sharedCategoryId={access?.sharedWorkCategoryId} sharedCategories={sharedCategories} listTail={LIST_TAIL} />
                 )}
-              </>
+              </div>
             )}
           </div>
         </div>
@@ -1549,28 +1713,57 @@ if (page === "nightly") {
           focused-column FAB. Writes to whichever list `addTarget` names. */}
       {showAddPanel && (
         <div
-          onClick={() => setShowAddPanel(false)}
+          onClick={closeAddPanel}
           style={{
             position: "fixed", inset: 0, zIndex: 80, background: theme.scrim,
             backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
-            animation: "fadeIn .22s ease", display: "flex", alignItems: "flex-end", justifyContent: "center",
+            animation: "fadeIn .22s ease", display: "flex", justifyContent: "center",
+            // Mobile docks the panel to the top so the keyboard opens beneath it;
+            // desktop keeps the bottom sheet, where there's no keyboard to dodge.
+            alignItems: isDesktop ? "flex-end" : "flex-start",
+            overflowY: "auto",
           }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              ...glass.sheet, width: "100%", maxWidth: 640, margin: "0 10px 10px", padding: 20,
-              borderRadius: 30, animation: `sheetIn .42s ${EASE_OUT}`,
-              paddingBottom: "calc(20px + env(safe-area-inset-bottom))",
+              ...(isDesktop ? glass.sheet : glass.raised),
+              width: "100%", maxWidth: 640, padding: 20, borderRadius: 30,
+              margin: isDesktop ? "0 10px 10px" : "calc(10px + env(safe-area-inset-top)) 10px 10px",
+              animation: isDesktop ? `sheetIn .42s ${EASE_OUT}` : `sheetInTop .42s ${EASE_OUT}`,
+              paddingBottom: isDesktop ? "calc(20px + env(safe-area-inset-bottom))" : 20,
             }}
           >
-            <div style={{ width: 38, height: 4, borderRadius: 99, background: theme.glassBorder, margin: "-6px auto 16px" }} />
+            {isDesktop && <div style={{ width: 38, height: 4, borderRadius: 99, background: theme.glassBorder, margin: "-6px auto 16px" }} />}
+
+            {/* Named header with an explicit way out — the scrim also closes,
+                but that isn't discoverable enough to be the only escape. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <span style={{ ...display(15), color: theme.textSecondary, flex: 1, minWidth: 0 }}>
+                New task in {addAccent}
+              </span>
+              <button
+                onClick={closeAddPanel}
+                title="Cancel (Esc)"
+                aria-label="Cancel new task"
+                style={{
+                  display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
+                  padding: "6px 12px", borderRadius: 999, cursor: "pointer",
+                  fontSize: 12.5, fontWeight: 500, color: theme.textMuted,
+                  background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
+                  transition: `all .25s ${SPRING}`,
+                }}
+              >
+                <X size={13} />
+                Cancel
+              </button>
+            </div>
 
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
               <input
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") addTodo(); }}
+                onKeyDown={(e) => { if (e.key === "Enter") addTodo(); if (e.key === "Escape") closeAddPanel(); }}
                 placeholder={`Add to ${addAccent}…`}
                 autoFocus
                 style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", fontSize: 17, fontWeight: 500, color: theme.textPrimary, padding: "4px 2px" }}
@@ -1654,6 +1847,8 @@ if (page === "nightly") {
                 onCreateCategory={addCategoryAndSelect}
               />
             </div>
+
+            {!isDesktop && <div style={{ width: 38, height: 4, borderRadius: 99, background: theme.glassBorder, margin: "16px auto -6px" }} />}
           </div>
         </div>
       )}
@@ -1675,7 +1870,8 @@ if (page === "nightly") {
               onClick={(e) => e.stopPropagation()}
               style={{
                 position: "fixed", top: 0, right: 0, bottom: 0, width: 460, maxWidth: "92vw",
-                zIndex: 60, padding: "26px 22px 40px", overflowY: "auto",
+                zIndex: 60, padding: "26px 22px 0", overflow: "hidden",
+                display: "flex", flexDirection: "column",
                 background: `linear-gradient(200deg, ${theme.glassHigh}, ${theme.glassFill})`,
                 backdropFilter: "blur(34px) saturate(200%)", WebkitBackdropFilter: "blur(34px) saturate(200%)",
                 borderLeft: `1px solid ${theme.glassBorder}`,
@@ -1683,139 +1879,14 @@ if (page === "nightly") {
                 animation: `screenIn .4s ${EASE_OUT}`,
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <h2 style={{ ...display(24, "-.03em"), margin: 0 }}>Clear your head</h2>
                 <button onClick={() => setShowThoughtsPanel(false)} style={{ border: "none", background: "transparent", color: theme.textFainter, cursor: "pointer", padding: 4, display: "flex" }}>
                   <X size={20} />
                 </button>
               </div>
 
-              <div style={{ background: theme.cardBg, borderRadius: 18, padding: 14, boxShadow: "0 1px 3px rgba(58,44,30,0.06), 0 1px 2px rgba(58,44,30,0.04)", marginBottom: 16, border: "1px solid #EFE6D9" }}>
-                <textarea
-                  value={thoughtDraft}
-                  onChange={(e) => setThoughtDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addThought(); }
-                  }}
-                  placeholder="What's on your mind? Get it out of your head..."
-                  rows={2}
-                  style={{ width: "100%", border: "none", fontSize: 15, padding: "8px 4px", color: theme.textPrimary, background: "transparent", resize: "none", fontFamily: "inherit" }}
-                />
-
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingTop: 10, borderTop: `1px solid ${theme.dividerSoft}`, flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginRight: 4 }}>
-                    <Calendar size={14} color={theme.textFaint} style={{ cursor: "pointer" }} onClick={() => thoughtDueRef.current?.showPicker?.()} />
-                    <input
-                      ref={thoughtDueRef}
-                      type="date"
-                      value={thoughtDue}
-                      onChange={(e) => setThoughtDue(e.target.value)}
-                      style={{ border: "none", fontSize: 13, color: theme.textSecondary, background: "transparent" }}
-                    />
-                  </div>
-                  <span style={{ fontSize: 12, color: theme.textFaint, marginRight: 2 }}>Talk to:</span>
-
-                  <PersonChip label="No one yet" selected={thoughtPersonId === null} onClick={() => setThoughtPersonId(null)} />
-                  {people.map((p) => (
-                    <PersonChip key={p.id} label={p.name} color={PALETTE[p.color]} selected={thoughtPersonId === p.id} onClick={() => setThoughtPersonId(p.id)} />
-                  ))}
-
-                  {showNewPerson ? (
-                    <InlineCreate
-                      value={newPersonName}
-                      onChange={setNewPersonName}
-                      onConfirm={confirmNewPersonForCapture}
-                      onCancel={() => { setShowNewPerson(false); setNewPersonName(""); }}
-                      placeholder="Name"
-                      small
-                    />
-                  ) : (
-                    <button
-                      onClick={() => setShowNewPerson(true)}
-                      style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, padding: "5px 10px", borderRadius: 999, border: "1px dashed #C4B7A9", background: "transparent", color: theme.textMuted, cursor: "pointer" }}
-                    >
-                      <UserPlus size={12} />
-                      New person
-                    </button>
-                  )}
-
-                  <button
-                    onClick={addThought}
-                    disabled={!thoughtDraft.trim()}
-                    style={{
-                      marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700,
-                      padding: "8px 16px", borderRadius: 10, border: "none",
-                      background: thoughtDraft.trim() ? PALETTE.yellow.dot : theme.border,
-                      color: thoughtDraft.trim() ? theme.oldYellowText : theme.cardBg,
-                      cursor: thoughtDraft.trim() ? "pointer" : "default",
-                    }}
-                  >
-                    <Plus size={15} />
-                    Capture
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                <span style={{ fontSize: 12, color: theme.textFaint }}>Drag a thought onto a name to reassign it</span>
-                <button
-                  onClick={() => setShowManagePeople(true)}
-                  style={{ border: "none", background: "transparent", color: theme.textFaint, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 4 }}
-                >
-                  Manage people
-                </button>
-              </div>
-
-              <GroupList
-                groups={thoughtGroups}
-                kind="thought"
-                dragOverZone={dragOverZone}
-                setDragOverZone={setDragOverZone}
-                onDrop={handleDrop}
-                onDeleteGroup={deletePerson}
-                emptyUnsortedLabel="Nothing unassigned"
-                emptyGroupLabel="Drop thoughts here"
-                renderItem={(thought) => {
-                  const overdue = isOverdue(thought.due, thought.done);
-                  const stale = !thought.done && !thought.due && daysSince(thought.createdAt) >= STALE_DAYS;
-                  return (
-                    <TaskCard
-                      key={thought.id}
-                      highlighted={overdue || stale}
-                      tone="gold"
-                      showRowButtons
-                      done={thought.done}
-                      text={thought.text}
-                      due={thought.due}
-                      onToggle={() => toggleThoughtDone(thought)}
-                      onRemove={() => removeThought(thought.id)}
-                      onEdit={(text, due) => editThought(thought.id, text, due)}
-                      onDragStart={(e) => handleDragStart(e, thought.id, "thought")}
-                      badge={
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                          {thought.due ? (
-                            <Badge tone={overdue ? "red" : "neutral"} icon={Calendar}>
-                              {overdue ? `Overdue · ${fmtDate(thought.due)}` : fmtDate(thought.due)}
-                            </Badge>
-                          ) : (
-                            <Badge tone={stale ? "gold" : "neutral"} icon={Clock}>
-                              {stale ? `Sitting ${daysSince(thought.createdAt)}d · ${relativeTime(thought.createdAt)}` : relativeTime(thought.createdAt)}
-                            </Badge>
-                          )}
-                        </div>
-                      }
-                    />
-                  );
-                }}
-              />
-
-              {showManagePeople && (
-                <ManagePeopleModal
-                  people={people}
-                  onClose={() => setShowManagePeople(false)}
-                  onDelete={deletePerson}
-                />
-              )}
+              {renderThoughts(40)}
             </div>
           </div>
         )}
@@ -1939,12 +2010,25 @@ function UserMenu({ user, access, isDesktop, pendingBudgetRequest, onRequestBudg
           </MenuRow>
         </div>
       )}
-      {showNotify && (
+      {/* Portalled to <body>: this menu lives inside the top bar, whose
+          backdrop-filter makes it the containing block for fixed children (so
+          `inset: 0` would resolve to the bar, not the viewport) and traps the
+          overlay in that bar's z-index-30 stacking context, under the tab bar. */}
+      {showNotify && createPortal(
         <div
           onClick={() => { setShowNotify(false); setWizardStep(1); }}
-          style={{ position: "fixed", inset: 0, background: theme.scrim, backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "fadeIn .2s ease" }}
+          style={{
+            position: "fixed", inset: 0, background: theme.scrim,
+            backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", zIndex: 90,
+            display: "flex", justifyContent: "center", padding: 20, animation: "fadeIn .2s ease",
+            // `align-items: center` would overflow equally in both directions once
+            // the card outgrows the viewport, putting its top off-screen with no
+            // way to reach it. Auto margins centre when it fits and collapse to 0
+            // when it doesn't, so the overlay's own scroll can always reach the top.
+            alignItems: "flex-start", overflowY: "auto",
+          }}
         >
-          <div onClick={(e) => e.stopPropagation()} style={{ ...glass.raised, borderRadius: 28, padding: 22, width: 380, maxWidth: "92vw", animation: `popIn .3s ${SPRING}` }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ ...glass.raised, borderRadius: 28, padding: 22, width: 380, maxWidth: "92vw", margin: "auto 0", animation: `popIn .3s ${SPRING}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 4 }}>
               <span style={{
                 width: 36, height: 36, borderRadius: 13, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
@@ -2047,7 +2131,8 @@ function UserMenu({ user, access, isDesktop, pendingBudgetRequest, onRequestBudg
               </>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -2055,7 +2140,7 @@ function UserMenu({ user, access, isDesktop, pendingBudgetRequest, onRequestBudg
 
 function GroupList({ groups, kind, dragOverZone, setDragOverZone, onDrop, onDeleteGroup, renderItem, emptyUnsortedLabel = "All caught up — nothing unsorted", emptyGroupLabel = "Drop tasks here" }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {groups.map((group) => {
         const isOver = dragOverZone === group.key;
         const color = group.color;
@@ -2067,31 +2152,35 @@ function GroupList({ groups, kind, dragOverZone, setDragOverZone, onDrop, onDele
             onDragLeave={() => setDragOverZone((z) => (z === group.key ? null : z))}
             onDrop={(e) => onDrop(e, group.key, isUnsorted ? null : group.refId, kind)}
             style={{
-              borderRadius: 16,
-              border: isOver ? `2px dashed ${color ? color.dot : theme.textGray}` : "2px dashed transparent",
-              background: isOver ? (color ? color.soft : theme.dividerSoft) : "transparent",
-              padding: 8,
-              transition: "all 0.12s ease",
+              borderRadius: 22, padding: isOver ? 8 : 0,
+              border: `1px dashed ${isOver ? (color ? color.dot : theme.accentPlum) : "transparent"}`,
+              background: isOver ? mix(color ? color.dot : theme.accentPlum, 10) : "transparent",
+              transition: `all .25s ${SPRING}`,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px 10px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {color ? <span style={{ width: 8, height: 8, borderRadius: "50%", background: color.dot }} /> : <Inbox size={13} color={theme.textFaint} />}
-                <span style={{ fontSize: 13, fontWeight: 800, color: color ? color.text : theme.textMuted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                  {group.name}
-                </span>
-                <span style={{ fontSize: 12, color: theme.textFainter }}>{group.items.length}</span>
-              </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "0 4px 10px" }}>
+              {color ? (
+                <span style={{ width: 7, height: 7, borderRadius: 99, background: color.dot, boxShadow: `0 0 10px -1px ${color.dot}` }} />
+              ) : (
+                <Inbox size={13} color={theme.textFainter} />
+              )}
+              <span style={{
+                fontSize: 11.5, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase",
+                color: color ? color.text : theme.textMuted,
+              }}>
+                {group.name}
+              </span>
+              <span style={{ fontFamily: MONO, fontSize: 11.5, color: theme.textFainter }}>{group.items.length}</span>
               {!isUnsorted && (
-                <button onClick={() => onDeleteGroup(group.refId)} style={{ border: "none", background: "transparent", color: theme.textFainter, cursor: "pointer", padding: 2 }} title="Delete">
+                <IconAction onClick={() => onDeleteGroup(group.refId)} title="Delete" hoverColor={theme.accentRed}>
                   <Trash2 size={13} />
-                </button>
+                </IconAction>
               )}
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 9, minHeight: 8 }}>
               {group.items.length === 0 && (
-                <div style={{ fontSize: 12, color: theme.textFainter, padding: "10px 12px", border: "1px dashed #E6DACB", borderRadius: 12, textAlign: "center" }}>
+                <div style={{ padding: 16, borderRadius: 16, border: `1px dashed ${theme.glassBorder2}`, textAlign: "center", fontSize: 12, color: theme.textFainter }}>
                   {isUnsorted ? emptyUnsortedLabel : emptyGroupLabel}
                 </div>
               )}
@@ -2104,17 +2193,22 @@ function GroupList({ groups, kind, dragOverZone, setDragOverZone, onDrop, onDele
   );
 }
 
-
 function TaskCard({
   text, due, done, categoryId, categories, onToggle, onRemove, onEdit, todoId,
   onReorderPointerDown, isDragging, dragDeltaY, isDropTarget, badge, highlighted,
-  tone = "red", showHandle, showRowButtons, onRemind, remindActive,
+  tone = "red", showHandle, showRowButtons, onRemind, remindActive, onDragStart, flat,
 }) {
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(text);
   const [editDue, setEditDue] = useState(due || "");
   const editDueRef = useRef(null);
   const [editCategoryId, setEditCategoryId] = useState(categoryId || null);
+
+  // Thoughts are reassigned by dragging the whole card onto a person group
+  // (HTML5 drag-and-drop, handled by GroupList). Disabled while editing so the
+  // textarea keeps normal text selection.
+  const [htmlDragging, setHtmlDragging] = useState(false);
+  const canDrag = !!onDragStart && !editing;
 
   // The accent ring that bursts outward when a task is checked off.
   const [bursting, setBursting] = useState(false);
@@ -2164,21 +2258,30 @@ function TaskCard({
   return (
     <div
       data-todo-id={todoId}
+      draggable={canDrag}
+      onDragStart={canDrag ? (e) => { setHtmlDragging(true); onDragStart(e); } : undefined}
+      onDragEnd={canDrag ? () => setHtmlDragging(false) : undefined}
       style={{
         position: "relative", display: "flex", alignItems: "flex-start", gap: 11,
+        cursor: canDrag ? (htmlDragging ? "grabbing" : "grab") : "default",
         padding: showHandle ? "14px 13px 14px 10px" : "14px 13px",
         borderRadius: 22,
+        // `flat` drops this card out of the blur — see BLUR_LIST_LIMIT. The
+        // solid fills are what the blur averages to, so the tint maths and the
+        // rest of the recipe are unchanged either way.
         background: flagged
-          ? `linear-gradient(157deg, ${theme.glassHigh}, ${mix(flagColor, 8, theme.glassFill)})`
-          : `linear-gradient(157deg, ${theme.glassHigh}, ${theme.glassFill})`,
-        backdropFilter: "blur(22px) saturate(180%)",
-        WebkitBackdropFilter: "blur(22px) saturate(180%)",
+          ? `linear-gradient(157deg, ${flat ? theme.glassHighSolid : theme.glassHigh}, ${mix(flagColor, 8, flat ? theme.glassFillSolid : theme.glassFill)})`
+          : `linear-gradient(157deg, ${flat ? theme.glassHighSolid : theme.glassHigh}, ${flat ? theme.glassFillSolid : theme.glassFill})`,
+        ...(flat ? {} : {
+          backdropFilter: "blur(22px) saturate(180%)",
+          WebkitBackdropFilter: "blur(22px) saturate(180%)",
+        }),
         border: `1px solid ${borderColor}`,
         boxShadow: isDragging
           ? `inset 0 1px 0 ${theme.glassSpec}, 0 22px 50px -18px ${theme.glassShadow}`
           : `inset 0 1px 0 ${theme.glassSpec}, 0 10px 28px -20px ${theme.glassShadow}`,
         transform: isDragging ? `translateY(${dragDeltaY}px) scale(1.02)` : "none",
-        opacity: done ? 0.62 : 1,
+        opacity: done ? 0.62 : htmlDragging ? 0.5 : 1,
         transition: isDragging ? "none" : `transform .42s ${SPRING}, opacity .3s ease, box-shadow .3s ease`,
         zIndex: isDragging ? 30 : 1,
         touchAction: "pan-y",
@@ -2312,30 +2415,6 @@ function TaskCard({
   );
 }
 
-// Quiet 14px row button that colours in on hover — pencil, clock, trash.
-function IconAction({ onClick, title, children, hoverColor, active, activeColor }) {
-  const [hover, setHover] = useState(false);
-  const color = hover ? (hoverColor || theme.textPrimary) : active ? activeColor : theme.textFainter;
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: 5, borderRadius: 9, border: "none", cursor: "pointer", color,
-        background: hover
-          ? mix(hoverColor || theme.textPrimary, 14)
-          : active ? mix(activeColor, 14) : "transparent",
-        transition: "all .25s ease",
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
 // The badge row under a task: due date, reminder time, repeat, category.
 function TaskBadges({ todo, overdue, category }) {
   return (
@@ -2397,7 +2476,7 @@ function CategoryPicker({ categories, recent, selectedId, onSelect, showMore, se
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-        <Tag size={13} color={theme.textFaint} style={{ marginRight: 2 }} />
+        <Tag size={13} color={theme.textFainter} style={{ marginRight: 2 }} />
         <CategoryChip label="None" selected={!selectedId} onClick={() => onSelect(null)} />
         {recent.map((c) => (
           <CategoryChip key={c.id} label={c.name} color={PALETTE[c.color]} selected={selectedId === c.id} onClick={() => onSelect(c.id)} />
@@ -2564,7 +2643,7 @@ function InlineCreate({ value, onChange, onConfirm, onCancel, placeholder, small
       <button onClick={onConfirm} style={{ ...accentButtonStyle(true), borderRadius: 999, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <Check size={14} />
       </button>
-      <button onClick={onCancel} style={{ border: "none", background: "transparent", color: theme.textFaint, borderRadius: 999, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+      <button onClick={onCancel} style={{ border: "none", background: "transparent", color: theme.textFainter, borderRadius: 999, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
         <X size={14} />
       </button>
     </div>
@@ -2572,12 +2651,19 @@ function InlineCreate({ value, onChange, onConfirm, onCancel, placeholder, small
 }
 
 function PersonChip({ label, color, selected, onClick }) {
-  const bg = selected ? (color ? color.bg : theme.borderSoft) : theme.cardBg;
-  const text = selected ? (color ? color.text : theme.textSecondary) : theme.textMuted;
-  const border = selected ? "transparent" : theme.border;
   return (
-    <button onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 999, border: `1px solid ${border}`, background: bg, color: text, cursor: "pointer", transition: "all 0.15s ease" }}>
-      {color && <span style={{ width: 7, height: 7, borderRadius: "50%", background: color.dot }} />}
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 500,
+        padding: "6px 13px", borderRadius: 999, cursor: "pointer",
+        color: selected ? (color ? color.text : theme.accentPlum) : theme.textMuted,
+        background: selected ? (color ? color.bg : theme.accentSoft) : theme.inputBg,
+        border: `1px solid ${selected ? (color ? color.dot : theme.accentPlum) : theme.glassBorder2}`,
+        transition: `all .25s ${SPRING}`,
+      }}
+    >
+      {color && <span style={{ width: 6, height: 6, borderRadius: 99, flexShrink: 0, background: color.dot }} />}
       {label}
     </button>
   );

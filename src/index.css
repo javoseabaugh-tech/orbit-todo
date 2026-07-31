@@ -15,6 +15,12 @@ html, body {
   height: 100%;
   overscroll-behavior-y: none;
 }
+/* Native controls (<input type="time">/"date", scrollbars, pickers) are drawn
+   by the browser's own shadow DOM, which ignores our `color` and follows this
+   instead. Without it they render light-mode — dark digits on dark glass. */
+html {
+  color-scheme: light dark;
+}
 body {
   font-family: 'Geist', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;

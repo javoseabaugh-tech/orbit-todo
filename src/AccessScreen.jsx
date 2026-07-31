@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, where } from "firebase/firestore";
 import { X, Trash2, UserPlus, Shield } from "lucide-react";
-import { theme } from "./theme";
+import { theme, glass, EASE_OUT, SPRING } from "./theme";
+import { display, mix, fieldStyle, accentButtonStyle, IconAction, GlassBackdrop } from "./ui";
 
 function emailToDocId(email) {
   return email.toLowerCase();
@@ -141,38 +142,66 @@ export default function AccessScreen({ db, currentRole, onClose }) {
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: theme.gradB, zIndex: 50, overflowY: "auto", fontFamily: "'Inter', -apple-system, sans-serif" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 20px 12px", borderBottom: `1px solid ${theme.borderSoft2}` }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Shield size={20} color={theme.accentPlum} />
-          <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 22, color: theme.textPrimary, margin: 0 }}>Access</h1>
-        </div>
-        <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", padding: 6 }}>
-          <X size={22} color={theme.textMuted} />
-        </button>
-      </div>
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 50, overflow: "hidden",
+      display: "flex", flexDirection: "column",
+      background: theme.gradB, color: theme.textPrimary,
+      fontFamily: "'Geist', system-ui, sans-serif",
+      animation: `screenIn .45s ${EASE_OUT}`,
+    }}>
+      <GlassBackdrop />
 
-      <div style={{ padding: 20 }}>
+      <div style={{
+        position: "relative", zIndex: 1, width: "100%", maxWidth: 620, margin: "0 auto",
+        flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
+        padding: "24px 20px 0",
+      }}>
+        <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
+          <span style={{
+            width: 40, height: 40, borderRadius: 14, flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: theme.accentInk,
+            background: `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})`,
+            boxShadow: `0 10px 26px -10px ${theme.accentPlum}`,
+          }}>
+            <Shield size={19} />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h1 style={{ ...display(26, "-.03em"), margin: 0 }}>Access</h1>
+            <p style={{ margin: "3px 0 0", fontSize: 13, color: theme.textMuted }}>Who can see what, and how much.</p>
+          </div>
+          <IconAction onClick={onClose} title="Close" size={6}>
+            <X size={20} />
+          </IconAction>
+        </div>
+
+        {/* Everything below the Access header is the only scrolling region. */}
+        <div className="orbit-scroll" style={{ flex: 1, minHeight: 0, paddingBottom: 60 }}>
+
         {error && (
-          <div style={{ background: theme.softBg2, color: theme.oldOrangeText, padding: "10px 14px", borderRadius: 10, marginBottom: 16, fontSize: 14 }}>
+          <div style={{
+            padding: "11px 14px", borderRadius: 14, marginBottom: 16, fontSize: 13.5,
+            color: theme.accentRed, background: mix(theme.accentRed, 12),
+            border: `1px solid ${mix(theme.accentRed, 30)}`,
+          }}>
             {error}
           </div>
         )}
 
         {canManageAccess && (
-          <form onSubmit={handleAddPerson} style={{ background: theme.cardBg, borderRadius: 14, padding: 16, marginBottom: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-            <div style={{ fontWeight: 600, color: theme.textPrimary, marginBottom: 10, fontSize: 15 }}>Add someone</div>
+          <form onSubmit={handleAddPerson} style={{ ...glass.card, borderRadius: 24, padding: 16, marginBottom: 20 }}>
+            <div style={{ ...display(17), marginBottom: 12 }}>Add someone</div>
             <input
               type="email"
               placeholder="email@example.com"
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
-              style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: `1px solid ${theme.borderSoft2}`, marginBottom: 10, fontSize: 15, boxSizing: "border-box" }}
+              style={{ ...fieldStyle(), fontSize: 14, marginBottom: 10 }}
             />
             <select
               value={newRole}
               onChange={(e) => setNewRole(e.target.value)}
-              style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: `1px solid ${theme.borderSoft2}`, marginBottom: 10, fontSize: 15, boxSizing: "border-box" }}
+              style={{ ...fieldStyle(), fontSize: 13.5, marginBottom: 12, cursor: "pointer" }}
             >
               <option value="household">Household (shares our budget automatically)</option>
               <option value="guardian">Guardian (own budget by default, approvable)</option>
@@ -181,94 +210,115 @@ export default function AccessScreen({ db, currentRole, onClose }) {
             <button
               type="submit"
               disabled={saving}
-              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", padding: "10px 12px", borderRadius: 10, border: "none", background: theme.accentPlum, color: theme.cardBg, fontSize: 15, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}
+              style={{
+                ...accentButtonStyle(!saving), display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+                width: "100%", padding: "12px 14px", borderRadius: 15, fontSize: 14, fontWeight: 600,
+              }}
             >
               <UserPlus size={16} /> {saving ? "Adding…" : "Add person"}
             </button>
           </form>
         )}
 
-        <div style={{ fontWeight: 600, color: theme.textPrimary, marginBottom: 10, fontSize: 15 }}>People with access</div>
-        {people.map((person) => (
-          <div key={person.id} style={{ background: theme.cardBg, borderRadius: 14, padding: 16, marginBottom: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-              <div>
-                <div style={{ fontWeight: 600, color: theme.textPrimary, fontSize: 15 }}>{person.email}</div>
-                {canManageAccess && person.role !== "owner" ? (
-                  <select
-                    value={person.role}
-                    onChange={(e) => handleChangeRole(person, e.target.value)}
-                    style={{ fontSize: 13, color: theme.textMuted, border: `1px solid ${theme.borderSoft2}`, borderRadius: 6, padding: "2px 6px", marginTop: 2 }}
-                  >
-                    <option value="household">Household</option>
-                    <option value="guardian">Guardian</option>
-                    <option value="assistant">Assistant</option>
-                  </select>
-                ) : (
-                  <div style={{ fontSize: 13, color: theme.textMuted }}>{ROLE_LABELS[person.role] || person.role}</div>
+        <div style={{
+          fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase",
+          color: theme.textFainter, marginBottom: 10,
+        }}>
+          People with access
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+          {people.map((person) => (
+            <div key={person.id} style={{ ...glass.card, borderRadius: 22, padding: 16 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14.5, fontWeight: 600, color: theme.textPrimary, overflowWrap: "anywhere" }}>{person.email}</div>
+                  {canManageAccess && person.role !== "owner" ? (
+                    <select
+                      value={person.role}
+                      onChange={(e) => handleChangeRole(person, e.target.value)}
+                      style={{
+                        marginTop: 6, padding: "5px 10px", borderRadius: 10, fontSize: 12.5, cursor: "pointer",
+                        color: theme.textMuted, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
+                      }}
+                    >
+                      <option value="household">Household</option>
+                      <option value="guardian">Guardian</option>
+                      <option value="assistant">Assistant</option>
+                    </select>
+                  ) : (
+                    <div style={{ fontSize: 12.5, color: theme.textMuted, marginTop: 4 }}>{ROLE_LABELS[person.role] || person.role}</div>
+                  )}
+                </div>
+                {person.role === "owner" ? (
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0,
+                    fontSize: 11, fontWeight: 500, padding: "4px 11px", borderRadius: 999,
+                    color: theme.accentPlum, background: theme.accentSoft,
+                    border: `1px solid ${mix(theme.accentPlum, 34)}`,
+                  }}>
+                    <Shield size={11} /> Owner
+                  </span>
+                ) : canManageAccess && (
+                  <IconAction onClick={() => handleRemovePerson(person)} title="Remove access" hoverColor={theme.accentRed}>
+                    <Trash2 size={16} />
+                  </IconAction>
                 )}
               </div>
-              {canManageAccess && person.role !== "owner" && (
-                <button onClick={() => handleRemovePerson(person)} style={{ background: "none", border: "none", cursor: "pointer", padding: 6 }}>
-                  <Trash2 size={18} color={theme.oldOrangeText} />
+
+              {person.role === "household" && (
+                <div style={{ fontSize: 12.5, color: theme.greenDot }}>Shares the budget automatically</div>
+              )}
+
+              {person.role === "guardian" && canManageBudget && (
+                <button onClick={() => handleToggleBudget(person)} style={rolePill(person.budgetShared)}>
+                  Shared budget: {person.budgetShared ? "Approved" : "Not approved"}
                 </button>
               )}
+
+              {person.role === "assistant" && (
+                <div style={{ fontSize: 12.5, color: theme.textMuted }}>No budget access</div>
+              )}
+
+              {isOwner && person.role === "assistant" && (
+                <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginTop: 10 }}>
+                  <button onClick={() => handleToggleSharedWork(person)} style={rolePill(person.sharedWorkAccess)}>
+                    Shared Work + Projects: {person.sharedWorkAccess ? "On" : "Off"}
+                  </button>
+                  {person.sharedWorkAccess && (
+                    <select
+                      value={person.sharedWorkCategoryId || ""}
+                      onChange={(e) => handleSetSharedWorkCategory(person, e.target.value || null)}
+                      style={{
+                        padding: "7px 11px", borderRadius: 11, fontSize: 12.5, cursor: "pointer",
+                        color: theme.textMuted, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
+                      }}
+                    >
+                      <option value="">All Work + Projects items</option>
+                      {ownerCategories.map((c) => (
+                        <option key={c.id} value={c.id}>Only "{c.name}"</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
             </div>
-
-            {person.role === "household" && (
-              <div style={{ fontSize: 13, color: theme.greenDot, fontWeight: 600 }}>Shares our budget automatically</div>
-            )}
-
-            {person.role === "guardian" && canManageBudget && (
-              <button
-                onClick={() => handleToggleBudget(person)}
-                style={{
-                  padding: "6px 12px", borderRadius: 20,
-                  border: person.budgetShared ? `1px solid ${theme.accentPlum}` : `1px solid ${theme.borderSoft2}`,
-                  background: person.budgetShared ? theme.oldPlumBg : theme.gradB,
-                  color: person.budgetShared ? theme.accentPlum : theme.textMuted,
-                  fontSize: 13, fontWeight: 600, cursor: "pointer", marginTop: 4,
-                }}
-              >
-                Shared budget: {person.budgetShared ? "Approved" : "Not approved"}
-              </button>
-            )}
-
-            {person.role === "assistant" && (
-              <div style={{ fontSize: 13, color: theme.textMuted }}>No budget access</div>
-            )}
-
-            {isOwner && person.role === "assistant" && (
-              <div style={{ marginTop: 10 }}>
-                <button
-                  onClick={() => handleToggleSharedWork(person)}
-                  style={{
-                    padding: "6px 12px", borderRadius: 20,
-                    border: person.sharedWorkAccess ? `1px solid ${theme.accentPlum}` : `1px solid ${theme.borderSoft2}`,
-                    background: person.sharedWorkAccess ? theme.oldPlumBg : theme.gradB,
-                    color: person.sharedWorkAccess ? theme.accentPlum : theme.textMuted,
-                    fontSize: 13, fontWeight: 600, cursor: "pointer",
-                  }}
-                >
-                  Shared Work + Workbench: {person.sharedWorkAccess ? "On" : "Off"}
-                </button>
-                {person.sharedWorkAccess && (
-                  <select
-                    value={person.sharedWorkCategoryId || ""}
-                    onChange={(e) => handleSetSharedWorkCategory(person, e.target.value || null)}
-                    style={{ marginLeft: 8, fontSize: 13, color: theme.textMuted, border: `1px solid ${theme.borderSoft2}`, borderRadius: 8, padding: "5px 8px" }}
-                  >
-                    <option value="">All Work + Workbench items</option>
-                    {ownerCategories.map((c) => (
-                      <option key={c.id} value={c.id}>Only "{c.name}"</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+          ))}
+        </div>
+        </div>
       </div>
     </div>
   );
+}
+
+// Role-scoped toggles read as pills: accent when the permission is granted.
+function rolePill(on) {
+  return {
+    display: "inline-flex", alignItems: "center", gap: 6, marginTop: 4,
+    padding: "7px 13px", borderRadius: 999, fontSize: 12.5, fontWeight: 500, cursor: "pointer",
+    color: on ? theme.accentPlum : theme.textMuted,
+    background: on ? theme.accentSoft : theme.inputBg,
+    border: `1px solid ${on ? theme.accentPlum : theme.glassBorder2}`,
+    transition: `all .25s ${SPRING}`,
+  };
 }

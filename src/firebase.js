@@ -1,3 +1,4 @@
+if (import.meta.env.DEV) self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";

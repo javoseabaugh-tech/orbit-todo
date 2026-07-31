@@ -180,12 +180,16 @@ export async function registerBudgetGate() {
   localStorage.removeItem(BUDGET_GATE_DECLINED_KEY);
   return true;
 }
-export async function verifyBudgetGate() {
+// `signal` lets the caller abandon a request that never settles — WebKit can
+// leave credentials.get() pending indefinitely (rather than rejecting) when the
+// call happens outside transient user activation, so callers need an escape.
+export async function verifyBudgetGate(signal) {
   const credIdB64 = localStorage.getItem(BUDGET_GATE_KEY);
   if (!credIdB64) return false;
   const challenge = crypto.getRandomValues(new Uint8Array(32));
   try {
     const assertion = await navigator.credentials.get({
+      signal,
       publicKey: {
         challenge,
         allowCredentials: [{ id: b64ToBuf(credIdB64), type: "public-key" }],

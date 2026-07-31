@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from "react";
-import { theme } from "./theme";
+import { theme, glass, SPRING, EASE_OUT } from "./theme";
+import { MONO, display, mix, accentButtonStyle, IconAction, GlassBackdrop } from "./ui";
 import {
   Plus,
   Trash2,
   Check,
   PiggyBank,
   Wallet,
-  Loader2,
   AlertCircle,
   PartyPopper,
   ArrowLeft,
@@ -471,656 +471,355 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
 
   if (!loaded) {
     return (
-      <div className="app-shell flex items-center justify-center min-h-screen">
-        <Loader2 className="animate-spin" size={28} color={theme.accentPlum} />
+      <div style={{ position: "relative", minHeight: "100vh", fontFamily: "'Geist', system-ui, sans-serif" }}>
+        <GlassBackdrop />
+        <div style={{ position: "relative", zIndex: 1, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{
+            width: 22, height: 22, borderRadius: "50%",
+            border: `2px solid ${theme.accentSoft}`, borderTopColor: theme.accentPlum,
+            animation: "spin .8s linear infinite",
+          }} />
+        </div>
       </div>
     );
   }
 
   const periodLabel = period === "15" ? "the 15th" : "the 30th";
 
+  // Segmented control: accent-filled when active, transparent when not.
+  const segStyle = (on) => ({
+    display: "flex", alignItems: "center", justifyContent: "center", gap: 6, flex: 1,
+    padding: "9px 16px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer",
+    border: "none",
+    color: on ? theme.accentInk : theme.textMuted,
+    background: on ? `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})` : "transparent",
+    boxShadow: on ? `0 8px 20px -10px ${theme.accentPlum}` : "none",
+    transition: `all .35s ${SPRING}`,
+  });
+
+  const fieldSm = {
+    padding: "7px 11px", borderRadius: 11, fontSize: 12.5,
+    color: theme.textSecondary, background: theme.inputBg,
+    border: `1px solid ${theme.glassBorder2}`, cursor: "pointer",
+  };
+  const moneyInput = {
+    padding: "7px 11px", borderRadius: 11, fontFamily: MONO, fontSize: 13, textAlign: "right",
+    color: theme.textPrimary, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
+  };
+  const vaultInput = {
+    width: "100%", padding: "11px 13px", borderRadius: 14, fontSize: 14,
+    color: theme.textPrimary, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
+  };
+
   return (
-    <div className="app-shell min-h-screen w-full">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');
+    <div
+      className="orbit-shell"
+      style={{
+        position: "relative", overflow: "hidden", display: "flex", flexDirection: "column",
+        color: theme.textPrimary, fontFamily: "'Geist', system-ui, sans-serif",
+      }}
+    >
+      <GlassBackdrop />
 
-        .app-shell {
-          background:
-            radial-gradient(1100px 550px at 8% -10%, rgba(125,85,104,0.10), transparent 60%),
-            radial-gradient(900px 480px at 105% 5%, rgba(201,154,62,0.10), transparent 55%),
-            ${theme.gradA};
-          font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
-          color: ${theme.textPrimary};
-          height: 100vh;
-          height: 100dvh;
-          display: flex;
-          flex-direction: column;
-          overflow: hidden;
-        }
-        .fixed-zone {
-          flex-shrink: 0;
-          border-bottom: 1px solid ${theme.borderSoft};
-          box-shadow: 0 6px 16px -12px rgba(0,0,0,0.15);
-          background: linear-gradient(180deg, ${theme.cardBg}, ${theme.gradB});
-          position: relative;
-          z-index: 10;
-        }
-        .scroll-zone {
-          flex: 1 1 auto;
-          overflow-y: auto;
-          -webkit-overflow-scrolling: touch;
-        }
-        .font-display { font-family: 'Fraunces', Georgia, serif; }
-        .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+      <div style={{
+        position: "relative", zIndex: 1, width: "100%", maxWidth: 720, margin: "0 auto",
+        flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
+        padding: "24px 20px 0", animation: `screenIn .45s ${EASE_OUT}`,
+      }}>
+        {onBack && (
+          <button
+            onClick={onBack}
+            style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 5, marginBottom: 20, fontSize: 13.5, color: theme.textMuted, background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
+          >
+            <ArrowLeft size={16} />
+            Back to Orbit
+          </button>
+        )}
 
-        .header-band {
-          background: transparent;
-        }
-        .ledger-glow { background: linear-gradient(90deg, ${theme.accentPlum}, ${theme.goldDot}); }
-
-        .card {
-          background: ${theme.cardBg};
-          border: 1px solid ${theme.borderSoft};
-          border-radius: 18px;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 16px 32px -24px rgba(0,0,0,0.12);
-        }
-
-        .account-card {
-          position: relative;
-          overflow: hidden;
-          border-radius: 16px;
-          padding: 0.75rem 0.85rem;
-          border: 1px solid ${theme.borderSoft};
-          background: ${theme.cardBg};
-          box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 16px 32px -24px rgba(0,0,0,0.12);
-          min-width: 0;
-        }
-        .account-card.acc-a1 { background: linear-gradient(135deg, rgba(125,85,104,0.12), ${theme.cardBg} 65%); }
-        .account-card.acc-a2 { background: linear-gradient(135deg, rgba(201,154,62,0.12), ${theme.cardBg} 65%); }
-        .account-card::after {
-          content: '';
-          position: absolute;
-          right: -30px; top: -30px;
-          width: 140px; height: 140px;
-          border-radius: 999px;
-          background: radial-gradient(circle, ${theme.borderSoft}, transparent 70%);
-          pointer-events: none;
-        }
-        .main-tab-toggle {
-          display: inline-flex;
-          padding: 4px;
-          border-radius: 999px;
-          background: ${theme.cardBg};
-          border: 1px solid ${theme.borderSoft};
-        }
-        .main-tab-pill {
-          display: flex;
-          align-items: center;
-          gap: 0.35rem;
-          padding: 0.45rem 0.95rem;
-          border-radius: 999px;
-          font-family: 'Fraunces', Georgia, serif;
-          font-weight: 600;
-          font-size: 0.82rem;
-          color: ${theme.budgetMuted};
-          transition: all 0.15s ease;
-          cursor: pointer;
-          border: none;
-          background: transparent;
-        }
-        .main-tab-pill.active {
-          background: ${theme.textPrimary};
-          color: ${theme.cardBg};
-        }
-
-        .period-toggle {
-          display: inline-flex;
-          padding: 4px;
-          border-radius: 999px;
-          background: ${theme.cardBg};
-          border: 1px solid ${theme.borderSoft};
-        }
-        .period-pill {
-          padding: 0.5rem 1.1rem;
-          border-radius: 999px;
-          font-family: 'Fraunces', Georgia, serif;
-          font-weight: 600;
-          font-size: 0.9rem;
-          color: ${theme.budgetMuted};
-          transition: all 0.15s ease;
-          cursor: pointer;
-          border: none;
-          background: transparent;
-        }
-        .period-pill.active {
-          background: linear-gradient(90deg, ${theme.accentPlum}, ${theme.goldDot});
-          color: ${theme.prefersDark ? theme.textPrimary : theme.cardBg};
-        }
-
-        .bank-chip {
-          font-family: 'Fraunces', Georgia, serif;
-          font-weight: 600;
-          font-size: 0.78rem;
-          padding: 0.35rem 0.7rem;
-          border-radius: 10px;
-          border: 1px solid ${theme.borderSoft};
-          cursor: pointer;
-          transition: all 0.15s ease;
-          white-space: nowrap;
-          background: ${theme.cardBg};
-        }
-        .bank-chip.chip-a1.selected { background: rgba(125,85,104,0.12); border-color: ${theme.accentPlum}; color: ${theme.accentPlum}; }
-        .bank-chip.chip-a2.selected { background: rgba(201,154,62,0.12); border-color: ${theme.goldDot}; color: ${theme.goldDot}; }
-        .bank-chip:not(.selected) { color: ${theme.budgetBorder}; }
-
-        .bill-row {
-          border: 1px solid ${theme.borderSoft};
-          border-radius: 14px;
-          background: ${theme.softBg3};
-          transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.2s ease;
-        }
-        .bill-row:hover { border-color: ${theme.border}; }
-
-        .row-scheduled {
-          background: ${theme.paleYellowBg2};
-          border-color: ${theme.goldLight};
-        }
-
-        .row-resolved {
-          background: ${theme.softBg4};
-          opacity: 0.78;
-        }
-
-        .status-select {
-          font-family: 'Fraunces', Georgia, serif;
-          font-weight: 600;
-          font-size: 0.78rem;
-          padding: 0.4rem 0.5rem;
-          border-radius: 10px;
-          border: 1px solid ${theme.borderSoft2};
-          background: ${theme.cardBg};
-          color: ${theme.textPrimary};
-          flex-shrink: 0;
-        }
-        .status-select:focus {
-          outline: none;
-          border-color: ${theme.accentPlum};
-          box-shadow: 0 0 0 3px rgba(125,85,104,0.14);
-        }
-        .status-select.select-scheduled { border-color: ${theme.goldDark}; color: ${theme.goldText}; background: ${theme.paleYellowBg}; }
-        .status-select.select-paid { border-color: ${theme.accentPlum}; color: ${theme.accentPlum}; background: ${theme.softBg2}; }
-        .status-select.select-skip { border-color: ${theme.budgetBorder}; color: ${theme.budgetMuted}; background: ${theme.softBg4}; }
-
-        input[type="text"], input[type="number"], select {
-          background: ${theme.cardBg};
-          border: 1px solid ${theme.borderSoft2};
-          border-radius: 10px;
-          color: ${theme.textPrimary};
-          font-family: 'Inter', sans-serif;
-        }
-        input[type="text"]:focus, input[type="number"]:focus, select:focus {
-          outline: none;
-          border-color: ${theme.accentPlum};
-          box-shadow: 0 0 0 3px rgba(125,85,104,0.14);
-        }
-
-        .add-btn {
-          background: linear-gradient(90deg, ${theme.accentPlum}, ${theme.goldDot});
-          color: ${theme.prefersDark ? theme.textPrimary : theme.cardBg};
-          font-family: 'Fraunces', Georgia, serif;
-          font-weight: 700;
-        }
-        .add-btn:hover { filter: brightness(1.06); }
-        .add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-        .celebrate-card {
-          background: linear-gradient(135deg, rgba(125,85,104,0.10), rgba(201,154,62,0.10));
-          border: 1px solid ${theme.accentPlum}40;
-          border-radius: 18px;
-        }
-
-        .tag {
-          font-size: 0.68rem;
-          font-weight: 600;
-          padding: 0.15rem 0.5rem;
-          border-radius: 999px;
-          flex-shrink: 0;
-        }
-        .tag-paid { background: rgba(125,85,104,0.14); color: ${theme.accentPlum}; }
-        .tag-skip { background: rgba(100,116,139,0.14); color: ${theme.budgetMuted}; }
-
-        .unhide-btn {
-          font-family: 'Fraunces', Georgia, serif;
-          font-weight: 600;
-          font-size: 0.78rem;
-          color: ${theme.goldDot};
-          background: transparent;
-          border: none;
-          cursor: pointer;
-          text-decoration: underline;
-          text-underline-offset: 2px;
-        }
-
-        .login-row {
-          border: 1px solid ${theme.borderSoft};
-          border-radius: 14px;
-          background: ${theme.softBg3};
-          padding: 0.9rem 0.95rem;
-          display: flex;
-          flex-direction: column;
-          gap: 0.6rem;
-        }
-        .login-row-head {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-        .login-site-link {
-          display: flex;
-          align-items: center;
-          gap: 0.4rem;
-          font-family: 'Fraunces', Georgia, serif;
-          font-weight: 600;
-          font-size: 0.92rem;
-          color: ${theme.goldDot};
-          text-decoration: none;
-          min-width: 0;
-        }
-        .login-site-link:hover { text-decoration: underline; }
-        .login-site-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .login-field-row {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          background: ${theme.cardBg};
-          border: 1px solid ${theme.borderSoft};
-          border-radius: 10px;
-          padding: 0.4rem 0.5rem 0.4rem 0.7rem;
-        }
-        .login-field-label {
-          font-size: 0.68rem;
-          font-weight: 600;
-          color: ${theme.budgetBorder};
-          width: 62px;
-          flex-shrink: 0;
-        }
-        .login-field-value {
-          flex: 1;
-          min-width: 0;
-          font-family: 'JetBrains Mono', ui-monospace, monospace;
-          font-size: 0.82rem;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          color: ${theme.textPrimary};
-        }
-        .icon-btn {
-          flex-shrink: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 26px;
-          height: 26px;
-          border-radius: 8px;
-          border: none;
-          background: transparent;
-          color: ${theme.budgetMuted};
-          cursor: pointer;
-          transition: background 0.15s ease, color 0.15s ease;
-        }
-        .icon-btn:hover { background: rgba(201,154,62,0.1); color: ${theme.goldDot}; }
-        .icon-btn.copied { color: ${theme.accentPlum}; }
-
-        .name-select {
-          background: ${theme.cardBg};
-          border: 1px solid ${theme.borderSoft2};
-          border-radius: 10px;
-          color: ${theme.textPrimary};
-          font-family: 'Inter', sans-serif;
-        }
-        .name-select:focus {
-          outline: none;
-          border-color: ${theme.accentPlum};
-          box-shadow: 0 0 0 3px rgba(125,85,104,0.14);
-        }
-      `}</style>
-
-      <div className="fixed-zone">
-        <div className="header-band px-5 sm:px-8 pt-5 pb-2">
-          {onBack && (
-            <button
-              onClick={onBack}
-              style={{
-                display: "flex", alignItems: "center", gap: 4, border: "none", background: "transparent",
-                color: theme.textMuted, fontSize: 12, fontWeight: 700, padding: 0, marginBottom: 10, cursor: "pointer",
-              }}
-            >
-              <ArrowLeft size={14} />
-              Back to Orbit
-            </button>
-          )}
-          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">
-            {title}
-          </h1>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="h-1.5 w-1.5 rounded-full ledger-glow" style={{ display: "inline-block" }} />
-            <p className="text-sm sm:text-base" style={{ color: theme.textMuted }}>
-              Biweekly Budget
-            </p>
+        <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
+          <span style={{
+            width: 40, height: 40, borderRadius: 14, flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: theme.accentInk,
+            background: `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})`,
+            boxShadow: `0 10px 26px -10px ${theme.accentPlum}`,
+          }}>
+            <Wallet size={19} />
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ ...display(30, "-.03em"), margin: 0, lineHeight: 1 }}>{title}</h1>
+            <p style={{ margin: "5px 0 0", fontSize: 13.5, color: theme.textMuted }}>Biweekly budget</p>
           </div>
         </div>
 
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-3 pb-4 flex flex-col gap-3">
-          <div className="flex justify-center">
-            <div className="main-tab-toggle">
-              <button className={`main-tab-pill ${view === "budget" ? "active" : ""}`} onClick={() => setView("budget")}>
-                <Receipt size={14} />
-                Budget
-              </button>
-              <button className={`main-tab-pill ${view === "logins" ? "active" : ""}`} onClick={() => setView("logins")}>
-                <KeyRound size={14} />
-                Logins
-              </button>
+        <div style={{
+          ...glass.card, flexShrink: 0, display: "flex", gap: 4, padding: 5, borderRadius: 999, marginBottom: 16,
+        }}>
+          <button style={segStyle(view === "budget")} onClick={() => setView("budget")}>
+            <Receipt size={14} />
+            Budget
+          </button>
+          <button style={segStyle(view === "logins")} onClick={() => setView("logins")}>
+            <KeyRound size={14} />
+            Logins
+          </button>
+        </div>
+
+        {/* Everything below the Budget/Logins switch is the only scroller. */}
+        <div className="orbit-scroll" style={{ flex: 1, minHeight: 0, paddingBottom: 90 }}>
+
+        {view === "budget" && (
+          <>
+            <div style={{ display: "flex", gap: 4, padding: 5, borderRadius: 999, marginBottom: 18, maxWidth: 280, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}` }}>
+              <button style={segStyle(period === "15")} onClick={() => setPeriod("15")}>15th</button>
+              <button style={segStyle(period === "30")} onClick={() => setPeriod("30")}>30th</button>
             </div>
-          </div>
 
-          {view === "budget" && (
-            <>
-          <div className="flex justify-center">
-            <div className="period-toggle">
-              <button className={`period-pill ${period === "15" ? "active" : ""}`} onClick={() => setPeriod("15")}>
-                15th
-              </button>
-              <button className={`period-pill ${period === "30" ? "active" : ""}`} onClick={() => setPeriod("30")}>
-                30th
-              </button>
-            </div>
-          </div>
-
-          {showAccounts && (
-          <div className="grid grid-cols-2 gap-2 sm:gap-3">
-            {state.accounts.map((acc) => {
-              const spent = accountTotal(acc.id);
-              const balanceRaw = acc.balances?.[period];
-              const balance = balanceRaw === "" || balanceRaw === undefined ? 0 : Number(balanceRaw);
-              const remaining = balance - spent;
-              const isNegative = remaining < 0;
-              return (
-                <div key={acc.id} className={`account-card acc-${acc.id}`}>
-                  <div className="flex items-start justify-between gap-1">
-                    {editingAccountId === acc.id ? (
-                      <input
-                        type="text"
-                        autoFocus
-                        value={acc.name}
-                        onChange={(e) => updateAccountName(acc.id, e.target.value)}
-                        onBlur={() => setEditingAccountId(null)}
-                        onKeyDown={(e) => e.key === "Enter" && setEditingAccountId(null)}
-                        className="text-xs px-1.5 py-1 font-display font-semibold"
-                        style={{ maxWidth: "68%" }}
-                      />
-                    ) : (
-                      <button
-                        className="font-display font-semibold text-xs sm:text-sm text-left truncate"
-                        onClick={() => setEditingAccountId(acc.id)}
-                        style={{ color: theme.textPrimary }}
-                        title="Tap to rename"
-                      >
-                        {acc.name}
-                      </button>
-                    )}
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                      <Wallet size={14} color={acc.id === "a1" ? theme.accentPlum : theme.goldDot} />
-                      <button onClick={() => deleteAccount(acc.id)} title="Delete account" style={{ display: "flex" }}>
-                        <Trash2 size={13} color={theme.budgetMuted} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mt-2">
-                    <label className="text-xs" style={{ color: theme.budgetMuted }}>
-                      Available {periodLabel}
-                    </label>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      value={balanceRaw === undefined ? "" : balanceRaw}
-                      onChange={(e) => updateAccountBalance(acc.id, e.target.value)}
-                      placeholder="0.00"
-                      className="w-full mt-1 px-2 py-1.5 text-sm sm:text-base font-mono font-semibold"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between mt-2 text-xs">
-                    <span style={{ color: theme.textMuted }}>Assigned</span>
-                    <span className="font-mono">{money(spent)}</span>
-                  </div>
-                  <div className="flex items-center justify-between mt-1 pt-1.5 text-xs" style={{ borderTop: `1px solid ${theme.borderSoft}` }}>
-                    <span style={{ color: theme.textMuted }}>Left</span>
-                    <span className="font-mono font-semibold" style={{ color: isNegative ? theme.accentRed : theme.greenDot }}>
-                      {money(remaining)}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-            {state.accounts.length < 3 && (
-              <button
-                onClick={addAccount}
-                className="account-card"
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  border: `1px dashed ${theme.budgetBorder}`, color: theme.budgetMuted,
-                  fontSize: 13, fontWeight: 600, cursor: "pointer", minHeight: 100,
-                }}
-              >
-                + Add account
-              </button>
-            )}
-          </div>
-          )}
-          <button
-            onClick={() => setShowAccounts((v) => !v)}
-            title={showAccounts ? "Minimize accounts" : "Expand accounts"}
-            style={{
-              position: "fixed", bottom: 90, right: 24, minWidth: 52, height: 52, borderRadius: 26, padding: "0 14px",
-              background: theme.accentPlum, color: theme.prefersDark ? theme.gradA : "#fff",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              boxShadow: "0 4px 12px rgba(0,0,0,0.25)", cursor: "pointer", zIndex: 40, fontSize: 16, fontWeight: 700,
-            }}
-          >
-            {showAccounts ? (
-              "−"
-            ) : state.accounts.length > 0 ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                {state.accounts.map((acc, idx) => {
+            {showAccounts && (
+              <div style={{ display: "flex", gap: 11, flexWrap: "wrap", marginBottom: 20 }}>
+                {state.accounts.map((acc) => {
                   const spent = accountTotal(acc.id);
                   const balanceRaw = acc.balances?.[period];
                   const balance = balanceRaw === "" || balanceRaw === undefined ? 0 : Number(balanceRaw);
                   const remaining = balance - spent;
                   return (
-                    <div key={acc.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      {idx > 0 && <div style={{ width: 1, height: 24, background: theme.prefersDark ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.25)" }} />}
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.1 }}>
-                        <div style={{ fontSize: "0.55rem", opacity: 0.8, fontWeight: 600, textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "56px" }}>
-                          {acc.name}
-                        </div>
-                        <div style={{ fontSize: "0.85rem", whiteSpace: "nowrap" }}>
+                    <div key={acc.id} style={{ ...glass.card, flex: "1 1 180px", minWidth: 0, padding: 15, borderRadius: 22 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 11 }}>
+                        <Landmark size={15} color={theme.accentPlum} style={{ flexShrink: 0 }} />
+                        <input
+                          type="text"
+                          value={acc.name}
+                          onChange={(e) => updateAccountName(acc.id, e.target.value)}
+                          onFocus={() => setEditingAccountId(acc.id)}
+                          onBlur={() => setEditingAccountId(null)}
+                          title="Tap to rename"
+                          style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: theme.textPrimary, background: "transparent", border: "none", padding: 0 }}
+                        />
+                        <IconAction onClick={() => deleteAccount(acc.id)} title="Delete account" hoverColor={theme.accentRed} size={3}>
+                          <Trash2 size={14} />
+                        </IconAction>
+                      </div>
+
+                      <label style={{ display: "block", fontSize: 11, color: theme.textFainter, marginBottom: 5 }}>
+                        Available {periodLabel}
+                      </label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={balanceRaw === undefined ? "" : balanceRaw}
+                        onChange={(e) => updateAccountBalance(acc.id, e.target.value)}
+                        placeholder="0.00"
+                        style={{
+                          width: "100%", padding: "8px 11px", borderRadius: 12, marginBottom: 11,
+                          fontFamily: MONO, fontSize: 15, fontWeight: 600,
+                          color: theme.textPrimary, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
+                        }}
+                      />
+
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: theme.textMuted }}>
+                        <span>Assigned</span>
+                        <span style={{ fontFamily: MONO }}>{money(spent)}</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 7, paddingTop: 7, borderTop: `1px solid ${theme.glassBorder2}`, fontSize: 12, color: theme.textMuted }}>
+                        <span>Left</span>
+                        <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 600, color: remaining < 0 ? theme.accentRed : theme.greenDot }}>
                           {money(remaining)}
-                        </div>
+                        </span>
                       </div>
                     </div>
                   );
                 })}
-              </div>
-            ) : (
-              <Landmark size={22} />
-            )}
-          </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="scroll-zone">
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
-        {view === "budget" && (
-          <>
-        {allDone && (
-          <div className="celebrate-card p-4 sm:p-5 flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3">
-              <PartyPopper size={22} color={theme.accentPlum} />
-              <div>
-                <p className="font-display font-semibold text-sm sm:text-base">
-                  Every bill for {periodLabel} is handled
-                </p>
-                <p className="text-xs" style={{ color: theme.textMuted }}>
-                  {paidThisPeriod.length} paid · {skippedThisPeriod.length} no payment needed · {money(paidThisPeriod.reduce((s, b) => s + (Number(b.amount) || 0), 0))} total paid
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="card p-4 sm:p-5">
-          <div className="flex items-start justify-between mb-3 gap-2 flex-wrap">
-            <h2 className="font-display font-semibold text-base flex items-center gap-2">
-              <PiggyBank size={18} color={theme.accentPlum} />
-              Bills due the {period}th
-            </h2>
-            <div className="flex items-center gap-3 flex-wrap justify-end">
-              <button className="unhide-btn" onClick={resetAllToUnpaid} title="Reset every bill on both pay periods to Unpaid">
-                <RotateCcw size={12} style={{ display: "inline", marginRight: 3, marginBottom: -1 }} />
-                Reset all to unpaid
-              </button>
-              {!revealAll && resolvedCount > 0 && (
-                <button className="unhide-btn" onClick={unhideAll}>
-                  Unhide {resolvedCount} hidden
-                </button>
-              )}
-              <span className="text-xs font-mono" style={{ color: theme.budgetBorder }}>
-                {unresolved.length} open
-              </span>
-            </div>
-          </div>
-
-          {visibleBills.length === 0 && (
-            <p className="text-sm py-6 text-center" style={{ color: theme.budgetBorder }}>
-              No bills here yet. Add one below to start allocating this pay period.
-            </p>
-          )}
-
-          <div className="grid grid-cols-2 gap-2">
-            {visibleBills.map((bill) => {
-              const rowClass =
-                bill.status === "scheduled"
-                  ? "row-scheduled"
-                  : bill.status === "paid" || bill.status === "skip"
-                  ? "row-resolved"
-                  : "";
-              const resolved = bill.status === "paid" || bill.status === "skip";
-              const loginUrl = billLoginUrl(bill.name);
-              return (
-                <div key={bill.id} className={`bill-row ${rowClass} px-3 py-3 flex flex-col gap-2.5`}>
-                  <select
-                    value={bill.name}
-                    onChange={(e) => updateBill(bill.id, { name: e.target.value })}
-                    className="name-select w-full px-2 py-2 text-sm font-medium"
-                    style={resolved ? { textDecoration: "line-through", color: theme.textMuted } : undefined}
+                {state.accounts.length < 3 && (
+                  <button
+                    onClick={addAccount}
+                    style={{
+                      flex: "1 1 180px", minWidth: 0, minHeight: 120, padding: 15, borderRadius: 22,
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+                      fontSize: 13, fontWeight: 500, cursor: "pointer",
+                      color: theme.textFainter, background: theme.inputBg,
+                      border: `1px dashed ${theme.glassBorder2}`,
+                    }}
                   >
-                    {!sortedLoginNames.includes(bill.name) && bill.name && (
-                      <option value={bill.name}>{bill.name} (no login saved)</option>
-                    )}
-                    {sortedLoginNames.length === 0 && !bill.name && (
-                      <option value="">Add a login first</option>
-                    )}
-                    {sortedLoginNames.map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="flex items-center gap-2">
-                    {loginUrl && (
-                      <>
-                        <a
-                          href={loginUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="icon-btn flex-shrink-0"
-                          title={`Open ${bill.name} in your default browser`}
-                        >
-                          <ExternalLink size={16} />
-                        </a>
-                        <button
-                          onClick={() => copyToClipboard(loginUrl, `${bill.id}-link`)}
-                          className={`icon-btn flex-shrink-0 ${copiedFlag === `${bill.id}-link` ? "copied" : ""}`}
-                          title="Copy link"
-                        >
-                          {copiedFlag === `${bill.id}-link` ? <Check size={14} /> : <Copy size={14} />}
-                        </button>
-                      </>
-                    )}
-                    <button onClick={() => deleteBill(bill.id)} className="flex-shrink-0" style={{ color: theme.budgetBorder, marginLeft: "auto" }} title="Delete bill">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+                    <Plus size={15} />
+                    Add account
+                  </button>
+                )}
+              </div>
+            )}
 
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <select
-                      value={bill.status}
-                      onChange={(e) => setStatus(bill, e.target.value)}
-                      className={`status-select ${bill.status === "scheduled" ? "select-scheduled" : ""} ${bill.status === "paid" ? "select-paid" : ""} ${bill.status === "skip" ? "select-skip" : ""}`}
-                    >
-                      <option value="unpaid">Unpaid</option>
-                      <option value="scheduled">Scheduled</option>
-                      <option value="skip">No payment needed</option>
-                      <option value="paid">Payment complete</option>
-                    </select>
-
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      value={bill.amount}
-                      onChange={(e) => updateBill(bill.id, { amount: parseFloat(e.target.value) || 0 })}
-                      className="w-24 px-2 py-2 text-sm font-mono text-right"
-                    />
-
-                    <select
-                      value={bill.bankId || ""}
-                      onChange={(e) => updateBill(bill.id, { bankId: e.target.value })}
-                      disabled={state.accounts.length === 0}
-                      className="flex-shrink-0 ml-auto px-2 py-1.5 text-xs"
-                      style={state.accounts.length === 0 ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
-                    >
-                      {state.accounts.length === 0 ? (
-                        <option value="">No account</option>
-                      ) : (
-                        state.accounts.map((acc) => (
-                          <option key={acc.id} value={acc.id}>{acc.name}</option>
-                        ))
-                     )}
-                    </select>
+            {allDone && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 13, padding: 16, borderRadius: 22, marginBottom: 18,
+                background: `linear-gradient(140deg, ${theme.accentSoft}, ${theme.glassFill})`,
+                border: `1px solid ${theme.accentPlum}`,
+                boxShadow: `inset 0 1px 0 ${theme.glassSpec}`,
+                animation: `popIn .4s ${SPRING}`,
+              }}>
+                <PartyPopper size={22} color={theme.accentPlum} style={{ flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 14.5, fontWeight: 600 }}>Every bill for {periodLabel} is handled</div>
+                  <div style={{ fontFamily: MONO, fontSize: 12, color: theme.textMuted, marginTop: 3 }}>
+                    {paidThisPeriod.length} paid · {skippedThisPeriod.length} no payment needed · {money(paidThisPeriod.reduce((s, b) => s + (Number(b.amount) || 0), 0))} total paid
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            )}
 
-          <div className="mt-4 pt-4" style={{ borderTop: `1px solid ${theme.borderSoft}` }}>
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 13 }}>
+              <h2 style={{ ...display(17), margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                <PiggyBank size={17} color={theme.accentPlum} />
+                Bills due {periodLabel}
+              </h2>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                <button
+                  onClick={resetAllToUnpaid}
+                  title="Reset every bill on both pay periods to Unpaid"
+                  style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 500, color: theme.textFainter, background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
+                >
+                  <RotateCcw size={12} />
+                  Reset all to unpaid
+                </button>
+                {!revealAll && resolvedCount > 0 && (
+                  <button
+                    onClick={unhideAll}
+                    style={{ fontSize: 12, fontWeight: 500, color: theme.accentPlum, background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
+                  >
+                    Unhide {resolvedCount} hidden
+                  </button>
+                )}
+                <span style={{ fontFamily: MONO, fontSize: 11.5, color: theme.textFainter }}>{unresolved.length} open</span>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {visibleBills.length === 0 && (
+                <div style={{ padding: "30px 16px", borderRadius: 20, border: `1px dashed ${theme.glassBorder2}`, textAlign: "center", fontSize: 13, color: theme.textFainter }}>
+                  No bills here yet. Add one below to start allocating this pay period.
+                </div>
+              )}
+              {visibleBills.map((bill, idx) => {
+                const scheduled = bill.status === "scheduled";
+                const resolved = bill.status === "paid" || bill.status === "skip";
+                const loginUrl = billLoginUrl(bill.name);
+                const statusTint =
+                  bill.status === "paid" ? theme.accentPlum : scheduled ? theme.goldDot : null;
+                return (
+                  <div
+                    key={bill.id}
+                    style={{
+                      padding: 14, borderRadius: 20, display: "flex", flexDirection: "column", gap: 11,
+                      background: scheduled
+                        ? `linear-gradient(157deg, ${theme.glassHigh}, ${mix(theme.goldDot, 12, theme.glassFill)})`
+                        : `linear-gradient(157deg, ${theme.glassHigh}, ${theme.glassFill})`,
+                      backdropFilter: "blur(20px) saturate(180%)",
+                      WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                      border: `1px solid ${scheduled ? mix(theme.goldDot, 38, theme.glassBorder) : theme.glassBorder}`,
+                      boxShadow: `inset 0 1px 0 ${theme.glassSpec}, 0 10px 28px -22px ${theme.glassShadow}`,
+                      opacity: resolved ? 0.62 : 1,
+                      transition: "all .3s ease",
+                      animation: `rowIn .4s ${EASE_OUT} ${Math.min(idx, 12) * 0.035}s both`,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                      <select
+                        value={bill.name}
+                        onChange={(e) => updateBill(bill.id, { name: e.target.value })}
+                        style={{
+                          flex: 1, minWidth: 0, padding: "8px 11px", borderRadius: 12,
+                          fontSize: 14, fontWeight: 600, cursor: "pointer",
+                          background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
+                          textDecoration: resolved ? "line-through" : "none",
+                          color: resolved ? theme.textFainter : theme.textPrimary,
+                        }}
+                      >
+                        {!sortedLoginNames.includes(bill.name) && bill.name && (
+                          <option value={bill.name}>{bill.name} (no login saved)</option>
+                        )}
+                        {sortedLoginNames.length === 0 && !bill.name && <option value="">Add a login first</option>}
+                        {sortedLoginNames.map((n) => (
+                          <option key={n} value={n}>{n}</option>
+                        ))}
+                      </select>
+                      {loginUrl && (
+                        <>
+                          <a
+                            href={loginUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={`Open ${bill.name} in your default browser`}
+                            style={{ flexShrink: 0, padding: 5, borderRadius: 9, color: theme.textFainter, display: "flex" }}
+                          >
+                            <ExternalLink size={15} />
+                          </a>
+                          <IconAction
+                            onClick={() => copyToClipboard(loginUrl, `${bill.id}-link`)}
+                            title="Copy link"
+                            hoverColor={theme.accentPlum}
+                            active={copiedFlag === `${bill.id}-link`}
+                            activeColor={theme.accentPlum}
+                          >
+                            {copiedFlag === `${bill.id}-link` ? <Check size={14} /> : <Copy size={14} />}
+                          </IconAction>
+                        </>
+                      )}
+                      <IconAction onClick={() => deleteBill(bill.id)} title="Delete bill" hoverColor={theme.accentRed}>
+                        <Trash2 size={15} />
+                      </IconAction>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+                      <select
+                        value={bill.status}
+                        onChange={(e) => setStatus(bill, e.target.value)}
+                        style={{
+                          padding: "7px 11px", borderRadius: 11, fontSize: 12, fontWeight: 600,
+                          cursor: "pointer", flexShrink: 0,
+                          color: statusTint || theme.textMuted,
+                          background: statusTint ? mix(statusTint, 14) : theme.inputBg,
+                          border: `1px solid ${statusTint ? mix(statusTint, 40) : theme.glassBorder2}`,
+                        }}
+                      >
+                        <option value="unpaid">Unpaid</option>
+                        <option value="scheduled">Scheduled</option>
+                        <option value="skip">No payment needed</option>
+                        <option value="paid">Payment complete</option>
+                      </select>
+
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={bill.amount}
+                        onChange={(e) => updateBill(bill.id, { amount: parseFloat(e.target.value) || 0 })}
+                        style={{ ...moneyInput, width: 104 }}
+                      />
+
+                      <select
+                        value={bill.bankId || ""}
+                        onChange={(e) => updateBill(bill.id, { bankId: e.target.value })}
+                        disabled={state.accounts.length === 0}
+                        style={{ ...fieldSm, marginLeft: "auto", fontSize: 12, ...(state.accounts.length === 0 ? { opacity: 0.5, cursor: "not-allowed" } : null) }}
+                      >
+                        {state.accounts.length === 0 ? (
+                          <option value="">No account</option>
+                        ) : (
+                          state.accounts.map((acc) => <option key={acc.id} value={acc.id}>{acc.name}</option>)
+                        )}
+                      </select>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ marginTop: 18, paddingTop: 18, borderTop: `1px solid ${theme.glassBorder2}`, display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" }}>
               <select
                 value={newBill.name}
                 onChange={(e) => setNewBill((n) => ({ ...n, name: e.target.value }))}
-                className="name-select flex-1 px-3 py-2 text-sm"
+                style={{ ...fieldSm, flex: "1 1 160px", minWidth: 0, padding: "10px 13px", borderRadius: 13, fontSize: 13.5, color: theme.textPrimary }}
               >
-                <option value="">
-                  {sortedLoginNames.length === 0 ? "Add a login first" : "Select a bill…"}
-                </option>
+                <option value="">{sortedLoginNames.length === 0 ? "Add a login first" : "Select a bill…"}</option>
                 {sortedLoginNames.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
+                  <option key={n} value={n}>{n}</option>
                 ))}
               </select>
               <input
@@ -1130,74 +829,120 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
                 value={newBill.amount}
                 onChange={(e) => setNewBill((n) => ({ ...n, amount: e.target.value }))}
                 onKeyDown={(e) => e.key === "Enter" && addBill()}
-                className="sm:w-28 px-3 py-2 text-sm font-mono"
+                style={{ ...moneyInput, width: 112, flexShrink: 0, padding: "10px 13px", borderRadius: 13 }}
               />
               <select
                 value={newBill.bankId}
                 onChange={(e) => setNewBill((n) => ({ ...n, bankId: e.target.value }))}
                 disabled={state.accounts.length === 0}
-                className="px-3 py-2 text-sm"
-                style={state.accounts.length === 0 ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+                style={{ ...fieldSm, flexShrink: 0, padding: "10px 13px", borderRadius: 13, fontSize: 13, ...(state.accounts.length === 0 ? { opacity: 0.5, cursor: "not-allowed" } : null) }}
               >
                 {state.accounts.length === 0 ? (
                   <option value="">Add an account first</option>
                 ) : (
-                  state.accounts.map((acc) => (
-                    <option key={acc.id} value={acc.id}>{acc.name}</option>
-                  ))
+                  state.accounts.map((acc) => <option key={acc.id} value={acc.id}>{acc.name}</option>)
                 )}
               </select>
               <button
                 onClick={addBill}
                 disabled={!newBill.name.trim() || newBill.amount === ""}
-                className="add-btn px-4 py-2 rounded-lg text-sm flex items-center justify-center gap-1"
+                style={{
+                  ...accentButtonStyle(!!newBill.name.trim() && newBill.amount !== ""),
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  padding: "10px 18px", borderRadius: 13, fontSize: 13, fontWeight: 600, flexShrink: 0,
+                }}
               >
-                <Plus size={16} />
+                <Plus size={15} />
                 Add
               </button>
             </div>
-          </div>
-        </div>
 
-        <p className="text-xs text-center" style={{ color: theme.budgetBorder }}>
-          Bill status is saved automatically. Mark a bill "no payment needed" or "payment complete" and it steps out of the way — exporting brings everything back into view for a check, without changing anything.
-        </p>
+            <p style={{ margin: "16px 0 0", fontSize: 11.5, lineHeight: 1.55, textAlign: "center", color: theme.textFainter }}>
+              Bill status saves automatically. Mark a bill "no payment needed" or "payment complete" and it steps out of the way — unhide brings everything back for a check without changing anything.
+            </p>
+
+            {/* Floating bubble: minimises the account cards, and shows each
+                account's remaining balance while they're collapsed. */}
+            <button
+              onClick={() => setShowAccounts((v) => !v)}
+              title={showAccounts ? "Minimize accounts" : "Expand accounts"}
+              style={{
+                position: "fixed", right: 24, bottom: 24, minWidth: 54, height: 54, padding: "0 18px",
+                borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", gap: 14,
+                zIndex: 45, border: "none", cursor: "pointer",
+                color: theme.accentInk,
+                background: `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})`,
+                boxShadow: `0 14px 34px -10px ${theme.accentPlum}, inset 0 1px 0 rgba(255,255,255,.4)`,
+                transition: `all .4s ${SPRING}`,
+              }}
+            >
+              {showAccounts ? (
+                <Landmark size={20} />
+              ) : state.accounts.length > 0 ? (
+                state.accounts.map((acc, idx) => {
+                  const balanceRaw = acc.balances?.[period];
+                  const balance = balanceRaw === "" || balanceRaw === undefined ? 0 : Number(balanceRaw);
+                  const remaining = balance - accountTotal(acc.id);
+                  return (
+                    <span key={acc.id} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                      {idx > 0 && <span style={{ width: 1, height: 26, background: "rgba(255,255,255,.28)" }} />}
+                      <span style={{ display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.15 }}>
+                        <span style={{ fontSize: 9.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".04em", opacity: 0.8, maxWidth: 62, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {acc.name}
+                        </span>
+                        <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}>
+                          {money(remaining)}
+                        </span>
+                      </span>
+                    </span>
+                  );
+                })
+              ) : (
+                <Landmark size={20} />
+              )}
+            </button>
           </>
         )}
 
         {view === "logins" && !vaultKey && (
-          <div className="card p-5 sm:p-6" style={{ textAlign: "center" }}>
-            <div style={{
-              width: 44, height: 44, borderRadius: "50%", margin: "0 auto 14px",
-              background: theme.oldPlumBg, display: "flex", alignItems: "center", justifyContent: "center",
+          <div style={{ ...glass.panel, padding: "26px 24px", borderRadius: 26, textAlign: "center" }}>
+            <span style={{
+              width: 48, height: 48, margin: "0 auto 16px", borderRadius: 17,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: theme.accentInk,
+              background: `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})`,
+              boxShadow: `0 10px 26px -10px ${theme.accentPlum}`,
             }}>
-              <ShieldCheck size={22} color={theme.accentPlum} />
-            </div>
+              <ShieldCheck size={22} />
+            </span>
 
             {state.vaultMeta ? (
               <>
-                <h2 className="font-display font-semibold text-base" style={{ marginBottom: 4 }}>Unlock your vault</h2>
-                <p className="text-sm" style={{ color: theme.textMuted, marginBottom: 16 }}>
-                  Your logins are encrypted — enter your vault passphrase to view them this visit.
+                <h2 style={{ ...display(20), margin: "0 0 6px" }}>Unlock your vault</h2>
+                <p style={{ margin: "0 0 18px", fontSize: 13.5, lineHeight: 1.55, color: theme.textMuted }}>
+                  Your logins are end-to-end encrypted. Enter your passphrase to view them this visit.
                 </p>
 
                 {faceIdEnabledHere && (
-                  <button
-                    onClick={unlockWithFaceId}
-                    disabled={faceIdBusy}
-                    className="add-btn w-full px-4 py-2.5 rounded-lg text-sm flex items-center justify-center gap-2"
-                    style={{ marginBottom: 10 }}
-                  >
-                    <ScanFace size={16} />
-                    {faceIdBusy ? "Checking..." : "Unlock with Face ID"}
-                  </button>
-                )}
-                {faceIdEnabledHere && (
-                  <div className="flex items-center gap-3 my-3" style={{ color: theme.budgetBorder }}>
-                    <div style={{ flex: 1, height: 1, background: theme.borderSoft }} />
-                    <span className="text-xs">or use your passphrase</span>
-                    <div style={{ flex: 1, height: 1, background: theme.borderSoft }} />
-                  </div>
+                  <>
+                    <button
+                      onClick={unlockWithFaceId}
+                      disabled={faceIdBusy}
+                      style={{
+                        ...accentButtonStyle(!faceIdBusy), width: "100%", display: "flex",
+                        alignItems: "center", justifyContent: "center", gap: 8,
+                        padding: 12, borderRadius: 14, fontSize: 13.5, fontWeight: 600, marginBottom: 14,
+                      }}
+                    >
+                      <ScanFace size={16} />
+                      {faceIdBusy ? "Checking…" : "Unlock with Face ID"}
+                    </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 14, color: theme.textFainter }}>
+                      <span style={{ flex: 1, height: 1, background: theme.glassBorder2 }} />
+                      <span style={{ fontSize: 11.5 }}>or use your passphrase</span>
+                      <span style={{ flex: 1, height: 1, background: theme.glassBorder2 }} />
+                    </div>
+                  </>
                 )}
 
                 <input
@@ -1207,34 +952,31 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
                   onKeyDown={(e) => e.key === "Enter" && unlockVault()}
                   placeholder="Vault passphrase"
                   autoComplete="current-password"
-                  className="w-full px-3 py-2 text-sm"
-                  style={{ marginBottom: 10 }}
+                  style={{ ...vaultInput, marginBottom: 11 }}
                 />
-                {vaultError && (
-                  <p className="text-xs" style={{ color: theme.accentRed, marginBottom: 10 }}>{vaultError}</p>
-                )}
+                {vaultError && <p style={{ fontSize: 12, color: theme.accentRed, margin: "0 0 11px" }}>{vaultError}</p>}
                 <button
                   onClick={unlockVault}
                   disabled={vaultBusy || !vaultPassphrase}
-                  className="add-btn w-full px-4 py-2.5 rounded-lg text-sm"
+                  style={{ ...accentButtonStyle(!vaultBusy && !!vaultPassphrase), width: "100%", padding: 12, borderRadius: 14, fontSize: 13.5, fontWeight: 600 }}
                 >
-                  {vaultBusy ? "Unlocking..." : "Unlock"}
+                  {vaultBusy ? "Unlocking…" : "Unlock"}
                 </button>
                 <button
                   onClick={() => setShowForgotInfo((v) => !v)}
-                  style={{ border: "none", background: "transparent", color: theme.budgetBorder, fontSize: 12, marginTop: 12, cursor: "pointer" }}
+                  style={{ border: "none", background: "transparent", color: theme.textFainter, fontSize: 11.5, marginTop: 14, cursor: "pointer" }}
                 >
                   Forgot your passphrase?
                 </button>
                 {showForgotInfo && (
-                  <p className="text-xs" style={{ color: theme.textMuted, marginTop: 8, textAlign: "left" }}>
+                  <p style={{ fontSize: 11.5, lineHeight: 1.55, color: theme.textMuted, marginTop: 8, textAlign: "left" }}>
                     This vault is encrypted so that only your passphrase can unlock it — not even Claude or Firebase can read it. That means there's genuinely no way to recover it if it's forgotten. The rest of the budget (accounts, bills) is completely unaffected either way.
                   </p>
                 )}
                 {faceIdEnabledHere && (
                   <button
                     onClick={() => { removeFaceUnlock(); setFaceIdEnabledHere(false); }}
-                    style={{ border: "none", background: "transparent", color: theme.budgetBorder, fontSize: 12, marginTop: 8, cursor: "pointer", display: "block", width: "100%" }}
+                    style={{ border: "none", background: "transparent", color: theme.textFainter, fontSize: 11.5, marginTop: 8, cursor: "pointer", display: "block", width: "100%" }}
                   >
                     Remove Face ID from this device
                   </button>
@@ -1242,8 +984,8 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
               </>
             ) : (
               <>
-                <h2 className="font-display font-semibold text-base" style={{ marginBottom: 4 }}>Set up your vault</h2>
-                <p className="text-sm" style={{ color: theme.textMuted, marginBottom: 16 }}>
+                <h2 style={{ ...display(20), margin: "0 0 6px" }}>Set up your vault</h2>
+                <p style={{ margin: "0 0 18px", fontSize: 13.5, lineHeight: 1.55, color: theme.textMuted }}>
                   Choose a passphrase to encrypt your logins. This is separate from your Google sign-in, and it's the only key — there's no recovery if it's forgotten.
                 </p>
                 <input
@@ -1252,8 +994,7 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
                   onChange={(e) => setVaultPassphrase(e.target.value)}
                   placeholder="Create a passphrase (8+ characters)"
                   autoComplete="new-password"
-                  className="w-full px-3 py-2 text-sm"
-                  style={{ marginBottom: 8 }}
+                  style={{ ...vaultInput, marginBottom: 9 }}
                 />
                 <input
                   type="password"
@@ -1262,18 +1003,15 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
                   onKeyDown={(e) => e.key === "Enter" && createVault()}
                   placeholder="Confirm passphrase"
                   autoComplete="new-password"
-                  className="w-full px-3 py-2 text-sm"
-                  style={{ marginBottom: 10 }}
+                  style={{ ...vaultInput, marginBottom: 11 }}
                 />
-                {vaultError && (
-                  <p className="text-xs" style={{ color: theme.accentRed, marginBottom: 10 }}>{vaultError}</p>
-                )}
+                {vaultError && <p style={{ fontSize: 12, color: theme.accentRed, margin: "0 0 11px" }}>{vaultError}</p>}
                 <button
                   onClick={createVault}
                   disabled={vaultBusy || !vaultPassphrase || !vaultConfirm}
-                  className="add-btn w-full px-4 py-2.5 rounded-lg text-sm"
+                  style={{ ...accentButtonStyle(!vaultBusy && !!vaultPassphrase && !!vaultConfirm), width: "100%", padding: 12, borderRadius: 14, fontSize: 13.5, fontWeight: 600 }}
                 >
-                  {vaultBusy ? "Creating..." : "Create Vault"}
+                  {vaultBusy ? "Creating…" : "Create vault"}
                 </button>
               </>
             )}
@@ -1282,293 +1020,313 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
 
         {view === "logins" && vaultKey && (
           <>
-            <div className="card p-4 sm:p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="font-display font-semibold text-base flex items-center gap-2">
-                  <KeyRound size={18} color={theme.accentPlum} />
-                  Bill logins
-                </h2>
-                <span className="text-xs font-mono" style={{ color: theme.budgetBorder }}>
-                  {(state.logins || []).length} saved
-                </span>
-              </div>
-
-              {(state.logins || []).length === 0 && (
-                <p className="text-sm py-6 text-center" style={{ color: theme.budgetBorder }}>
-                  No logins saved yet. Add a bill's website, username, and password below.
-                </p>
-              )}
-
-              <div className="flex flex-col gap-2.5">
-                {sortedLogins.map((login) => {
-                  const passwordVisible = !!visiblePasswords[login.id];
-                  return (
-                    <div key={login.id} className="login-row">
-                      <div className="login-row-head">
-                        <input
-
-                          type="text"
-                          value={login.name}
-                          onChange={(e) => updateLogin(login.id, { name: e.target.value })}
-                          placeholder="Bill name"
-                          className="flex-1 min-w-0 px-2 py-1.5 text-sm font-medium"
-                        />
-                        <button onClick={() => deleteLogin(login.id)} className="icon-btn" title="Delete login">
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-
-                      <div className="login-field-row">
-                        <span className="login-field-label">Website</span>
-                        <input
-                          type="text"
-                          value={login.url}
-                          onChange={(e) => updateLogin(login.id, { url: e.target.value })}
-                          placeholder="example.com"
-                          className="login-field-value"
-                          style={{ background: "transparent", border: "none", padding: 0 }}
-                        />
-                        <a
-                          href={
-                            login.url
-                              ? /^https?:\/\//i.test(login.url)
-                                ? login.url
-                                : `https://${login.url}`
-                              : undefined
-                          }
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="icon-btn"
-                          style={!login.url ? { opacity: 0.35, pointerEvents: "none" } : undefined}
-                          title="Open in your default browser"
-                        >
-                          <ExternalLink size={14} />
-                        </a>
-                        {login.url && (
-                          <button
-                            onClick={() =>
-                              copyToClipboard(
-                                /^https?:\/\//i.test(login.url) ? login.url : `https://${login.url}`,
-                                `${login.id}-url`
-                              )
-                            }
-                            className={`icon-btn ${copiedFlag === `${login.id}-url` ? "copied" : ""}`}
-                            title="Copy link"
-                          >
-                            {copiedFlag === `${login.id}-url` ? <Check size={14} /> : <Copy size={14} />}
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="login-field-row">
-                        <span className="login-field-label">Username</span>
-                        <input
-                          type="text"
-                          value={login.username}
-                          onChange={(e) => updateLogin(login.id, { username: e.target.value })}
-                          placeholder="username or email"
-                          className="login-field-value"
-                          style={{ background: "transparent", border: "none", padding: 0 }}
-                        />
-                        <button
-                          onClick={() => copyToClipboard(login.username, `${login.id}-user`)}
-                          className={`icon-btn ${copiedFlag === `${login.id}-user` ? "copied" : ""}`}
-                          title="Copy username"
-                        >
-                          {copiedFlag === `${login.id}-user` ? <Check size={14} /> : <Copy size={14} />}
-                        </button>
-                      </div>
-
-                      <div className="login-field-row">
-                        <span className="login-field-label">Password</span>
-                        <input
-                          type={passwordVisible ? "text" : "password"}
-                          value={decryptedPasswords[login.id] ?? ""}
-                          onChange={(e) => updateLoginPassword(login.id, e.target.value)}
-                          placeholder="password"
-                          autoComplete="new-password"
-                          className="login-field-value"
-                          style={{ background: "transparent", border: "none", padding: 0 }}
-                        />
-                        <button
-                          onClick={() => togglePasswordVisible(login.id)}
-                          className="icon-btn"
-                          title={passwordVisible ? "Hide password" : "Show password"}
-                        >
-                          {passwordVisible ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </button>
-                        <button
-                          onClick={() => copyToClipboard(decryptedPasswords[login.id] || "", `${login.id}-pass`)}
-                          className={`icon-btn ${copiedFlag === `${login.id}-pass` ? "copied" : ""}`}
-                          title="Copy password"
-                        >
-                          {copiedFlag === `${login.id}-pass` ? <Check size={14} /> : <Copy size={14} />}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="mt-4 pt-4 flex flex-col gap-2" style={{ borderTop: `1px solid ${theme.borderSoft}` }}>
-                <input
-                  type="text"
-                  autoComplete="off"
-                  placeholder="Bill name (e.g. Electric Co.)"
-                  value={newLogin.name}
-                  onChange={(e) => setNewLogin((n) => ({ ...n, name: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm"
-                />
-                <input
-                  type="url"
-                  autoComplete="url"
-                  placeholder="Website URL"
-                  value={newLogin.url}
-                  onChange={(e) => setNewLogin((n) => ({ ...n, url: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm"
-                />
-                <input
-                  type="text"
-                  autoComplete="username"
-                  placeholder="Username"
-                  value={newLogin.username}
-                  onChange={(e) => setNewLogin((n) => ({ ...n, username: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm"
-                />
-                <input
-                  type="text"
-                  autoComplete="new-password"
-                  placeholder="Password"
-                  value={newLogin.password}
-                  onChange={(e) => setNewLogin((n) => ({ ...n, password: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm font-mono"
-                />
-                <button
-                  onClick={addLogin}
-                  disabled={!newLogin.name.trim()}
-                  className="add-btn w-full px-4 py-2.5 rounded-lg text-sm flex items-center justify-center gap-1"
-                >
-                  <Plus size={16} />
-                  Add login
-                </button>
-              </div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 13 }}>
+              <h2 style={{ ...display(17), margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                <KeyRound size={17} color={theme.accentPlum} />
+                Bill logins
+              </h2>
+              <span style={{ fontFamily: MONO, fontSize: 11.5, color: theme.textFainter }}>
+                {(state.logins || []).length} saved
+              </span>
             </div>
 
-            <p className="text-xs text-center" style={{ color: theme.budgetBorder }}>
-              Saved as end-to-end encrypted, unlocked only by your vault passphrase — not even Claude or Firebase can read your saved passwords.
+            {(state.logins || []).length === 0 && (
+              <div style={{ padding: "30px 16px", borderRadius: 20, border: `1px dashed ${theme.glassBorder2}`, textAlign: "center", fontSize: 13, color: theme.textFainter }}>
+                No logins saved yet. Add a bill's website, username, and password below.
+              </div>
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+              {sortedLogins.map((login, idx) => {
+                const passwordVisible = !!visiblePasswords[login.id];
+                const href = login.url
+                  ? (/^https?:\/\//i.test(login.url) ? login.url : `https://${login.url}`)
+                  : undefined;
+                return (
+                  <div
+                    key={login.id}
+                    style={{
+                      ...glass.card, padding: 15, borderRadius: 22,
+                      display: "flex", flexDirection: "column", gap: 9,
+                      animation: `rowIn .4s ${EASE_OUT} ${Math.min(idx, 12) * 0.035}s both`,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                      <input
+                        type="text"
+                        value={login.name}
+                        onChange={(e) => updateLogin(login.id, { name: e.target.value })}
+                        placeholder="Bill name"
+                        style={{ flex: 1, minWidth: 0, fontSize: 14.5, fontWeight: 600, color: theme.textPrimary, background: "transparent", border: "none", padding: 0 }}
+                      />
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Open in your default browser"
+                        style={{ padding: 5, borderRadius: 9, color: theme.textFainter, display: "flex", ...(login.url ? null : { opacity: 0.35, pointerEvents: "none" }) }}
+                      >
+                        <ExternalLink size={15} />
+                      </a>
+                      <IconAction onClick={() => deleteLogin(login.id)} title="Delete login" hoverColor={theme.accentRed}>
+                        <Trash2 size={15} />
+                      </IconAction>
+                    </div>
+
+                    <VaultField label="Website">
+                      <input
+                        type="text"
+                        value={login.url}
+                        onChange={(e) => updateLogin(login.id, { url: e.target.value })}
+                        placeholder="example.com"
+                        style={vaultValueStyle}
+                      />
+                      {login.url && (
+                        <IconAction
+                          onClick={() => copyToClipboard(href, `${login.id}-url`)}
+                          title="Copy link"
+                          hoverColor={theme.accentPlum}
+                          active={copiedFlag === `${login.id}-url`}
+                          activeColor={theme.accentPlum}
+                          size={4}
+                        >
+                          {copiedFlag === `${login.id}-url` ? <Check size={14} /> : <Copy size={14} />}
+                        </IconAction>
+                      )}
+                    </VaultField>
+
+                    <VaultField label="Username">
+                      <input
+                        type="text"
+                        value={login.username}
+                        onChange={(e) => updateLogin(login.id, { username: e.target.value })}
+                        placeholder="username or email"
+                        style={vaultValueStyle}
+                      />
+                      <IconAction
+                        onClick={() => copyToClipboard(login.username, `${login.id}-user`)}
+                        title="Copy username"
+                        hoverColor={theme.accentPlum}
+                        active={copiedFlag === `${login.id}-user`}
+                        activeColor={theme.accentPlum}
+                        size={4}
+                      >
+                        {copiedFlag === `${login.id}-user` ? <Check size={14} /> : <Copy size={14} />}
+                      </IconAction>
+                    </VaultField>
+
+                    <VaultField label="Password">
+                      <input
+                        type={passwordVisible ? "text" : "password"}
+                        value={decryptedPasswords[login.id] ?? ""}
+                        onChange={(e) => updateLoginPassword(login.id, e.target.value)}
+                        placeholder="password"
+                        autoComplete="new-password"
+                        style={vaultValueStyle}
+                      />
+                      <IconAction
+                        onClick={() => togglePasswordVisible(login.id)}
+                        title={passwordVisible ? "Hide password" : "Show password"}
+                        hoverColor={theme.accentPlum}
+                        size={4}
+                      >
+                        {passwordVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </IconAction>
+                      <IconAction
+                        onClick={() => copyToClipboard(decryptedPasswords[login.id] || "", `${login.id}-pass`)}
+                        title="Copy password"
+                        hoverColor={theme.accentPlum}
+                        active={copiedFlag === `${login.id}-pass`}
+                        activeColor={theme.accentPlum}
+                        size={4}
+                      >
+                        {copiedFlag === `${login.id}-pass` ? <Check size={14} /> : <Copy size={14} />}
+                      </IconAction>
+                    </VaultField>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ marginTop: 18, paddingTop: 18, borderTop: `1px solid ${theme.glassBorder2}`, display: "flex", flexDirection: "column", gap: 9 }}>
+              <input
+                type="text"
+                autoComplete="off"
+                placeholder="Bill name (e.g. Electric Co.)"
+                value={newLogin.name}
+                onChange={(e) => setNewLogin((n) => ({ ...n, name: e.target.value }))}
+                style={vaultInput}
+              />
+              <input
+                type="url"
+                autoComplete="url"
+                placeholder="Website URL"
+                value={newLogin.url}
+                onChange={(e) => setNewLogin((n) => ({ ...n, url: e.target.value }))}
+                style={vaultInput}
+              />
+              <input
+                type="text"
+                autoComplete="username"
+                placeholder="Username"
+                value={newLogin.username}
+                onChange={(e) => setNewLogin((n) => ({ ...n, username: e.target.value }))}
+                style={vaultInput}
+              />
+              <input
+                type="text"
+                autoComplete="new-password"
+                placeholder="Password"
+                value={newLogin.password}
+                onChange={(e) => setNewLogin((n) => ({ ...n, password: e.target.value }))}
+                style={{ ...vaultInput, fontFamily: MONO }}
+              />
+              <button
+                onClick={addLogin}
+                disabled={!newLogin.name.trim()}
+                style={{
+                  ...accentButtonStyle(!!newLogin.name.trim()), width: "100%",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  padding: 12, borderRadius: 14, fontSize: 13.5, fontWeight: 600,
+                }}
+              >
+                <Plus size={16} />
+                Add login
+              </button>
+            </div>
+
+            <p style={{ margin: "16px 0 0", fontSize: 11.5, lineHeight: 1.55, textAlign: "center", color: theme.textFainter }}>
+              End-to-end encrypted, unlocked only by your vault passphrase — not even Claude or Firebase can read your saved passwords.
             </p>
           </>
         )}
 
         {saveError && (
-          <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg" style={{ color: theme.accentRed, background: "rgba(220,38,38,0.06)" }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, marginTop: 16,
+            padding: "11px 14px", borderRadius: 14, fontSize: 12.5,
+            color: theme.accentRed, background: mix(theme.accentRed, 12),
+            border: `1px solid ${mix(theme.accentRed, 30)}`,
+          }}>
             <AlertCircle size={14} />
             Couldn't save your changes — they may not persist after you close this.
           </div>
         )}
-      </div>
+        </div>
       </div>
 
       {offerFaceId && (
-        <div
-          onClick={declineFaceId}
-          style={{ position: "fixed", inset: 0, background: theme.prefersDark ? "rgba(0,0,0,0.75)" : "rgba(43,36,32,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 200 }}
-        >
-          <div onClick={(e) => e.stopPropagation()} className="card p-5" style={{ maxWidth: 340, textAlign: "center" }}>
-            <div style={{
-              width: 44, height: 44, borderRadius: "50%", margin: "0 auto 14px",
-              background: theme.oldPlumBg, display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <ScanFace size={22} color={theme.accentPlum} />
-            </div>
-            <h2 className="font-display font-semibold text-base" style={{ marginBottom: 6 }}>Enable Face ID?</h2>
-            <p className="text-sm" style={{ color: theme.textMuted, marginBottom: 16 }}>
-              Unlock your logins with Face ID on this device instead of typing your passphrase each visit. Your passphrase stays the real key — this just lets Face ID release it faster on this specific device.
-            </p>
-            {faceIdMsg && <p className="text-xs" style={{ color: theme.accentRed, marginBottom: 12 }}>{faceIdMsg}</p>}
-            <button
-              onClick={confirmEnableFaceId}
-              disabled={faceIdBusy}
-              className="add-btn w-full px-4 py-2.5 rounded-lg text-sm flex items-center justify-center gap-2"
-              style={{ marginBottom: 8 }}
-            >
-              <ScanFace size={16} />
-              {faceIdBusy ? "Setting up..." : "Enable Face ID"}
-            </button>
-            <button
-              onClick={declineFaceId}
-              style={{ border: "none", background: "transparent", color: theme.textMuted, fontSize: 13, cursor: "pointer", padding: "6px 0" }}
-            >
-              Not now
-            </button>
-          </div>
-        </div>
+        <BudgetModal onClose={declineFaceId} icon={<ScanFace size={22} />} title="Enable Face ID?">
+          <p style={{ margin: "0 0 16px", fontSize: 13.5, lineHeight: 1.55, color: theme.textMuted }}>
+            Unlock your logins with Face ID on this device instead of typing your passphrase each visit. Your passphrase stays the real key — this just lets Face ID release it faster on this specific device.
+          </p>
+          {faceIdMsg && <p style={{ fontSize: 12, color: theme.accentRed, marginBottom: 12 }}>{faceIdMsg}</p>}
+          <button
+            onClick={confirmEnableFaceId}
+            disabled={faceIdBusy}
+            style={{
+              ...accentButtonStyle(!faceIdBusy), width: "100%", display: "flex",
+              alignItems: "center", justifyContent: "center", gap: 8,
+              padding: 12, borderRadius: 14, fontSize: 13.5, fontWeight: 600, marginBottom: 8,
+            }}
+          >
+            <ScanFace size={16} />
+            {faceIdBusy ? "Setting up…" : "Enable Face ID"}
+          </button>
+          <button onClick={declineFaceId} style={modalDismissStyle}>Not now</button>
+        </BudgetModal>
       )}
+
       {confirmDelete && (
-        <div
-          onClick={() => setConfirmDelete(null)}
-          style={{ position: "fixed", inset: 0, background: theme.prefersDark ? "rgba(0,0,0,0.75)" : "rgba(43,36,32,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 200 }}
-        >
-          <div onClick={(e) => e.stopPropagation()} className="card p-5" style={{ maxWidth: 340, textAlign: "center" }}>
-            <div style={{
-              width: 44, height: 44, borderRadius: "50%", margin: "0 auto 14px",
-              background: "rgba(220,38,38,0.10)", display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <Trash2 size={22} color={theme.accentRed} />
-            </div>
-            <h2 className="font-display font-semibold text-base" style={{ marginBottom: 6 }}>Delete this account?</h2>
-            <p className="text-sm" style={{ color: theme.textMuted, marginBottom: 16 }}>
-              This can't be undone. Any bills assigned to it will be left without an account.
-            </p>
-            <button
-              onClick={confirmDeleteAccount}
-              className="w-full px-4 py-2.5 rounded-lg text-sm flex items-center justify-center gap-2"
-              style={{ marginBottom: 8, background: theme.accentRed, color: "#fff", border: "none", cursor: "pointer", fontWeight: 600 }}
-            >
-              <Trash2 size={16} />
-              Delete account
-            </button>
-            <button
-              onClick={() => setConfirmDelete(null)}
-              style={{ border: "none", background: "transparent", color: theme.textMuted, fontSize: 13, cursor: "pointer", padding: "6px 0" }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+        <BudgetModal onClose={() => setConfirmDelete(null)} icon={<Trash2 size={22} />} tone="red" title="Delete this account?">
+          <p style={{ margin: "0 0 16px", fontSize: 13.5, lineHeight: 1.55, color: theme.textMuted }}>
+            This can't be undone. Any bills assigned to it will be left without an account.
+          </p>
+          <button onClick={confirmDeleteAccount} style={dangerButtonStyle}>
+            <Trash2 size={16} />
+            Delete account
+          </button>
+          <button onClick={() => setConfirmDelete(null)} style={modalDismissStyle}>Cancel</button>
+        </BudgetModal>
       )}
+
       {confirmReset && (
-        <div
-          onClick={() => setConfirmReset(false)}
-          style={{ position: "fixed", inset: 0, background: theme.prefersDark ? "rgba(0,0,0,0.75)" : "rgba(43,36,32,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 200 }}
-        >
-          <div onClick={(e) => e.stopPropagation()} className="card p-5" style={{ maxWidth: 360, textAlign: "center" }}>
-            <div style={{
-              width: 44, height: 44, borderRadius: "50%", margin: "0 auto 14px",
-              background: "rgba(220,38,38,0.10)", display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <AlertCircle size={22} color={theme.accentRed} />
-            </div>
-            <h2 className="font-display font-semibold text-base" style={{ marginBottom: 6 }}>Reset all bills to Unpaid?</h2>
-            <p className="text-sm" style={{ color: theme.textMuted, marginBottom: 16 }}>
-              This resets every bill on both the 15th and the 30th back to Unpaid, clearing all Scheduled, No payment needed, and Payment complete statuses.
-            </p>
-            <button
-              onClick={doResetAllToUnpaid}
-              className="w-full px-4 py-2.5 rounded-lg text-sm flex items-center justify-center gap-2"
-              style={{ marginBottom: 8, background: theme.accentRed, color: "#fff", border: "none", cursor: "pointer", fontWeight: 600 }}
-            >
-              Reset all to Unpaid
-            </button>
-            <button
-              onClick={() => setConfirmReset(false)}
-              style={{ border: "none", background: "transparent", color: theme.textMuted, fontSize: 13, cursor: "pointer", padding: "6px 0" }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+        <BudgetModal onClose={() => setConfirmReset(false)} icon={<AlertCircle size={22} />} tone="red" title="Reset all bills to Unpaid?">
+          <p style={{ margin: "0 0 16px", fontSize: 13.5, lineHeight: 1.55, color: theme.textMuted }}>
+            This resets every bill on both the 15th and the 30th back to Unpaid, clearing all Scheduled, No payment needed, and Payment complete statuses.
+          </p>
+          <button onClick={doResetAllToUnpaid} style={dangerButtonStyle}>Reset all to Unpaid</button>
+          <button onClick={() => setConfirmReset(false)} style={modalDismissStyle}>Cancel</button>
+        </BudgetModal>
       )}
+    </div>
+  );
+}
+
+// A labelled vault row: monospace value with its reveal/copy buttons.
+const vaultValueStyle = {
+  flex: 1, minWidth: 0, fontFamily: MONO, fontSize: 12.5,
+  color: theme.textPrimary, background: "transparent", border: "none", padding: 0,
+  overflow: "hidden", textOverflow: "ellipsis",
+};
+
+function VaultField({ label, children }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 9, padding: "9px 11px", borderRadius: 12,
+      background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
+    }}>
+      <span style={{ width: 62, flexShrink: 0, fontSize: 11, fontWeight: 600, color: theme.textFainter }}>{label}</span>
+      {children}
+    </div>
+  );
+}
+
+const modalDismissStyle = {
+  border: "none", background: "transparent", color: theme.textMuted,
+  fontSize: 13, cursor: "pointer", padding: "8px 0", width: "100%",
+};
+
+const dangerButtonStyle = {
+  width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+  padding: 12, borderRadius: 14, fontSize: 13.5, fontWeight: 600, marginBottom: 8,
+  color: theme.accentInk, background: theme.accentRed, border: "none", cursor: "pointer",
+  boxShadow: `0 10px 26px -10px ${theme.accentRed}`,
+};
+
+// Raised-glass confirm dialog shared by the three Budget prompts.
+function BudgetModal({ onClose, icon, title, tone, children }) {
+  const accent = tone === "red" ? theme.accentRed : theme.accentPlum;
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 200, background: theme.scrim,
+        backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+        display: "flex", justifyContent: "center", padding: 20,
+        animation: "fadeIn .2s ease",
+        // Auto margins on the card centre it when it fits and collapse to 0 when
+        // it doesn't, so a tall dialog can never put its own top off-screen the
+        // way `align-items: center` does. See the Telegram wizard in App.jsx.
+        alignItems: "flex-start", overflowY: "auto",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ ...glass.raised, maxWidth: 360, width: "100%", padding: 22, borderRadius: 28, textAlign: "center", margin: "auto 0", animation: `popIn .3s ${SPRING}` }}
+      >
+        <span style={{
+          width: 48, height: 48, margin: "0 auto 16px", borderRadius: 17,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: theme.accentInk,
+          background: tone === "red" ? accent : `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})`,
+          boxShadow: `0 10px 26px -10px ${accent}`,
+        }}>
+          {icon}
+        </span>
+        <h2 style={{ ...display(20), margin: "0 0 6px" }}>{title}</h2>
+        {children}
+      </div>
     </div>
   );
 }

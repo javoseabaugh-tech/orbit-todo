@@ -2,11 +2,14 @@ import { useEffect, useState } from "react";
 import {
   addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where,
 } from "firebase/firestore";
-import { Plus, Trash2, ChevronDown, X, ArrowUpRight, Users } from "lucide-react";
+import { Plus, Trash2, ChevronDown, X, ArrowUpRight, Users, Calendar, Tag, Check } from "lucide-react";
 import { db } from "./firebase";
-import { theme, PALETTE } from "./theme";
+import { theme, PALETTE, glass, SPRING, BLUR_LIST_LIMIT } from "./theme";
+import { MONO, display, mix, pillStyle, accentButtonStyle, fieldStyle, IconAction, fmtDay } from "./ui";
 
-export default function Workbench({ uid, categories, todos, sharedUid, sharedCategoryId, sharedCategories }) {
+// `listTail` is the bottom clearance the mobile tab bar and FAB need; the
+// desktop column passes nothing since it has its own padding.
+export default function Workbench({ uid, categories, todos, sharedUid, sharedCategoryId, sharedCategories, listTail }) {
   const [ownProjects, setOwnProjects] = useState([]);
   const [sharedProjects, setSharedProjects] = useState([]);
   const [filterBucket, setFilterBucket] = useState(null);
@@ -227,19 +230,14 @@ export default function Workbench({ uid, categories, todos, sharedUid, sharedCat
   }
 
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 8 }}>
-        <div style={{ display: "flex", gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+      <div style={{ flexShrink: 0, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 8 }}>
+        <div style={{ display: "flex", gap: 7 }}>
           {["work", "personal"].map((bucket) => (
             <button
               key={bucket}
               onClick={() => setFilterBucket(filterBucket === bucket ? null : bucket)}
-              style={{
-                padding: "6px 12px", borderRadius: 999, fontSize: 12, fontWeight: 700,
-                border: filterBucket === bucket ? `1px solid ${theme.accentPlum}` : `1px solid ${theme.border}`,
-                background: filterBucket === bucket ? theme.oldPlumBg : "transparent",
-                color: filterBucket === bucket ? theme.accentPlum : theme.textMuted,
-              }}
+              style={pillStyle(filterBucket === bucket)}
             >
               {bucket === "work" ? "Work" : "Personal"}
             </button>
@@ -247,47 +245,71 @@ export default function Workbench({ uid, categories, todos, sharedUid, sharedCat
         </div>
         <button
           onClick={() => setShowAddPanel((s) => !s)}
-          style={{ display: "flex", alignItems: "center", gap: 6, background: theme.accentPlum, color: theme.cardBg, borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 700 }}
+          style={{
+            ...accentButtonStyle(true), display: "flex", alignItems: "center", gap: 6,
+            padding: "8px 15px", borderRadius: 13, fontSize: 12.5, fontWeight: 600,
+            whiteSpace: "nowrap", flexShrink: 0,
+          }}
         >
-          <Plus size={16} /> New Project
+          <Plus size={15} /> New project
         </button>
       </div>
 
       {showAddPanel && (
-        <div style={{ background: theme.cardBg, borderRadius: 14, padding: 14, marginBottom: 14, border: `1px solid ${theme.border}` }}>
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            ...glass.card, flexShrink: 0, padding: 15, borderRadius: 22, marginBottom: 12,
+            border: `1px solid ${theme.accentPlum}`,
+            boxShadow: `inset 0 1px 0 ${theme.glassSpec}, 0 0 0 3px ${theme.accentSoft}, 0 14px 36px -22px ${theme.glassShadow}`,
+            animation: `popIn .3s ${SPRING}`,
+          }}
+        >
           <input
+            autoFocus
             placeholder="Project title"
             value={draftTitle}
             onChange={(e) => setDraftTitle(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addProject()}
-            style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${theme.border}`, borderRadius: 8, padding: "8px 10px", fontSize: 14, marginBottom: 10 }}
+            style={{ ...fieldStyle(), fontSize: 15, marginBottom: 11 }}
           />
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setDraftCategoryId(draftCategoryId === cat.id ? null : cat.id)}
-                style={{
-                  padding: "4px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600,
-                  background: draftCategoryId === cat.id ? PALETTE[cat.color].bg : "transparent",
-                  color: draftCategoryId === cat.id ? PALETTE[cat.color].text : theme.textMuted,
-                  border: `1px solid ${draftCategoryId === cat.id ? PALETTE[cat.color].dot : theme.border}`,
-                }}
-              >
-                {cat.name}
-              </button>
-            ))}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 11 }}>
+            <Tag size={14} color={theme.textFainter} />
+            {categories.map((cat) => {
+              const on = draftCategoryId === cat.id;
+              const palette = PALETTE[cat.color] || PALETTE.blue;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setDraftCategoryId(on ? null : cat.id)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 999,
+                    fontSize: 12, fontWeight: 500, cursor: "pointer",
+                    color: on ? palette.text : theme.textMuted,
+                    background: on ? palette.bg : theme.inputBg,
+                    border: `1px solid ${on ? palette.dot : theme.glassBorder2}`,
+                    transition: `all .25s ${SPRING}`,
+                  }}
+                >
+                  <span style={{ width: 6, height: 6, borderRadius: 99, flexShrink: 0, background: palette.dot }} />
+                  {cat.name}
+                </button>
+              );
+            })}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: theme.textMuted }}>Deadline (optional)</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginBottom: 13 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: theme.textFainter }}>
+              <Calendar size={13} />
+              Deadline (optional)
+            </span>
             <input
               type="date"
               value={draftDeadline}
               onChange={(e) => setDraftDeadline(e.target.value)}
-              style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: "6px 8px", fontSize: 12 }}
+              style={{ ...fieldStyle(), width: "auto", padding: "7px 11px", borderRadius: 11, fontFamily: MONO, fontSize: 12.5, color: theme.textSecondary }}
             />
             {draftDeadline && (
-              <button onClick={() => setDraftDeadline("")} style={{ color: theme.textFaint, fontSize: 11, fontWeight: 600, padding: 2 }}>
+              <button onClick={() => setDraftDeadline("")} style={{ border: "none", background: "transparent", color: theme.textFainter, fontSize: 11.5, fontWeight: 500, cursor: "pointer", padding: 2 }}>
                 Clear
               </button>
             )}
@@ -295,20 +317,25 @@ export default function Workbench({ uid, categories, todos, sharedUid, sharedCat
           <button
             onClick={addProject}
             disabled={!draftTitle.trim()}
-            style={{ width: "100%", background: theme.accentPlum, color: theme.cardBg, borderRadius: 8, padding: "9px 10px", fontSize: 13, fontWeight: 700, opacity: draftTitle.trim() ? 1 : 0.5 }}
+            style={{ ...accentButtonStyle(!!draftTitle.trim()), width: "100%", padding: "11px 14px", borderRadius: 14, fontSize: 13, fontWeight: 600 }}
           >
-            Create
+            Create project
           </button>
         </div>
       )}
 
-      {projects.length === 0 && (
-        <div style={{ fontSize: 13, color: theme.textFainter, padding: "24px 12px", border: `1px dashed ${theme.border}`, borderRadius: 14, textAlign: "center" }}>
-          No projects yet, create your first one above.
-        </div>
-      )}
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div
+        className="orbit-scroll"
+        style={{
+          flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 11,
+          paddingBottom: listTail || 4,
+        }}
+      >
+        {projects.length === 0 && (
+          <div style={{ padding: "32px 16px", borderRadius: 20, border: `1px dashed ${theme.glassBorder2}`, textAlign: "center", fontSize: 13, color: theme.textFainter }}>
+            No projects yet — create your first one above.
+          </div>
+        )}
         {visibleProjects.map((project) => {
           const category = categoryFor(project);
           const isExpanded = expanded && expanded.id === project.id;
@@ -320,57 +347,87 @@ export default function Workbench({ uid, categories, todos, sharedUid, sharedCat
             <div
               key={`${project._uid}-${project.id}`}
               style={{
-                background: theme.cardBg, borderRadius: 16, padding: 14,
-                border: `1px solid ${shared ? theme.accentPlum : theme.borderSoft}`,
-                boxShadow: "0 1px 3px rgba(58,44,30,0.06)",
+                ...(visibleProjects.length > BLUR_LIST_LIMIT ? glass.cardFlat : glass.card),
+                padding: 15, borderRadius: 22,
+                border: `1px solid ${shared ? theme.accentPlum : theme.glassBorder}`,
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                 <button
                   onClick={() => setExpanded(isExpanded ? null : { id: project.id, uid: project._uid })}
-                  style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, textAlign: "left" }}
+                  style={{ display: "flex", alignItems: "center", gap: 9, flex: 1, minWidth: 0, textAlign: "left", border: "none", background: "transparent", cursor: "pointer", padding: 0 }}
                 >
-                  <ChevronDown size={16} color={theme.textFaint} style={{ transform: isExpanded ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s ease" }} />
-                  <span style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 16, fontWeight: 600, color: theme.textPrimary }}>{project.title}</span>
+                  <ChevronDown
+                    size={15}
+                    color={theme.textFainter}
+                    style={{ flexShrink: 0, transform: isExpanded ? "none" : "rotate(-90deg)", transition: `transform .35s ${SPRING}` }}
+                  />
+                  <span style={{ ...display(16), color: theme.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {project.title}
+                  </span>
                 </button>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {shared && (
-                    <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, background: theme.oldPlumBg, color: theme.accentPlum }}>
-                      <Users size={10} /> Shared
-                    </span>
-                  )}
-                  {category && (
-                    <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: PALETTE[category.color].bg, color: PALETTE[category.color].text }}>
-                      {category.name}
-                    </span>
-                  )}
-                  {!shared && (
-                    <button onClick={() => deleteProject(project)} style={{ color: theme.budgetBorder, padding: 4 }}>
-                      <Trash2 size={15} />
-                    </button>
-                  )}
+                {shared && (
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0,
+                    fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 999,
+                    color: theme.accentPlum, background: theme.accentSoft,
+                    border: `1px solid ${mix(theme.accentPlum, 34)}`,
+                  }}>
+                    <Users size={10} /> Shared
+                  </span>
+                )}
+                {category && (
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", flexShrink: 0,
+                    fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: 999,
+                    color: PALETTE[category.color].text, background: PALETTE[category.color].bg,
+                    border: `1px solid ${mix(PALETTE[category.color].dot, 34)}`,
+                  }}>
+                    {category.name}
+                  </span>
+                )}
+                {!shared && (
+                  <IconAction onClick={() => deleteProject(project)} title="Delete project" hoverColor={theme.accentRed} size={4}>
+                    <Trash2 size={14} />
+                  </IconAction>
+                )}
+              </div>
+
+              <div style={{ position: "relative", marginTop: 12, height: 7, borderRadius: 99, background: theme.inputBg, overflow: "hidden" }}>
+                <div style={{
+                  width: `${progress}%`, height: "100%", borderRadius: 99,
+                  background: `linear-gradient(90deg, ${theme.accentPlum}, ${theme.accent2})`,
+                  boxShadow: `0 0 14px -2px ${theme.accentPlum}`,
+                  transition: `width .7s ${SPRING}`,
+                }} />
+                <div style={{ position: "absolute", inset: 0, overflow: "hidden", borderRadius: 99, pointerEvents: "none" }}>
+                  <span style={{
+                    position: "absolute", top: 0, bottom: 0, width: "34%",
+                    background: "linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent)",
+                    animation: "shimmer 2.6s ease-in-out infinite",
+                  }} />
                 </div>
               </div>
-              <div style={{ marginTop: 10, background: theme.softBg, borderRadius: 999, height: 6, overflow: "hidden" }}>
-                <div style={{ width: `${progress}%`, height: "100%", background: theme.accentPlum, transition: "width 0.2s ease" }} />
-              </div>
-              <div style={{ fontSize: 11, color: theme.textFaint, marginTop: 4 }}>
-                {progress}% complete{milestones.length ? ` - ${milestones.filter((m) => m.done).length}/${milestones.length} milestones` : ""}{project.deadline ? ` · due ${project.deadline}` : ""}
+              <div style={{ marginTop: 7, fontFamily: MONO, fontSize: 11.5, color: theme.textFainter }}>
+                {progress}%{milestones.length ? ` · ${milestones.filter((m) => m.done).length}/${milestones.length} milestones` : ""}{project.deadline ? ` · due ${fmtDay(project.deadline)}` : ""}
               </div>
 
               {isExpanded && (
-                <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${theme.borderSoft}` }}>
+                <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${theme.glassBorder2}` }}>
                   {!shared && (
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: theme.textMuted }}>Deadline</span>
+                      <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: theme.textFainter }}>
+                        <Calendar size={13} />
+                        Deadline
+                      </span>
                       <input
                         type="date"
                         value={project.deadline || ""}
                         onChange={(e) => setProjectDeadline(project, e.target.value)}
-                        style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: "5px 8px", fontSize: 12 }}
+                        style={{ ...fieldStyle(), width: "auto", padding: "7px 11px", borderRadius: 11, fontFamily: MONO, fontSize: 12.5, color: theme.textSecondary }}
                       />
                       {project.deadline && (
-                        <button onClick={() => setProjectDeadline(project, "")} style={{ color: theme.textFaint, fontSize: 11, fontWeight: 600, padding: 2 }}>
+                        <button onClick={() => setProjectDeadline(project, "")} style={{ border: "none", background: "transparent", color: theme.textFainter, fontSize: 11.5, fontWeight: 500, cursor: "pointer", padding: 2 }}>
                           Clear
                         </button>
                       )}
@@ -392,7 +449,7 @@ export default function Workbench({ uid, categories, todos, sharedUid, sharedCat
                   ))}
                   {!shared && <MilestoneAddRow deadline={project.deadline} onAdd={(text, due) => addMilestone(project, text, due)} />}
                   {shared && milestones.length === 0 && (
-                    <div style={{ fontSize: 12, color: theme.textFainter, padding: "6px 0" }}>
+                    <div style={{ fontSize: 12, color: theme.textFainter, padding: "8px 0" }}>
                       No milestones yet.
                     </div>
                   )}
@@ -426,25 +483,25 @@ function MilestoneRow({ milestone, shared, deadline, promoteTarget, onToggle, on
 
   if (editing) {
     return (
-      <div style={{ display: "flex", gap: 6, padding: "6px 0", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 7, padding: "7px 0", alignItems: "center", flexWrap: "wrap" }}>
         <input
           autoFocus
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
-          style={{ flex: 1, minWidth: 0, border: `1px solid ${theme.border}`, borderRadius: 8, padding: "6px 8px", fontSize: 13 }}
+          style={{ ...fieldStyle(), flex: 1, minWidth: 120, padding: "9px 12px", borderRadius: 12, fontSize: 13 }}
         />
         <input
           type="date"
           value={due}
           max={deadline || undefined}
           onChange={(e) => setDue(e.target.value)}
-          style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: "6px 8px", fontSize: 12 }}
+          style={{ ...fieldStyle(), width: "auto", padding: "8px 11px", borderRadius: 11, fontFamily: MONO, fontSize: 12, color: theme.textSecondary }}
         />
-        <button onClick={save} style={{ background: theme.accentPlum, color: theme.cardBg, borderRadius: 8, padding: "6px 9px", fontSize: 11, fontWeight: 700 }}>
+        <button onClick={save} style={{ ...accentButtonStyle(true), padding: "9px 15px", borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
           Save
         </button>
-        <button onClick={() => setEditing(false)} style={{ color: theme.textFaint, fontSize: 11, fontWeight: 600, padding: 2 }}>
+        <button onClick={() => setEditing(false)} style={{ border: "none", background: "transparent", color: theme.textFainter, fontSize: 12, fontWeight: 500, cursor: "pointer", padding: 4 }}>
           Cancel
         </button>
       </div>
@@ -452,37 +509,61 @@ function MilestoneRow({ milestone, shared, deadline, promoteTarget, onToggle, on
   }
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
-      <button onClick={onToggle} style={{ width: 18, height: 18, borderRadius: 6, border: `1.5px solid ${milestone.done ? theme.accentPlum : theme.border}`, background: milestone.done ? theme.accentPlum : "transparent", flexShrink: 0 }} />
+    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0" }}>
+      <button
+        onClick={onToggle}
+        style={{
+          width: 19, height: 19, borderRadius: 7, flexShrink: 0, padding: 0, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          border: `1.5px solid ${milestone.done ? theme.accentPlum : theme.glassBorder2}`,
+          background: milestone.done ? `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})` : "transparent",
+          boxShadow: milestone.done ? `0 3px 10px -4px ${theme.accentPlum}` : "none",
+          transition: `all .3s ${SPRING}`,
+        }}
+      >
+        {milestone.done && <Check size={10} color={theme.accentInk} strokeWidth={3.5} style={{ animation: `tick .45s ${SPRING}` }} />}
+      </button>
       <span
         onClick={startEdit}
         title={!shared ? "Tap to edit" : undefined}
-        style={{ flex: 1, fontSize: 13, color: theme.textSecondary, textDecoration: milestone.done ? "line-through" : "none", cursor: shared ? "default" : "pointer" }}
+        style={{
+          flex: 1, minWidth: 0, fontSize: 13.5,
+          color: milestone.done ? theme.textFainter : theme.textSecondary,
+          textDecoration: milestone.done ? "line-through" : "none",
+          cursor: shared ? "default" : "pointer",
+        }}
       >
         {milestone.text}
       </span>
-      {milestone.due && <span style={{ fontSize: 11, color: theme.textFaint }}>{milestone.due}</span>}
+      {milestone.due && (
+        <span style={{ fontFamily: MONO, fontSize: 11, color: theme.textFainter, flexShrink: 0 }}>{fmtDay(milestone.due)}</span>
+      )}
       {!shared && (milestone.promotedTodoId ? (
         <button
           onClick={onUnpromote}
-          title="Remove from todo list"
-          style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: theme.accentPlum, fontWeight: 700, padding: 2 }}
+          title="Remove from today's list"
+          style={{
+            display: "flex", alignItems: "center", gap: 3, flexShrink: 0, cursor: "pointer",
+            fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 999,
+            color: theme.accentPlum, background: theme.accentSoft, border: `1px solid ${theme.accentPlum}`,
+          }}
         >
-          In daily <X size={11} />
+          In today <X size={10} />
         </button>
       ) : (
-        <button
+        <IconAction
           onClick={onPromote}
-          title={`Promote to ${promoteTarget === "work" ? "Work" : "Personal"}`}
-          style={{ color: theme.textFaint, padding: 2 }}
+          title={`Add to today's ${promoteTarget === "work" ? "Work" : "Personal"} list`}
+          hoverColor={theme.accentPlum}
+          size={3}
         >
           <ArrowUpRight size={13} />
-        </button>
+        </IconAction>
       ))}
       {!shared && (
-        <button onClick={onDelete} style={{ color: theme.budgetBorder, padding: 2 }}>
+        <IconAction onClick={onDelete} title="Delete milestone" hoverColor={theme.accentRed} size={3}>
           <X size={13} />
-        </button>
+        </IconAction>
       )}
     </div>
   );
@@ -498,17 +579,26 @@ function MilestoneAddRow({ deadline, onAdd }) {
     setDue("");
   }
   return (
-    <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
+    <div style={{ display: "flex", gap: 7, marginTop: 8, alignItems: "center" }}>
       <input
         placeholder="Add a milestone"
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && submit()}
-        style={{ flex: 1, minWidth: 0, border: `1px solid ${theme.border}`, borderRadius: 8, padding: "6px 8px", fontSize: 13 }}
+        style={{ ...fieldStyle(), flex: 1, minWidth: 0, padding: "9px 12px", borderRadius: 12, fontSize: 13 }}
       />
-      <input type="date" value={due} max={deadline || undefined} onChange={(e) => setDue(e.target.value)} style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: "6px 8px", fontSize: 12 }} />
-      <button onClick={submit} style={{ background: theme.accentPlum, color: theme.cardBg, borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 700 }}>
-        <Plus size={14} />
+      <input
+        type="date"
+        value={due}
+        max={deadline || undefined}
+        onChange={(e) => setDue(e.target.value)}
+        style={{ ...fieldStyle(), width: "auto", padding: "8px 11px", borderRadius: 11, fontFamily: MONO, fontSize: 12, color: theme.textSecondary }}
+      />
+      <button
+        onClick={submit}
+        style={{ ...accentButtonStyle(true), width: 38, height: 38, flexShrink: 0, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center" }}
+      >
+        <Plus size={15} />
       </button>
     </div>
   );

@@ -10,18 +10,29 @@ import { db } from "./firebase";
 // night screen. Kept as one exported object so the weekly moon tracker can
 // import the same values instead of redefining them.
 export const NIGHT = {
-  bg: "#1a1216",
-  surface: "#241c20",
-  border: "#332a2f",
-  borderStrong: "#4f4247",
-  textBright: "#f0e6da",
-  text: "#e8ddd2",
-  textMuted: "#8f7f74",
-  textFaint: "#6e6058",
-  gold: "#c39d66",
-  goldDim: "#3a2f24",
-  moonDark: "#2a2118",
+  // The night sky itself — a gradient, so use it as `background`, never `color`.
+  bg: "radial-gradient(120% 80% at 50% -10%, #1b1830, #0c0a14 62%, #07060c)",
+  ink: "#12101c",              // readable on gold
+  surface: "rgba(255,255,255,.05)",
+  border: "rgba(255,255,255,.07)",
+  borderStrong: "rgba(255,255,255,.22)",
+  textBright: "#e9e3f2",
+  text: "#e9e3f2",
+  textMuted: "rgba(233,227,242,.55)",
+  textFaint: "rgba(233,227,242,.33)",
+  gold: "#e8c184",
+  goldLit: "#f0cf8e",
+  goldDeep: "#d5a55f",
+  goldGradient: "linear-gradient(140deg,#f0cf8e,#d5a55f)",
+  goldDim: "rgba(232,193,132,.12)",
+  goldBorder: "rgba(232,193,132,.5)",
+  moonDark: "#1a1626",
+  danger: "#e0796d",
 };
+
+const SPRING = "cubic-bezier(.34,1.56,.64,1)";
+const EASE_OUT = "cubic-bezier(.22,1,.36,1)";
+const MONO = "'Geist Mono', ui-monospace, monospace";
 
 // Local calendar date. NOT toISOString().slice(0,10) — that returns the UTC
 // date, which has already rolled to tomorrow during our evening. Same bug that
@@ -114,29 +125,35 @@ export function repeatLabel(tpl) {
 }
 
 // progress 0..1 — the lit part waxes from new moon to full.
-export function Moon({ size = 78, progress = 0, id = "moon" }) {
+export function Moon({ size = 88, progress = 0, id = "moon" }) {
   const c = size / 2;
-  const r = size * 0.385;
+  const r = size / 2;
   const shift = progress * 2 * r;
   const reduce = typeof window !== "undefined" && window.matchMedia
     && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img"
-      aria-label={`Moon, ${Math.round(progress * 100)} percent lit`}>
+    <svg
+      width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img"
+      aria-label={`Moon, ${Math.round(progress * 100)} percent lit`}
+      style={{ filter: `drop-shadow(0 0 30px rgba(232,193,132,.45))` }}
+    >
       <defs>
         <clipPath id={`clip-${id}`}>
           <circle cx={c} cy={c} r={r} />
         </clipPath>
+        <linearGradient id={`lit-${id}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor={NIGHT.goldLit} />
+          <stop offset="1" stopColor={NIGHT.goldDeep} />
+        </linearGradient>
       </defs>
       <g clipPath={`url(#clip-${id})`}>
-        <circle cx={c} cy={c} r={r} fill={NIGHT.moonDark} />
-        <circle cx={c} cy={c} r={r} fill={NIGHT.gold} />
+        <circle cx={c} cy={c} r={r} fill={`url(#lit-${id})`} />
         <circle
           cx={c - shift}
           cy={c}
           r={r}
           fill={NIGHT.moonDark}
-          style={reduce ? undefined : { transition: "cx 700ms ease" }}
+          style={reduce ? undefined : { transition: `cx 800ms ${EASE_OUT}` }}
         />
       </g>
     </svg>
@@ -352,17 +369,18 @@ export default function Nightly({ uid, onBack }) {
   // alignItems flex-start so a wrapped multi-line entry keeps its checkbox and
   // trash icon on the first line instead of floating to the vertical middle.
   const row = {
-    display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 2px",
-    borderBottom: `0.5px solid ${NIGHT.border}`,
+    display: "flex", alignItems: "flex-start", gap: 13, padding: "14px 2px",
+    borderBottom: `1px solid ${NIGHT.border}`,
   };
 
   const pill = (on) => ({
     display: "flex", alignItems: "center", gap: 6,
-    padding: "6px 11px", borderRadius: 999,
-    border: `0.5px solid ${on ? NIGHT.gold : NIGHT.border}`,
-    background: on ? NIGHT.goldDim : "transparent",
+    padding: "7px 13px", borderRadius: 999,
+    border: `1px solid ${on ? NIGHT.goldBorder : "rgba(255,255,255,.1)"}`,
+    background: on ? NIGHT.goldDim : NIGHT.surface,
     color: on ? NIGHT.gold : NIGHT.textMuted,
-    fontSize: 12.5, fontFamily: "inherit", cursor: "pointer",
+    fontSize: 12.5, fontWeight: 500, fontFamily: "inherit", cursor: "pointer",
+    transition: `all .25s ${SPRING}`,
   });
 
   function Item({ item, muted }) {
@@ -373,15 +391,17 @@ export default function Nightly({ uid, onBack }) {
           onClick={() => toggleDone(item)}
           title={item.done ? "Mark not done" : "Mark done"}
           style={{
-            width: 20, height: 20, minWidth: 20, borderRadius: 10, marginTop: 1,
+            width: 21, height: 21, minWidth: 21, borderRadius: "50%", marginTop: 1,
             border: `1.5px solid ${item.done ? NIGHT.gold : NIGHT.borderStrong}`,
-            background: item.done ? NIGHT.gold : "transparent",
-            color: NIGHT.bg,
+            background: item.done ? NIGHT.goldGradient : "transparent",
+            boxShadow: item.done ? `0 4px 14px -5px ${NIGHT.goldDeep}` : "none",
+            color: NIGHT.ink,
             display: "flex", alignItems: "center", justifyContent: "center",
             cursor: "pointer", padding: 0, flexShrink: 0,
+            transition: `all .35s ${SPRING}`,
           }}
         >
-          {item.done && <Check size={12} strokeWidth={3} />}
+          {item.done && <Check size={11} strokeWidth={3.5} style={{ animation: `tick .45s ${SPRING}` }} />}
         </button>
 
         <span style={{
@@ -404,19 +424,19 @@ export default function Nightly({ uid, onBack }) {
 
         {carried && (
           <span
-            className="orbit-nightly-pulse"
             title={`Carried over from ${shortDate(item.firstDate || today)}`}
             aria-label="Carried over from an earlier night"
             style={{
               width: 6, height: 6, borderRadius: 3, background: NIGHT.gold,
-              flexShrink: 0, marginTop: 8,
+              flexShrink: 0, marginTop: 8, boxShadow: `0 0 10px -1px ${NIGHT.gold}`,
+              animation: "glowPulse 2.8s ease-in-out infinite",
             }}
           />
         )}
 
         {muted && (
           <span style={{
-            fontSize: 12, color: NIGHT.textFaint, whiteSpace: "nowrap",
+            fontFamily: MONO, fontSize: 12, color: NIGHT.textFaint, whiteSpace: "nowrap",
             flexShrink: 0, marginTop: 2,
           }}>
             {shortDate(item.forDate)}
@@ -427,8 +447,9 @@ export default function Nightly({ uid, onBack }) {
           onClick={() => removeItem(item)}
           title={item.templateId ? "Skip tonight" : "Remove"}
           style={{
-            color: NIGHT.textFaint, cursor: "pointer", display: "flex",
+            color: "rgba(233,227,242,.3)", cursor: "pointer", display: "flex",
             padding: 0, flexShrink: 0, marginTop: 2,
+            background: "transparent", border: "none",
           }}
         >
           <Trash2 size={15} />
@@ -438,56 +459,52 @@ export default function Nightly({ uid, onBack }) {
   }
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      background: NIGHT.bg,
-      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-    }}>
-      {/* Scoped here rather than index.css so the module stays self-contained. */}
-      <style>{`
-        @keyframes orbitNightlyPulse {
-          0%, 100% { opacity: .28; transform: scale(.8); }
-          50%      { opacity: .95; transform: scale(1); }
-        }
-        .orbit-nightly-pulse {
-          animation: orbitNightlyPulse 2.8s ease-in-out infinite;
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .orbit-nightly-pulse { animation: none; opacity: .8; }
-        }
-      `}</style>
-
-      <div style={{ maxWidth: 560, margin: "0 auto", padding: "22px 20px 40px" }}>
+    <div
+      className="orbit-shell"
+      style={{
+        position: "relative", zIndex: 2, overflow: "hidden",
+        display: "flex", flexDirection: "column",
+        background: NIGHT.bg, color: NIGHT.text,
+        fontFamily: "'Geist', system-ui, sans-serif",
+        animation: `screenIn .5s ${EASE_OUT}`,
+      }}
+    >
+      <div style={{
+        width: "100%", maxWidth: 600, margin: "0 auto", padding: "24px 20px 0",
+        flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
+      }}>
 
         <button
           onClick={onBack}
           title="Back"
           style={{
-            display: "flex", alignItems: "center", gap: 3, marginBottom: 20,
-            color: NIGHT.textMuted, fontSize: 14, cursor: "pointer", padding: 0,
+            flexShrink: 0, display: "flex", alignItems: "center", gap: 5, marginBottom: 22,
+            color: NIGHT.textMuted, fontSize: 13.5, cursor: "pointer", padding: 0,
+            background: "transparent", border: "none",
           }}
         >
           <ChevronLeft size={16} /> Back
         </button>
 
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+        <div style={{ flexShrink: 0, display: "flex", justifyContent: "center", marginBottom: 18 }}>
           <Moon progress={progress} id="tonight" />
         </div>
 
-        <div style={{ textAlign: "center", marginBottom: 26 }}>
+        <div style={{ flexShrink: 0, textAlign: "center", marginBottom: 30 }}>
           <div style={{
-            fontFamily: "'Fraunces', Georgia, serif", fontSize: 23, fontWeight: 600,
+            fontFamily: "'Bricolage Grotesque', system-ui, sans-serif",
+            fontSize: 26, fontWeight: 600, letterSpacing: "-.03em",
             color: NIGHT.textBright,
           }}>
-            Tonight's focus
+            {allDone ? "That's everything." : "Tonight's focus"}
           </div>
-          <div style={{ fontSize: 13, marginTop: 4, color: allDone ? NIGHT.gold : NIGHT.textMuted }}>
+          <div style={{ fontSize: 13.5, marginTop: 6, color: allDone ? NIGHT.gold : NIGHT.textMuted }}>
             {allDone
-              ? "That's everything. Sleep well."
+              ? "Sleep well."
               : `${prettyDate(today)}${tonight.length ? ` · ${doneCount} of ${tonight.length}` : ""}`}
           </div>
           {carriedCount > 0 && !allDone && (
-            <div style={{ fontSize: 12, marginTop: 5, color: NIGHT.textFaint }}>
+            <div style={{ fontSize: 12, marginTop: 7, color: NIGHT.textFaint }}>
               {carriedCount === 1
                 ? "1 thing carried over from an earlier night"
                 : `${carriedCount} things carried over from earlier nights`}
@@ -495,18 +512,21 @@ export default function Nightly({ uid, onBack }) {
           )}
         </div>
 
+        {/* Everything below the "Tonight's focus" header is the only scroller. */}
+        <div className="orbit-scroll" style={{ flex: 1, minHeight: 0, paddingBottom: 60 }}>
+
         {loaded && tonight.length === 0 && (
           <div style={{
             textAlign: "center", color: NIGHT.textMuted, fontSize: 14,
-            padding: "26px 10px", borderTop: `0.5px solid ${NIGHT.border}`,
-            borderBottom: `0.5px solid ${NIGHT.border}`,
+            padding: "28px 10px", borderTop: `1px solid ${NIGHT.border}`,
+            borderBottom: `1px solid ${NIGHT.border}`,
           }}>
             Nothing set for tonight. Add the first thing below.
           </div>
         )}
 
         {tonight.length > 0 && (
-          <div style={{ borderTop: `0.5px solid ${NIGHT.border}` }}>
+          <div style={{ borderTop: `1px solid ${NIGHT.border}` }}>
             {tonight.map((item) => <Item key={item.id} item={item} />)}
           </div>
         )}
@@ -514,12 +534,12 @@ export default function Nightly({ uid, onBack }) {
         {upcoming.length > 0 && (
           <div style={{ marginTop: 30 }}>
             <div style={{
-              fontSize: 11, letterSpacing: "0.09em", textTransform: "uppercase",
-              color: NIGHT.textFaint, marginBottom: 8,
+              fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase",
+              color: NIGHT.textFaint, marginBottom: 9,
             }}>
               Coming up
             </div>
-            <div style={{ borderTop: `0.5px solid ${NIGHT.border}` }}>
+            <div style={{ borderTop: `1px solid ${NIGHT.border}` }}>
               {upcoming.map((item) => <Item key={item.id} item={item} muted />)}
             </div>
           </div>
@@ -527,7 +547,7 @@ export default function Nightly({ uid, onBack }) {
 
         {/* alignItems flex-end keeps the + button pinned to the bottom of the
             field as the textarea grows upward. */}
-        <div style={{ display: "flex", gap: 8, marginTop: 26, alignItems: "flex-end" }}>
+        <div style={{ display: "flex", gap: 9, marginTop: 28, alignItems: "flex-end" }}>
           <textarea
             ref={taRef}
             value={draft}
@@ -544,9 +564,9 @@ export default function Nightly({ uid, onBack }) {
               flex: 1,
               minWidth: 0,
               background: NIGHT.surface,
-              border: `0.5px solid ${NIGHT.border}`,
-              borderRadius: 10,
-              padding: "11px 14px",
+              border: `1px solid rgba(255,255,255,.11)`,
+              borderRadius: 14,
+              padding: "12px 15px",
               fontSize: 15,
               lineHeight: 1.4,
               fontFamily: "inherit",
@@ -563,12 +583,14 @@ export default function Nightly({ uid, onBack }) {
             onClick={addItem}
             title="Add"
             style={{
-              width: 42, height: 42, minWidth: 42, borderRadius: 10,
-              background: draft.trim() ? NIGHT.gold : NIGHT.goldDim,
-              color: draft.trim() ? NIGHT.bg : NIGHT.textFaint,
+              width: 44, height: 44, minWidth: 44, borderRadius: 14,
+              background: draft.trim() ? NIGHT.goldGradient : "rgba(255,255,255,.06)",
+              color: draft.trim() ? NIGHT.ink : NIGHT.textFaint,
+              boxShadow: draft.trim() ? `0 8px 22px -10px ${NIGHT.goldDeep}` : "none",
               display: "flex", alignItems: "center", justifyContent: "center",
               cursor: draft.trim() ? "pointer" : "default", padding: 0,
-              flexShrink: 0,
+              flexShrink: 0, border: "none",
+              transition: `all .3s ${SPRING}`,
             }}
           >
             <Plus size={20} />
@@ -578,7 +600,7 @@ export default function Nightly({ uid, onBack }) {
         {/* Date + repeat controls. The native date input sits invisibly on top
             of its pill rather than being hidden — showPicker() on a
             display:none input is unreliable in iOS Safari. */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 11, flexWrap: "wrap" }}>
           <div style={{ position: "relative", display: "inline-flex" }}>
             <button title="Pick a night" style={pill(!!draftDate)}>
               <Calendar size={14} />
@@ -628,9 +650,10 @@ export default function Nightly({ uid, onBack }) {
 
         {showRepeat && (
           <div style={{
-            display: "flex", flexWrap: "wrap", gap: 7, marginTop: 10,
-            padding: "12px", borderRadius: 10,
-            background: NIGHT.surface, border: `0.5px solid ${NIGHT.border}`,
+            display: "flex", flexWrap: "wrap", gap: 8, marginTop: 11,
+            padding: 14, borderRadius: 16,
+            background: "rgba(255,255,255,.04)", border: `1px solid rgba(255,255,255,.09)`,
+            animation: `popIn .3s ${SPRING}`,
           }}>
             {REPEAT_OPTIONS.map((opt) => (
               <button
@@ -656,16 +679,16 @@ export default function Nightly({ uid, onBack }) {
                   inputMode="numeric"
                   onChange={(e) => setIntervalDays(e.target.value.replace(/[^0-9]/g, ""))}
                   style={{
-                    width: 56, background: NIGHT.bg, color: NIGHT.text,
-                    border: `0.5px solid ${NIGHT.borderStrong}`, borderRadius: 8,
-                    padding: "6px 9px", fontSize: 14, fontFamily: "inherit", outline: "none",
+                    width: 56, background: "rgba(255,255,255,.06)", color: NIGHT.text,
+                    border: `1px solid rgba(255,255,255,.11)`, borderRadius: 11,
+                    padding: "7px 10px", fontSize: 14, fontFamily: MONO, outline: "none",
                   }}
                 />
                 nights, starting {shortDate(draftDate || today)}
               </div>
             )}
 
-            <div style={{ width: "100%", fontSize: 11.5, color: NIGHT.textFaint, marginTop: 2 }}>
+            <div style={{ width: "100%", fontSize: 11.5, lineHeight: 1.5, color: NIGHT.textFaint, marginTop: 3 }}>
               Repeating items come back every matching night on their own. A missed
               night stays missed — it won't pile up on tomorrow.
             </div>
@@ -678,8 +701,9 @@ export default function Nightly({ uid, onBack }) {
               onClick={() => setShowTemplates((v) => !v)}
               style={{
                 display: "flex", alignItems: "center", gap: 6, padding: 0,
-                fontSize: 11, letterSpacing: "0.09em", textTransform: "uppercase",
+                fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase",
                 color: NIGHT.textFaint, cursor: "pointer", fontFamily: "inherit",
+                background: "transparent", border: "none",
               }}
             >
               <Repeat size={12} />
@@ -687,7 +711,7 @@ export default function Nightly({ uid, onBack }) {
             </button>
 
             {showTemplates && (
-              <div style={{ marginTop: 8, borderTop: `0.5px solid ${NIGHT.border}` }}>
+              <div style={{ marginTop: 8, borderTop: `1px solid ${NIGHT.border}` }}>
                 {templates.map((tpl) => (
                   <div key={tpl.id} style={row}>
                     <span style={{
@@ -703,8 +727,9 @@ export default function Nightly({ uid, onBack }) {
                       onClick={() => removeTemplate(tpl.id)}
                       title="Stop repeating"
                       style={{
-                        color: NIGHT.textFaint, cursor: "pointer", display: "flex",
+                        color: "rgba(233,227,242,.3)", cursor: "pointer", display: "flex",
                         padding: 0, flexShrink: 0, marginTop: 2,
+                        background: "transparent", border: "none",
                       }}
                     >
                       <Trash2 size={15} />
@@ -716,6 +741,7 @@ export default function Nightly({ uid, onBack }) {
           </div>
         )}
 
+        </div>
       </div>
     </div>
   );
