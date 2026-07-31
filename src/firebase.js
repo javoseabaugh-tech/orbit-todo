@@ -6,7 +6,15 @@ import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAvQhtSEe54arPmUYBqI9dUMemBt1whQzI",
-  authDomain: "orbit-cbd4e.firebaseapp.com",
+  // Must match the domain the app is actually served from. signInWithRedirect
+  // hands the session off via authDomain, and since Chrome 115 / Safari ITP
+  // partitioned third-party storage that handoff silently fails across origins
+  // — auth completes, onAuthStateChanged fires null, and you loop back to the
+  // sign-in button. The default "<project>.firebaseapp.com" is a *different*
+  // origin from the web.app host, so it loops. Firebase Hosting serves
+  // /__/auth/* on both, so this is a valid authDomain.
+  // Deploying to a preview channel needs this set to that channel's hostname.
+  authDomain: "orbit-cbd4e.web.app",
   projectId: "orbit-cbd4e",
   storageBucket: "orbit-cbd4e.firebasestorage.app",
   messagingSenderId: "944702899935",
