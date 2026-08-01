@@ -20,6 +20,7 @@ import {
   Receipt,
   RotateCcw,
   Landmark,
+  X,
 } from "lucide-react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
@@ -82,6 +83,7 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
   const [loaded, setLoaded] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const [newBill, setNewBill] = useState({ name: "", amount: "", bankId: "a1" });
+  const [showAddBill, setShowAddBill] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState(null);
   const [revealAll, setRevealAll] = useState(false); // session-only: not saved
   const [view, setView] = useState("budget"); // 'budget' | 'logins'
@@ -160,13 +162,13 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
 
   // What actually renders in the list: everything, unless a bill is paid/skip
   // AND we haven't just exported (revealAll brings hidden rows back for review).
-  // Sorted largest amount first.
+  // Sorted alphabetically by bill name.
   const visibleBills = (revealAll
     ? billsThisPeriod
     : billsThisPeriod.filter((b) => b.status !== "paid" && b.status !== "skip")
   )
     .slice()
-    .sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0));
+    .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }));
 
   const sortedLogins = (state.logins || [])
     .slice()
@@ -185,18 +187,21 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
     return /^https?:\/\//i.test(login.url) ? login.url : `https://${login.url}`;
   }
 
-  function accountTotal(bankId) {
+  // Only ever sums the bills for the given pay period, so the 15th's bills can
+  // never spill into the 30th's math (and vice-versa). Defaults to the period
+  // currently in focus.
+  function accountTotal(bankId, forPeriod = period) {
     return state.bills
-      .filter((b) => b.dueDate === period && b.bankId === bankId && b.status !== "skip")
+      .filter((b) => b.dueDate === forPeriod && b.bankId === bankId && b.status !== "skip")
       .reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
   }
 
-  function updateAccountBalance(accountId, value) {
+  function updateAccountBalance(accountId, value, forPeriod = period) {
     setState((s) => ({
       ...s,
       accounts: s.accounts.map((a) =>
         a.id === accountId
-          ? { ...a, balances: { ...a.balances, [period]: value === "" ? "" : Number(value) } }
+          ? { ...a, balances: { ...a.balances, [forPeriod]: value === "" ? "" : Number(value) } }
           : a
       ),
     }));
@@ -239,7 +244,7 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
 
   function addBill() {
     const amount = parseFloat(newBill.amount);
-    if (!newBill.name.trim() || !Number.isFinite(amount)) return;
+    if (!newBill.name.trim() || !Number.isFinite(amount)) return false;
     setState((s) => ({
       ...s,
       bills: [
@@ -256,6 +261,7 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
       ],
     }));
     setNewBill({ name: "", amount: "", bankId: newBill.bankId });
+    return true;
   }
 
   function updateBill(id, patch) {
@@ -577,63 +583,84 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
 
             {showAccounts && (
               <div style={{ display: "flex", gap: 11, flexWrap: "wrap", marginBottom: 20 }}>
-                {state.accounts.map((acc) => {
-                  const spent = accountTotal(acc.id);
-                  const balanceRaw = acc.balances?.[period];
-                  const balance = balanceRaw === "" || balanceRaw === undefined ? 0 : Number(balanceRaw);
-                  const remaining = balance - spent;
-                  return (
-                    <div key={acc.id} style={{ ...glass.card, flex: "1 1 180px", minWidth: 0, padding: 15, borderRadius: 22 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 11 }}>
-                        <Landmark size={15} color={theme.accentPlum} style={{ flexShrink: 0 }} />
-                        <input
-                          type="text"
-                          value={acc.name}
-                          onChange={(e) => updateAccountName(acc.id, e.target.value)}
-                          onFocus={() => setEditingAccountId(acc.id)}
-                          onBlur={() => setEditingAccountId(null)}
-                          title="Tap to rename"
-                          style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: theme.textPrimary, background: "transparent", border: "none", padding: 0 }}
-                        />
-                        <IconAction onClick={() => deleteAccount(acc.id)} title="Delete account" hoverColor={theme.accentRed} size={3}>
-                          <Trash2 size={14} />
-                        </IconAction>
-                      </div>
-
-                      <label style={{ display: "block", fontSize: 11, color: theme.textFainter, marginBottom: 5 }}>
-                        Available {periodLabel}
-                      </label>
+                {state.accounts.map((acc) => (
+                  <div key={acc.id} style={{ ...glass.card, flex: "1 1 300px", minWidth: 0, padding: 15, borderRadius: 22 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 13 }}>
+                      <Landmark size={15} color={theme.accentPlum} style={{ flexShrink: 0 }} />
                       <input
-                        type="number"
-                        inputMode="decimal"
-                        value={balanceRaw === undefined ? "" : balanceRaw}
-                        onChange={(e) => updateAccountBalance(acc.id, e.target.value)}
-                        placeholder="0.00"
-                        style={{
-                          width: "100%", padding: "8px 11px", borderRadius: 12, marginBottom: 11,
-                          fontFamily: MONO, fontSize: 15, fontWeight: 600,
-                          color: theme.textPrimary, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
-                        }}
+                        type="text"
+                        value={acc.name}
+                        onChange={(e) => updateAccountName(acc.id, e.target.value)}
+                        onFocus={() => setEditingAccountId(acc.id)}
+                        onBlur={() => setEditingAccountId(null)}
+                        title="Tap to rename"
+                        style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: theme.textPrimary, background: "transparent", border: "none", padding: 0 }}
                       />
-
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: theme.textMuted }}>
-                        <span>Assigned</span>
-                        <span style={{ fontFamily: MONO }}>{money(spent)}</span>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 7, paddingTop: 7, borderTop: `1px solid ${theme.glassBorder2}`, fontSize: 12, color: theme.textMuted }}>
-                        <span>Left</span>
-                        <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 600, color: remaining < 0 ? theme.accentRed : theme.greenDot }}>
-                          {money(remaining)}
-                        </span>
-                      </div>
+                      <IconAction onClick={() => deleteAccount(acc.id)} title="Delete account" hoverColor={theme.accentRed} size={3}>
+                        <Trash2 size={14} />
+                      </IconAction>
                     </div>
-                  );
-                })}
+
+                    {/* The 15th and the 30th are kept completely separate: each has
+                        its own available balance, its own assigned total, and its
+                        own "left" — a bill on one period never touches the other. */}
+                    <div style={{ display: "flex", gap: 10 }}>
+                      {["15", "30"].map((per) => {
+                        const active = per === period;
+                        const spent = accountTotal(acc.id, per);
+                        const balanceRaw = acc.balances?.[per];
+                        const balance = balanceRaw === "" || balanceRaw === undefined ? 0 : Number(balanceRaw);
+                        const remaining = balance - spent;
+                        return (
+                          <div
+                            key={per}
+                            style={{
+                              flex: 1, minWidth: 0, padding: 12, borderRadius: 16,
+                              background: active ? mix(theme.accentPlum, 9) : "transparent",
+                              border: `1px solid ${active ? mix(theme.accentPlum, 32) : theme.glassBorder2}`,
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: active ? theme.accentPlum : theme.textMuted }}>
+                                {per === "15" ? "15th" : "30th"}
+                              </span>
+                            </div>
+                            <label style={{ display: "block", fontSize: 10.5, color: theme.textFainter, marginBottom: 5 }}>
+                              Available
+                            </label>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              value={balanceRaw === undefined ? "" : balanceRaw}
+                              onChange={(e) => updateAccountBalance(acc.id, e.target.value, per)}
+                              placeholder="0.00"
+                              style={{
+                                width: "100%", padding: "7px 9px", borderRadius: 11, marginBottom: 10,
+                                fontFamily: MONO, fontSize: 14, fontWeight: 600,
+                                color: theme.textPrimary, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
+                              }}
+                            />
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: theme.textMuted }}>
+                              <span>Assigned</span>
+                              <span style={{ fontFamily: MONO }}>{money(spent)}</span>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, paddingTop: 6, borderTop: `1px solid ${theme.glassBorder2}`, fontSize: 11.5, color: theme.textMuted }}>
+                              <span>Left</span>
+                              <span style={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 600, color: remaining < 0 ? theme.accentRed : theme.greenDot }}>
+                                {money(remaining)}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
                 {state.accounts.length < 3 && (
                   <button
                     onClick={addAccount}
                     style={{
-                      flex: "1 1 180px", minWidth: 0, minHeight: 120, padding: 15, borderRadius: 22,
+                      flex: "1 1 300px", minWidth: 0, minHeight: 120, padding: 15, borderRadius: 22,
                       display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
                       fontSize: 13, fontWeight: 500, cursor: "pointer",
                       color: theme.textFainter, background: theme.inputBg,
@@ -811,55 +838,29 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
               })}
             </div>
 
-            <div style={{ marginTop: 18, paddingTop: 18, borderTop: `1px solid ${theme.glassBorder2}`, display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" }}>
-              <select
-                value={newBill.name}
-                onChange={(e) => setNewBill((n) => ({ ...n, name: e.target.value }))}
-                style={{ ...fieldSm, flex: "1 1 160px", minWidth: 0, padding: "10px 13px", borderRadius: 13, fontSize: 13.5, color: theme.textPrimary }}
-              >
-                <option value="">{sortedLoginNames.length === 0 ? "Add a login first" : "Select a bill…"}</option>
-                {sortedLoginNames.map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
-              <input
-                type="number"
-                inputMode="decimal"
-                placeholder="Amount"
-                value={newBill.amount}
-                onChange={(e) => setNewBill((n) => ({ ...n, amount: e.target.value }))}
-                onKeyDown={(e) => e.key === "Enter" && addBill()}
-                style={{ ...moneyInput, width: 112, flexShrink: 0, padding: "10px 13px", borderRadius: 13 }}
-              />
-              <select
-                value={newBill.bankId}
-                onChange={(e) => setNewBill((n) => ({ ...n, bankId: e.target.value }))}
-                disabled={state.accounts.length === 0}
-                style={{ ...fieldSm, flexShrink: 0, padding: "10px 13px", borderRadius: 13, fontSize: 13, ...(state.accounts.length === 0 ? { opacity: 0.5, cursor: "not-allowed" } : null) }}
-              >
-                {state.accounts.length === 0 ? (
-                  <option value="">Add an account first</option>
-                ) : (
-                  state.accounts.map((acc) => <option key={acc.id} value={acc.id}>{acc.name}</option>)
-                )}
-              </select>
-              <button
-                onClick={addBill}
-                disabled={!newBill.name.trim() || newBill.amount === ""}
-                style={{
-                  ...accentButtonStyle(!!newBill.name.trim() && newBill.amount !== ""),
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                  padding: "10px 18px", borderRadius: 13, fontSize: 13, fontWeight: 600, flexShrink: 0,
-                }}
-              >
-                <Plus size={15} />
-                Add
-              </button>
-            </div>
-
-            <p style={{ margin: "16px 0 0", fontSize: 11.5, lineHeight: 1.55, textAlign: "center", color: theme.textFainter }}>
+            <p style={{ margin: "18px 0 0", fontSize: 11.5, lineHeight: 1.55, textAlign: "center", color: theme.textFainter }}>
               Bill status saves automatically. Mark a bill "no payment needed" or "payment complete" and it steps out of the way — unhide brings everything back for a check without changing anything.
             </p>
+
+            {/* Floating "add bill" button — sits bottom-left so it never
+                overlaps the accounts bubble on the right. Tapping it opens the
+                form anchored to the top of the screen, so on a phone the fields
+                stay above the on-screen keyboard instead of hidden beneath it. */}
+            <button
+              onClick={() => setShowAddBill(true)}
+              title="Add a bill"
+              style={{
+                position: "fixed", left: 24, bottom: 24, width: 54, height: 54,
+                borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center",
+                zIndex: 45, border: "none", cursor: "pointer",
+                color: theme.accentInk,
+                background: `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})`,
+                boxShadow: `0 14px 34px -10px ${theme.accentPlum}, inset 0 1px 0 rgba(255,255,255,.4)`,
+                transition: `all .4s ${SPRING}`,
+              }}
+            >
+              <Plus size={22} />
+            </button>
 
             {/* Floating bubble: minimises the account cards, and shows each
                 account's remaining balance while they're collapsed. */}
@@ -1258,6 +1259,95 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
           <button onClick={doResetAllToUnpaid} style={dangerButtonStyle}>Reset all to Unpaid</button>
           <button onClick={() => setConfirmReset(false)} style={modalDismissStyle}>Cancel</button>
         </BudgetModal>
+      )}
+
+      {/* Add-bill form, anchored to the very top of the screen so it opens
+          above the keyboard on mobile rather than being pushed behind it. */}
+      {showAddBill && (
+        <div
+          onClick={() => setShowAddBill(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 210, background: theme.scrim,
+            backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+            display: "flex", justifyContent: "center", alignItems: "flex-start",
+            padding: 16, animation: "fadeIn .2s ease",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              ...glass.raised, width: "100%", maxWidth: 460,
+              marginTop: "calc(env(safe-area-inset-top, 0px) + 8px)",
+              padding: 20, borderRadius: 24, animation: `popIn .3s ${SPRING}`,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 16 }}>
+              <span style={{
+                width: 36, height: 36, borderRadius: 12, flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: theme.accentInk,
+                background: `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})`,
+                boxShadow: `0 8px 20px -10px ${theme.accentPlum}`,
+              }}>
+                <Plus size={18} />
+              </span>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <h2 style={{ ...display(18), margin: 0, lineHeight: 1.1 }}>Add a bill</h2>
+                <p style={{ margin: "3px 0 0", fontSize: 12, color: theme.textMuted }}>Due {periodLabel}</p>
+              </div>
+              <IconAction onClick={() => setShowAddBill(false)} title="Close" hoverColor={theme.accentRed}>
+                <X size={18} />
+              </IconAction>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <select
+                value={newBill.name}
+                onChange={(e) => setNewBill((n) => ({ ...n, name: e.target.value }))}
+                autoFocus
+                style={{ ...fieldSm, width: "100%", padding: "11px 13px", borderRadius: 13, fontSize: 14, color: theme.textPrimary }}
+              >
+                <option value="">{sortedLoginNames.length === 0 ? "Add a login first" : "Select a bill…"}</option>
+                {sortedLoginNames.map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                inputMode="decimal"
+                placeholder="Amount"
+                value={newBill.amount}
+                onChange={(e) => setNewBill((n) => ({ ...n, amount: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === "Enter" && addBill()) setShowAddBill(false); }}
+                style={{ ...moneyInput, width: "100%", textAlign: "left", padding: "11px 13px", borderRadius: 13, fontSize: 14 }}
+              />
+              <select
+                value={newBill.bankId}
+                onChange={(e) => setNewBill((n) => ({ ...n, bankId: e.target.value }))}
+                disabled={state.accounts.length === 0}
+                style={{ ...fieldSm, width: "100%", padding: "11px 13px", borderRadius: 13, fontSize: 14, color: theme.textPrimary, ...(state.accounts.length === 0 ? { opacity: 0.5, cursor: "not-allowed" } : null) }}
+              >
+                {state.accounts.length === 0 ? (
+                  <option value="">Add an account first</option>
+                ) : (
+                  state.accounts.map((acc) => <option key={acc.id} value={acc.id}>{acc.name}</option>)
+                )}
+              </select>
+              <button
+                onClick={() => { if (addBill()) setShowAddBill(false); }}
+                disabled={!newBill.name.trim() || newBill.amount === ""}
+                style={{
+                  ...accentButtonStyle(!!newBill.name.trim() && newBill.amount !== ""),
+                  width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  padding: 13, borderRadius: 14, fontSize: 14, fontWeight: 600, marginTop: 2,
+                }}
+              >
+                <Plus size={16} />
+                Add bill
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
