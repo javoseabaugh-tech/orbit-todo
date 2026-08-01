@@ -584,84 +584,67 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
 
             {showAccounts && (
               <div style={{ display: "flex", gap: 11, flexWrap: "wrap", marginBottom: 20 }}>
-                {state.accounts.map((acc) => (
-                  <div key={acc.id} style={{ ...glass.card, flex: "1 1 300px", minWidth: 0, padding: 15, borderRadius: 22 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 13 }}>
-                      <Landmark size={15} color={theme.accentPlum} style={{ flexShrink: 0 }} />
-                      <input
-                        type="text"
-                        value={acc.name}
-                        onChange={(e) => updateAccountName(acc.id, e.target.value)}
-                        onFocus={() => setEditingAccountId(acc.id)}
-                        onBlur={() => setEditingAccountId(null)}
-                        title="Tap to rename"
-                        style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: theme.textPrimary, background: "transparent", border: "none", padding: 0 }}
-                      />
-                      <IconAction onClick={() => deleteAccount(acc.id)} title="Delete account" hoverColor={theme.accentRed} size={3}>
-                        <Trash2 size={14} />
-                      </IconAction>
-                    </div>
+                {state.accounts.map((acc) => {
+                  // Only the currently-selected pay period is shown, so the 15th
+                  // and the 30th never appear side by side. The balances stay
+                  // fully separate underneath — switching the tab above swaps
+                  // which period's balance, assigned total, and "left" you see.
+                  const spent = accountTotal(acc.id, period);
+                  const balanceRaw = acc.balances?.[period];
+                  const balance = balanceRaw === "" || balanceRaw === undefined ? 0 : Number(balanceRaw);
+                  const remaining = balance - spent;
+                  return (
+                    <div key={acc.id} style={{ ...glass.card, flex: "1 1 180px", minWidth: 0, padding: 15, borderRadius: 22 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 11 }}>
+                        <Landmark size={15} color={theme.accentPlum} style={{ flexShrink: 0 }} />
+                        <input
+                          type="text"
+                          value={acc.name}
+                          onChange={(e) => updateAccountName(acc.id, e.target.value)}
+                          onFocus={() => setEditingAccountId(acc.id)}
+                          onBlur={() => setEditingAccountId(null)}
+                          title="Tap to rename"
+                          style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: theme.textPrimary, background: "transparent", border: "none", padding: 0 }}
+                        />
+                        <IconAction onClick={() => deleteAccount(acc.id)} title="Delete account" hoverColor={theme.accentRed} size={3}>
+                          <Trash2 size={14} />
+                        </IconAction>
+                      </div>
 
-                    {/* The 15th and the 30th are kept completely separate: each has
-                        its own available balance, its own assigned total, and its
-                        own "left" — a bill on one period never touches the other. */}
-                    <div style={{ display: "flex", gap: 10 }}>
-                      {["15", "30"].map((per) => {
-                        const active = per === period;
-                        const spent = accountTotal(acc.id, per);
-                        const balanceRaw = acc.balances?.[per];
-                        const balance = balanceRaw === "" || balanceRaw === undefined ? 0 : Number(balanceRaw);
-                        const remaining = balance - spent;
-                        return (
-                          <div
-                            key={per}
-                            style={{
-                              flex: 1, minWidth: 0, padding: 12, borderRadius: 16,
-                              background: active ? mix(theme.accentPlum, 9) : "transparent",
-                              border: `1px solid ${active ? mix(theme.accentPlum, 32) : theme.glassBorder2}`,
-                            }}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                              <span style={{ fontSize: 12, fontWeight: 700, color: active ? theme.accentPlum : theme.textMuted }}>
-                                {per === "15" ? "15th" : "30th"}
-                              </span>
-                            </div>
-                            <label style={{ display: "block", fontSize: 10.5, color: theme.textFainter, marginBottom: 5 }}>
-                              Available
-                            </label>
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              value={balanceRaw === undefined ? "" : balanceRaw}
-                              onChange={(e) => updateAccountBalance(acc.id, e.target.value, per)}
-                              placeholder="0.00"
-                              style={{
-                                width: "100%", padding: "7px 9px", borderRadius: 11, marginBottom: 10,
-                                fontFamily: MONO, fontSize: 14, fontWeight: 600,
-                                color: theme.textPrimary, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
-                              }}
-                            />
-                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: theme.textMuted }}>
-                              <span>Assigned</span>
-                              <span style={{ fontFamily: MONO }}>{money(spent)}</span>
-                            </div>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, paddingTop: 6, borderTop: `1px solid ${theme.glassBorder2}`, fontSize: 11.5, color: theme.textMuted }}>
-                              <span>Left</span>
-                              <span style={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 600, color: remaining < 0 ? theme.accentRed : theme.greenDot }}>
-                                {money(remaining)}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
+                      <label style={{ display: "block", fontSize: 11, color: theme.textFainter, marginBottom: 5 }}>
+                        Available {periodLabel}
+                      </label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={balanceRaw === undefined ? "" : balanceRaw}
+                        onChange={(e) => updateAccountBalance(acc.id, e.target.value, period)}
+                        placeholder="0.00"
+                        style={{
+                          width: "100%", padding: "8px 11px", borderRadius: 12, marginBottom: 11,
+                          fontFamily: MONO, fontSize: 15, fontWeight: 600,
+                          color: theme.textPrimary, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
+                        }}
+                      />
+
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: theme.textMuted }}>
+                        <span>Assigned</span>
+                        <span style={{ fontFamily: MONO }}>{money(spent)}</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 7, paddingTop: 7, borderTop: `1px solid ${theme.glassBorder2}`, fontSize: 12, color: theme.textMuted }}>
+                        <span>Left</span>
+                        <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 600, color: remaining < 0 ? theme.accentRed : theme.greenDot }}>
+                          {money(remaining)}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {state.accounts.length < 3 && (
                   <button
                     onClick={addAccount}
                     style={{
-                      flex: "1 1 300px", minWidth: 0, minHeight: 120, padding: 15, borderRadius: 22,
+                      flex: "1 1 180px", minWidth: 0, minHeight: 120, padding: 15, borderRadius: 22,
                       display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
                       fontSize: 13, fontWeight: 500, cursor: "pointer",
                       color: theme.textFainter, background: theme.inputBg,
