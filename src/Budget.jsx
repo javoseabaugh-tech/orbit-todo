@@ -82,7 +82,7 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
   const [period, setPeriod] = useState("15");
   const [loaded, setLoaded] = useState(false);
   const [saveError, setSaveError] = useState(false);
-  const [newBill, setNewBill] = useState({ name: "", amount: "", bankId: "a1" });
+  const [newBill, setNewBill] = useState({ name: "", amount: "", bankId: "a1", dueDate: "15" });
   const [showAddBill, setShowAddBill] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState(null);
   const [revealAll, setRevealAll] = useState(false); // session-only: not saved
@@ -245,6 +245,7 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
   function addBill() {
     const amount = parseFloat(newBill.amount);
     if (!newBill.name.trim() || !Number.isFinite(amount)) return false;
+    const dueDate = newBill.dueDate === "30" ? "30" : "15";
     setState((s) => ({
       ...s,
       bills: [
@@ -253,14 +254,14 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
           id: uid(),
           name: newBill.name.trim(),
           amount,
-          dueDate: period,
+          dueDate,
           bankId: newBill.bankId,
           status: "unpaid",
           paidAt: null,
         },
       ],
     }));
-    setNewBill({ name: "", amount: "", bankId: newBill.bankId });
+    setNewBill({ name: "", amount: "", bankId: newBill.bankId, dueDate });
     return true;
   }
 
@@ -847,7 +848,7 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
                 form anchored to the top of the screen, so on a phone the fields
                 stay above the on-screen keyboard instead of hidden beneath it. */}
             <button
-              onClick={() => setShowAddBill(true)}
+              onClick={() => { setNewBill((n) => ({ ...n, dueDate: period })); setShowAddBill(true); }}
               title="Add a bill"
               style={{
                 position: "fixed", left: 24, bottom: 24, width: 54, height: 54,
@@ -1293,7 +1294,7 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
               </span>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <h2 style={{ ...display(18), margin: 0, lineHeight: 1.1 }}>Add a bill</h2>
-                <p style={{ margin: "3px 0 0", fontSize: 12, color: theme.textMuted }}>Due {periodLabel}</p>
+                <p style={{ margin: "3px 0 0", fontSize: 12, color: theme.textMuted }}>Due the {newBill.dueDate === "30" ? "30th" : "15th"}</p>
               </div>
               <IconAction onClick={() => setShowAddBill(false)} title="Close" hoverColor={theme.accentRed}>
                 <X size={18} />
@@ -1301,6 +1302,15 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {/* Which pay period this bill belongs to. It deducts only from the
+                  chosen account's balance for this exact period. */}
+              <div>
+                <label style={{ display: "block", fontSize: 11, color: theme.textFainter, marginBottom: 6 }}>Pay period</label>
+                <div style={{ display: "flex", gap: 4, padding: 5, borderRadius: 999, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}` }}>
+                  <button type="button" style={segStyle(newBill.dueDate !== "30")} onClick={() => setNewBill((n) => ({ ...n, dueDate: "15" }))}>15th</button>
+                  <button type="button" style={segStyle(newBill.dueDate === "30")} onClick={() => setNewBill((n) => ({ ...n, dueDate: "30" }))}>30th</button>
+                </div>
+              </div>
               <select
                 value={newBill.name}
                 onChange={(e) => setNewBill((n) => ({ ...n, name: e.target.value }))}
