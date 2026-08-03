@@ -38,3 +38,19 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: orbit-cbd4e
           channelId: live
+
+      # Publish the Firestore Security Rules and indexes too, so the access
+      # rules in firestore.rules (e.g. letting a shared assistant tick Work
+      # tasks done) actually reach the live project instead of drifting.
+      # Uses the same service account as the Hosting deploy above.
+      - name: Deploy Firestore rules & indexes (live)
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/service-account.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/service-account.json"
+          npx --yes firebase-tools@13 deploy \
+            --only firestore:rules,firestore:indexes \
+            --project orbit-cbd4e \
+            --non-interactive \
+            --force
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
