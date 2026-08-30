@@ -1,5 +1,5 @@
 const FIRESTORE_SCOPE = "https://www.googleapis.com/auth/datastore";
-const GEMINI_MODEL = "gemini-1.5-flash";
+const GEMINI_MODEL = "gemini-3.5-flash";
 
 function props_() {
   return PropertiesService.getScriptProperties();
