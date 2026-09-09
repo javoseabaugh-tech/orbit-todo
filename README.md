@@ -215,6 +215,24 @@ due is marked notified without sending, so an outage doesn't dump a backlog.
 A reminder belonging to someone who hasn't connected Telegram is left pending
 rather than marked, so they still get it if they connect inside that window.
 
+## Firestore indexes
+
+`firestore.indexes.json` must **not** list `__name__` in an index's fields, even
+though the Firestore REST API returns it and the Firebase console shows it.
+`firebase deploy` strips `__name__` from the live indexes before comparing them
+with this file, so an entry that declares it looks like a different index — and
+one that does not exist yet.
+
+That is not a cosmetic mismatch. When nothing matches, the CLI tries to create
+indexes that already exist (a 409 that fails the deploy) and, because the
+workflow passes `--force`, it also queues every unmatched live index for
+deletion. Deletion runs after creation, so the 409 has been the only thing
+preventing it.
+
+Sync this file with `firebase firestore:indexes`, which emits the correct
+format. Do not paste from the REST API or the console, which include `__name__`
+and `density`.
+
 ## Data model
 
 Everything lives under `users/{uid}/`:
