@@ -154,7 +154,7 @@ Day to day:
 | `npm run script:pull` | live → repo | **overwrites local files** |
 | `npm run script:push` | repo → live | **overwrites the live project** |
 | `npm run script:status` | — | lists what a push would send |
-| `npm run script:drift` | live → repo | pulls, then shows what changed |
+| `npm run script:drift` | live → repo | pulls **both** projects, then shows what changed |
 | `npm run script:logs` | — | recent execution logs |
 
 Get the direction backwards and you lose work, so check `git status` first.
@@ -164,7 +164,9 @@ even though they are `.gs` server-side; keeping a `.gs` copy alongside would
 push two files with the same server-side name.
 
 `npm run script:drift` on a schedule (or before any change) is what catches a
-trigger or function that vanished from the live project. It's also worth
+function that vanished from the live project — or appeared in it. It reports
+with `git status`, not `git diff`, because a file that is new in the live
+project arrives untracked and a diff would not show it at all. It's also worth
 running `checkTriggers()` after any push.
 
 clasp is invoked through pinned `npx`, not a devDependency, so CI's `npm ci`
