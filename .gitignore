@@ -3,3 +3,7 @@ dist/
 .env
 .firebase/
 *.zip
+
+# clasp credentials — never commit these
+.clasprc.json
+**/.clasprc.json

@@ -6,7 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "script:login": "npx --yes @google/clasp@3.4.1 login",
+    "script:status": "cd apps-script/orbit && npx --yes @google/clasp@3.4.1 status",
+    "script:pull": "cd apps-script/orbit && npx --yes @google/clasp@3.4.1 pull",
+    "script:push": "cd apps-script/orbit && npx --yes @google/clasp@3.4.1 push",
+    "script:logs": "cd apps-script/orbit && npx --yes @google/clasp@3.4.1 logs",
+    "script:drift": "npm run script:pull --silent && git --no-pager diff --stat -- apps-script/"
   },
   "dependencies": {
     "firebase": "^10.14.1",

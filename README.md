@@ -47,7 +47,8 @@ Tap "Brain dump," speak naturally — e.g. *"Remind me to ask Amon about the tra
 
 ## Telegram notifications (Apps Script)
 
-`Code.gs` runs in a standalone Apps Script project and notifies **everyone in
+`apps-script/orbit/Code.gs` runs in a standalone Apps Script project and
+notifies **everyone in
 the access list**, each through their own Telegram bot:
 
 | Function | Trigger | What it sends |
@@ -119,6 +120,53 @@ trigger is 5 minutes rather than 1 deliberately: at ~2s per run, every-minute
 checks would spend about half the daily runtime budget on empty polls.
 
 The digest costs one Gemini call per person per day.
+
+### Keeping the script in git (clasp)
+
+The Apps Script project is the live source of truth; this repo used to hold a
+hand-typed copy that silently drifted. Two functions were lost that way before
+anyone noticed. `clasp` makes the live project and the repo the same thing, so
+a deletion shows up as a diff you can revert instead of as silence weeks later.
+
+One-time setup:
+
+```bash
+npm run script:login                       # opens a browser, stores creds in ~/.clasprc.json
+# put the real script ID in apps-script/orbit/.clasp.json (Apps Script editor
+# -> Project Settings -> Script ID), then:
+npm run script:pull                        # overwrite local with live
+git diff                                   # this is the drift
+```
+
+Day to day:
+
+| Command | Direction | Effect |
+| --- | --- | --- |
+| `npm run script:pull` | live → repo | **overwrites local files** |
+| `npm run script:push` | repo → live | **overwrites the live project** |
+| `npm run script:status` | — | lists what a push would send |
+| `npm run script:drift` | live → repo | pulls, then shows what changed |
+| `npm run script:logs` | — | recent execution logs |
+
+Get the direction backwards and you lose work, so check `git status` first.
+Once this is running, edit `Code.gs` here and `push` — don't paste into the
+editor, or the two diverge again.
+
+`npm run script:drift` on a schedule (or before any change) is what catches a
+trigger or function that vanished from the live project. It's also worth
+running `checkTriggers()` after any push.
+
+clasp is invoked through pinned `npx`, not a devDependency, so CI's `npm ci`
+stays lean and the lockfile is untouched.
+
+**On keyless deploys:** this one can't follow the WIF pattern the Firebase
+deploy uses. The Apps Script API authenticates as a *user*, not a service
+account, so there is no Workload Identity path — automating `push` in CI would
+mean storing a clasp refresh token as a secret. Pushing from a laptop is the
+honest trade here; the win is that drift becomes visible in git either way.
+
+The nightly nudge is a second Apps Script project and is not here yet — see
+`apps-script/nightly/README.md`.
 
 ### When notifications go quiet
 
