@@ -47,37 +47,82 @@ Tap "Brain dump," speak naturally — e.g. *"Remind me to ask Amon about the tra
 
 ## Telegram notifications (Apps Script)
 
-`Code.gs` runs in a standalone Apps Script project and sends two different
-things over Telegram, using the `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`
-script properties:
+`Code.gs` runs in a standalone Apps Script project and notifies **everyone in
+the access list**, each through their own Telegram bot:
 
 | Function | Trigger | What it sends |
 | --- | --- | --- |
-| `sendDailyDigest` | daily, 6am | Star's morning summary of everything due today |
-| `sendTimeSensitiveReminders` | every 5 minutes | one ping per todo whose `notifyAt` has arrived |
+| `sendDailyDigest` | daily, 6am | Star's morning summary of that person's items due today |
+| `sendTimeSensitiveReminders` | every 5 minutes | one ping per todo whose `notifyAt` has arrived, to that todo's owner |
 
-**Both only work if their time-based trigger is installed.** A trigger can be
-deleted without any warning or error — the code stays put and simply never
-runs, which looks identical to "notifications are broken." Run
-`setupAllTriggers()` once from the Apps Script editor to install both
-(re-running is safe; it clears its own triggers first), then `checkTriggers()`
-to confirm. `checkTriggers()` names any handler that has no trigger, and is
-the first thing to run whenever notifications go quiet.
+### Who gets notified
 
-Before the first reminder run, `previewTimeSensitive()` logs what *would* be
-sent without sending or marking anything — worth doing if the app has been
-collecting time-sensitive todos while nothing was delivering them.
+A person is notifiable when **both** halves exist:
 
-**Timezone:** `notifyAt` is a local wall-clock string with no timezone in it,
-so reminders fire according to the *Apps Script project's* timezone
-(Project Settings → Time zone). If that doesn't match your phone's, every
-reminder is off by the difference. `checkTriggers()` prints the timezone in
-use.
+1. `access/{email}` has a `uid` — the app self-registers this on sign-in, so it
+   appears the first time they log in.
+2. `notifyConfig/{email}` has `telegramBotToken` + `telegramChatId` — written by
+   the in-app Telegram wizard (Menu → Notifications). Everyone registers their
+   own bot with BotFather, so nobody shares a token.
 
-**Reminders that slipped:** anything more than `MAX_LATE_MINUTES` (3 hours)
-past due is marked as notified without sending, so an outage doesn't dump a
-backlog of stale pings all at once. Raise the constant if you'd rather get
-very late reminders than none.
+Anyone missing either half is skipped silently. `checkRecipients()` prints the
+whole list with the reason for each skip, and never logs a bot token.
+
+The owner is the one exception: if he has no `notifyConfig` doc, the script
+falls back to the `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` script properties
+that predate the wizard, so going multi-user can't knock the original digest
+offline.
+
+**Star's language.** Star swears in the owner's digest by his own choice —
+that's not something anyone else opted into, so every other recipient gets the
+same warmth without the profanity. Override per person with `starProfanity`
+(true or false) on their `access` doc. Names come from `access.name` if you add
+it, else `USER_NAME` for the owner, else the email's local part.
+
+### Staying inside the free quota
+
+A consumer Google account allows 20,000 `UrlFetch` calls and 90 minutes of
+trigger runtime per day. The 5-minute reminder trigger is the only thing that
+runs often, so it's built to cost **one HTTP call on a quiet run**:
+
+- the Firestore token is cached 50 minutes, so 288 daily runs need ~29 token
+  fetches rather than 288
+- reminders use a single **collection-group** query across every user's todos,
+  so cost does not grow as people are added (this is what the COLLECTION_GROUP
+  index in `firestore.indexes.json` is for)
+- the routing table is fetched only on runs that actually have something to
+  deliver
+
+A normal day lands near 400 calls and roughly 10 minutes of runtime — a few
+percent of the allowance, with room for the digest and the nightly nudge. The
+trigger is 5 minutes rather than 1 deliberately: at ~2s per run, every-minute
+checks would spend about half the daily runtime budget on empty polls.
+
+The digest costs one Gemini call per person per day.
+
+### When notifications go quiet
+
+**Both functions only work if their time-based trigger is installed.** A trigger
+can be deleted with no warning or error — the code stays put and simply never
+runs, which looks identical to "notifications are broken."
+
+1. `checkTriggers()` — names any handler with no trigger, and prints the
+   timezone in use.
+2. `setupAllTriggers()` — installs both. Safe to re-run; it clears its own
+   triggers first.
+3. `previewTimeSensitive()` — dry run across all users. Logs what *would* be
+   sent, to whom, sending and marking nothing.
+4. `checkRecipients()` — who resolves as notifiable, and why anyone is skipped.
+
+**Timezone:** `notifyAt` is a local wall-clock string with no timezone in it, so
+reminders fire on the Apps Script project's timezone (Project Settings → Time
+zone) — one shared timezone for everyone. If people are ever in different
+timezones, this needs a per-user field; today it does not exist.
+
+**Reminders that slipped:** anything more than `MAX_LATE_MINUTES` (3 hours) past
+due is marked notified without sending, so an outage doesn't dump a backlog.
+A reminder belonging to someone who hasn't connected Telegram is left pending
+rather than marked, so they still get it if they connect inside that window.
 
 ## Data model
 
