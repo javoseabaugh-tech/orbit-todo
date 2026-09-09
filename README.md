@@ -48,8 +48,7 @@ Tap "Brain dump," speak naturally — e.g. *"Remind me to ask Amon about the tra
 ## Telegram notifications (Apps Script)
 
 `apps-script/orbit/Code.gs` runs in a standalone Apps Script project and
-notifies **everyone in
-the access list**, each through their own Telegram bot:
+notifies **everyone in the access list**, each through their own Telegram bot:
 
 | Function | Trigger | What it sends |
 | --- | --- | --- |
