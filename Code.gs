@@ -522,8 +522,11 @@ function checkRecipients() {
     const email = String(a.email || a.id).toLowerCase();
     const cfg = configByEmail[email] || {};
     const isOwner = a.uid === ownerUid;
+    // Must mirror recipients_ exactly, including the owner needing BOTH script
+    // properties — a diagnostic that reports someone as reachable when the
+    // sender would skip them is worse than no diagnostic at all.
     const hasBot = !!(cfg.telegramBotToken && cfg.telegramChatId) ||
-      (isOwner && !!props_().getProperty("TELEGRAM_BOT_TOKEN"));
+      (isOwner && !!props_().getProperty("TELEGRAM_BOT_TOKEN") && !!props_().getProperty("TELEGRAM_CHAT_ID"));
     let verdict;
     if (!a.uid) verdict = "SKIPPED — never signed in (no uid on access doc)";
     else if (!hasBot) verdict = "SKIPPED — hasn't connected Telegram in the app";
