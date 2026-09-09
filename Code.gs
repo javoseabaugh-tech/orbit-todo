@@ -500,7 +500,23 @@ function checkTriggers() {
     Logger.log("NO TRIGGERS INSTALLED — run setupAllTriggers().");
     return;
   }
-  triggers.forEach((t) => Logger.log(`trigger: ${t.getHandlerFunction()} (${t.getEventType()})`));
+  // A trigger outlives the code it points at. Deleting a function leaves its
+  // trigger installed, firing into nothing — so check both directions: every
+  // expected handler has a trigger, AND every trigger has a live handler.
+  triggers.forEach((t) => {
+    const fn = t.getHandlerFunction();
+    let defined;
+    try {
+      defined = typeof globalThis[fn] === "function";
+    } catch (e) {
+      defined = true; // can't tell — don't cry wolf
+    }
+    Logger.log(`trigger: ${fn} (${t.getEventType()})${defined ? "" : "  <-- NOT DEFINED IN THIS PROJECT?"}`);
+    if (!defined) {
+      Logger.log(`  ^ ${fn} has a trigger but no function by that name was found. Either it lives in a file this check can't see, or the function was deleted and this trigger now fires into nothing. Confirm before ignoring.`);
+    }
+  });
+
   const handlers = triggers.map((t) => t.getHandlerFunction());
   ["sendDailyDigest", "sendTimeSensitiveReminders"].forEach((fn) => {
     if (handlers.indexOf(fn) === -1) Logger.log(`MISSING: ${fn} has no trigger.`);
