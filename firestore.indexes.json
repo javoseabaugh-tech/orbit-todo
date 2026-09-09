@@ -15,10 +15,6 @@
         {
           "fieldPath": "notifyAt",
           "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "ASCENDING"
         }
       ],
       "density": "SPARSE_ALL"
@@ -33,10 +29,6 @@
         },
         {
           "fieldPath": "createdAt",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "__name__",
           "order": "ASCENDING"
         }
       ],
@@ -57,10 +49,6 @@
         {
           "fieldPath": "createdAt",
           "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "ASCENDING"
         }
       ],
       "density": "SPARSE_ALL"
@@ -80,10 +68,6 @@
         {
           "fieldPath": "notifyAt",
           "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "ASCENDING"
         }
       ],
       "density": "SPARSE_ALL"
@@ -98,10 +82,6 @@
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "__name__",
           "order": "DESCENDING"
         }
       ],
