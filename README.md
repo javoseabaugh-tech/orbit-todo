@@ -54,6 +54,7 @@ the access list**, each through their own Telegram bot:
 | --- | --- | --- |
 | `sendDailyDigest` | daily, 6am | Star's morning summary of that person's items due today |
 | `sendTimeSensitiveReminders` | every 5 minutes | one ping per todo whose `notifyAt` has arrived, to that todo's owner |
+| `checkAssistantDigests` | every 15 minutes | tells a shared-work assistant when something new lands in their category |
 
 ### Who gets notified
 
@@ -76,8 +77,27 @@ offline.
 **Star's language.** Star swears in the owner's digest by his own choice —
 that's not something anyone else opted into, so every other recipient gets the
 same warmth without the profanity. Override per person with `starProfanity`
-(true or false) on their `access` doc. Names come from `access.name` if you add
+(boolean) on their `access` doc — there is no UI for it, so add the field in the
+Firebase console. Every write the Access screen makes uses `{ merge: true }`, so
+a hand-added field survives role changes and toggles. Names come from `access.name` if you add
 it, else `USER_NAME` for the owner, else the email's local part.
+
+### Assistant alerts on new shared work
+
+`checkAssistantDigests` (every 15 min) tells anyone with `sharedWorkAccess` when
+something new lands in the single category they can see
+(`sharedWorkCategoryId`, set on the Access screen under "Shared Work +
+Projects"). New todos and new Workbench projects both count — set
+`ALERT_ON_NEW_PROJECTS = false` at the top of that section for todos only.
+
+State is a per-person high-water mark in script properties
+(`assistantSeen_{email}`), holding the newest `createdAt` already reported.
+**The first run for a person sends nothing** and just starts the clock —
+otherwise switching sharing on would dump the category's whole history into
+their chat. The watermark then advances to the newest `createdAt` actually
+seen, not to "now", so anything written mid-run is still caught next time.
+
+`previewAssistantDigests()` dry-runs it without sending or moving any watermark.
 
 ### Staying inside the free quota
 
@@ -110,8 +130,8 @@ runs, which looks identical to "notifications are broken."
    timezone in use.
 2. `setupAllTriggers()` — installs both. Safe to re-run; it clears its own
    triggers first.
-3. `previewTimeSensitive()` — dry run across all users. Logs what *would* be
-   sent, to whom, sending and marking nothing.
+3. `previewTimeSensitive()` / `previewAssistantDigests()` — dry runs. Log what
+   *would* be sent, to whom, sending and changing nothing.
 4. `checkRecipients()` — who resolves as notifiable, and why anyone is skipped.
 
 **Timezone:** `notifyAt` is a local wall-clock string with no timezone in it, so

@@ -94,17 +94,18 @@ function fetchJson_(url, options) {
 }
 
 // One user's subcollection, e.g. users/{uid}/todos.
-function runQuery_(token, uid, collectionId, filters) {
+function runQuery_(token, uid, collectionId, filters, orderBy) {
+  const structuredQuery = {
+    from: [{ collectionId }],
+    where: { compositeFilter: { op: "AND", filters } },
+  };
+  // Only set when a range filter needs to match a specific deployed index.
+  if (orderBy) structuredQuery.orderBy = orderBy;
   const rows = fetchJson_(`${userBaseUrl_(uid)}:runQuery`, {
     method: "post",
     contentType: "application/json",
     headers: { Authorization: "Bearer " + token },
-    payload: JSON.stringify({
-      structuredQuery: {
-        from: [{ collectionId }],
-        where: { compositeFilter: { op: "AND", filters } },
-      },
-    }),
+    payload: JSON.stringify({ structuredQuery }),
     muteHttpExceptions: true,
   });
   return (rows || []).filter((r) => r.document).map((r) => docToObject_(r.document));
@@ -197,6 +198,10 @@ function eqFilter_(field, value) {
   return { fieldFilter: { field: { fieldPath: field }, op: "EQUAL", value: valueObj } };
 }
 
+function gtTimestampFilter_(field, isoString) {
+  return { fieldFilter: { field: { fieldPath: field }, op: "GREATER_THAN", value: { timestampValue: isoString } } };
+}
+
 function lteFilter_(field, value) {
   return { fieldFilter: { field: { fieldPath: field }, op: "LESS_THAN_OR_EQUAL", value: { stringValue: value } } };
 }
@@ -254,6 +259,9 @@ function recipients_(token) {
       botToken,
       chatId,
       name: displayName_(a, email, isOwner),
+      // Carried so checkAssistantDigests knows who is watching which category.
+      sharedWorkAccess: a.sharedWorkAccess === true,
+      sharedWorkCategoryId: a.sharedWorkCategoryId || null,
       // Star swears in the owner's digest by his own choice. That was never a
       // decision anyone else opted into, so everybody else gets the same warmth
       // without the profanity. Set `starProfanity: true` on someone's access doc
@@ -462,6 +470,135 @@ function sendTimeSensitiveReminders() {
   return { due: todos.length, sent, skipped };
 }
 
+// ---------- Assistant "new shared work" alerts ----------
+//
+// Someone with `sharedWorkAccess` on their access doc sees exactly one of the
+// owner's categories, named by `sharedWorkCategoryId` (Access screen → "Shared
+// Work + Projects"). This tells them when something new lands in it, so they
+// don't have to keep opening the app to check.
+//
+// State is a per-person high-water mark in script properties: the newest
+// createdAt already reported. On the very first run for someone it is set to
+// "now" and nothing is sent — otherwise switching sharing on would dump the
+// category's entire history into their chat.
+
+// Set to false to alert on new todos only and ignore new Workbench projects.
+const ALERT_ON_NEW_PROJECTS = true;
+
+function watermarkKey_(email) {
+  return "assistantSeen_" + String(email).toLowerCase();
+}
+
+// Items in a category created after `sinceIso`.
+//
+// Tries the indexed range query first, then falls back to filtering in code if
+// that index isn't there. The fallback costs more data but cannot silently
+// return nothing, and a silent nothing is the exact failure this whole project
+// has been chasing.
+function newItemsSince_(token, uid, collectionId, categoryId, sinceIso, orderDir) {
+  try {
+    return runQuery_(token, uid, collectionId, [
+      eqFilter_("categoryId", categoryId),
+      gtTimestampFilter_("createdAt", sinceIso),
+    ], [{ field: { fieldPath: "createdAt" }, direction: orderDir }]);
+  } catch (err) {
+    Logger.log(`Indexed query on ${collectionId} failed (${err.message}) — falling back to in-code filtering.`);
+    return runQuery_(token, uid, collectionId, [eqFilter_("categoryId", categoryId)])
+      .filter((d) => d.createdAt && d.createdAt > sinceIso);
+  }
+}
+
+function categoryName_(token, ownerUid, categoryId) {
+  try {
+    const cats = listCollection_(token, ownerUid, "categories");
+    const hit = cats.filter((c) => c.id === categoryId)[0];
+    return hit && hit.name ? hit.name : "shared work";
+  } catch (err) {
+    return "shared work";
+  }
+}
+
+function assistantAlertMessage_(ownerName, catName, todos, projects) {
+  const total = todos.length + projects.length;
+  const lines = [];
+  todos.slice(0, 10).forEach((t) => lines.push(`• ${t.text}`));
+  projects.slice(0, 10).forEach((p) => lines.push(`• [Project] ${p.title}`));
+  const shown = lines.length;
+  if (total > shown) lines.push(`…and ${total - shown} more`);
+  return `🆕 ${ownerName} added ${total} ${total === 1 ? "item" : "items"} to "${catName}":\n${lines.join("\n")}`;
+}
+
+function checkAssistantDigests() {
+  const token = getAccessToken_();
+  const ownerUid = props_().getProperty("FIREBASE_UID");
+  const ownerName = props_().getProperty("USER_NAME") || "Orbit";
+  const watchers = recipients_(token).filter((r) => r.sharedWorkAccess && r.sharedWorkCategoryId && !r.isOwner);
+  if (!watchers.length) return { watchers: 0, sent: 0 };
+
+  const nowIso = new Date().toISOString();
+  let sent = 0;
+
+  watchers.forEach((r) => {
+    // One person's failure must not stop the others being told.
+    try {
+      const key = watermarkKey_(r.email);
+      const since = props_().getProperty(key);
+      if (!since) {
+        // First time we've seen this person sharing — start the clock here
+        // rather than replaying everything already in the category.
+        props_().setProperty(key, nowIso);
+        Logger.log(`${r.email}: first run, watermark set to ${nowIso}, nothing sent.`);
+        return;
+      }
+
+      const todos = newItemsSince_(token, ownerUid, "todos", r.sharedWorkCategoryId, since, "ASCENDING");
+      const projects = ALERT_ON_NEW_PROJECTS
+        ? newItemsSince_(token, ownerUid, "workbench", r.sharedWorkCategoryId, since, "DESCENDING")
+        : [];
+      if (!todos.length && !projects.length) return;
+
+      const catName = categoryName_(token, ownerUid, r.sharedWorkCategoryId);
+      sendTelegram_(r.botToken, r.chatId, assistantAlertMessage_(ownerName, catName, todos, projects));
+
+      // Advance to the newest createdAt actually seen, not to "now" — anything
+      // written while this run was in flight is then still caught next time.
+      const stamps = todos.concat(projects).map((d) => d.createdAt).filter(Boolean);
+      stamps.sort();
+      if (stamps.length) props_().setProperty(key, stamps[stamps.length - 1]);
+      sent++;
+    } catch (err) {
+      Logger.log(`Assistant alert failed for ${r.email}: ${err.message}`);
+    }
+  });
+
+  Logger.log(`Assistant alerts: ${watchers.length} watcher(s), ${sent} notified.`);
+  return { watchers: watchers.length, sent };
+}
+
+// Dry run: what checkAssistantDigests would send. Sends nothing, and does not
+// move anyone's watermark.
+function previewAssistantDigests() {
+  const token = getAccessToken_();
+  const ownerUid = props_().getProperty("FIREBASE_UID");
+  const watchers = recipients_(token).filter((r) => r.sharedWorkAccess && r.sharedWorkCategoryId && !r.isOwner);
+  Logger.log(`${watchers.length} watcher(s) with shared work access and Telegram connected.`);
+  watchers.forEach((r) => {
+    const since = props_().getProperty(watermarkKey_(r.email));
+    if (!since) {
+      Logger.log(`${r.email} — no watermark yet; first real run sends nothing and starts the clock.`);
+      return;
+    }
+    const todos = newItemsSince_(token, ownerUid, "todos", r.sharedWorkCategoryId, since, "ASCENDING");
+    const projects = ALERT_ON_NEW_PROJECTS
+      ? newItemsSince_(token, ownerUid, "workbench", r.sharedWorkCategoryId, since, "DESCENDING")
+      : [];
+    Logger.log(`${r.email} — watching "${categoryName_(token, ownerUid, r.sharedWorkCategoryId)}" since ${since}: ${todos.length} todo(s), ${projects.length} project(s) new.`);
+    if (todos.length || projects.length) {
+      Logger.log(assistantAlertMessage_(props_().getProperty("USER_NAME") || "Orbit", categoryName_(token, ownerUid, r.sharedWorkCategoryId), todos, projects));
+    }
+  });
+}
+
 // ---------- Triggers ----------
 
 function setupDailyTrigger() {
@@ -480,11 +617,19 @@ function setupTimeSensitiveTrigger() {
   ScriptApp.newTrigger("sendTimeSensitiveReminders").timeBased().everyMinutes(5).create();
 }
 
+function setupAssistantDigestTrigger() {
+  ScriptApp.getProjectTriggers().forEach((t) => {
+    if (t.getHandlerFunction() === "checkAssistantDigests") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("checkAssistantDigests").timeBased().everyMinutes(15).create();
+}
+
 // Installs every trigger this project needs. Safe to re-run — each setup
 // function clears its own handler's triggers first, so nothing duplicates.
 function setupAllTriggers() {
   setupDailyTrigger();
   setupTimeSensitiveTrigger();
+  setupAssistantDigestTrigger();
   checkTriggers();
 }
 
@@ -518,7 +663,7 @@ function checkTriggers() {
   });
 
   const handlers = triggers.map((t) => t.getHandlerFunction());
-  ["sendDailyDigest", "sendTimeSensitiveReminders"].forEach((fn) => {
+  ["sendDailyDigest", "sendTimeSensitiveReminders", "checkAssistantDigests"].forEach((fn) => {
     if (handlers.indexOf(fn) === -1) Logger.log(`MISSING: ${fn} has no trigger.`);
   });
 }
