@@ -56,6 +56,14 @@ notifies **everyone in the access list**, each through their own Telegram bot:
 | `sendTimeSensitiveReminders` | every 5 minutes | one ping per todo whose `notifyAt` has arrived, to that todo's owner |
 | `checkAssistantDigests` | every 15 minutes | tells a shared-work assistant when something new lands in their category |
 
+A **second** Apps Script project, `apps-script/nightly/Code.gs`, sends the 6pm
+nightly-routine nudge (`sendNightlyNudge`). It is read-only — the app is the
+only thing that ever creates `nightly` documents. It works out which recurring
+templates fire tonight rather than reading materialised rows, so the nudge is
+right even on a day nobody opened the app. Those recurrence rules are a copy of
+`templateMatches()` in `src/Nightly.jsx`: **change one and you must change the
+other**, or the nudge and the app will disagree about what is due tonight.
+
 ### Who gets notified
 
 A person is notifiable when **both** halves exist:
@@ -164,8 +172,10 @@ account, so there is no Workload Identity path — automating `push` in CI would
 mean storing a clasp refresh token as a secret. Pushing from a laptop is the
 honest trade here; the win is that drift becomes visible in git either way.
 
-The nightly nudge is a second Apps Script project and is not here yet — see
-`apps-script/nightly/README.md`.
+The nightly nudge is a second Apps Script project, in `apps-script/nightly/`.
+Put its script ID in that folder's `.clasp.json`, then
+`cd apps-script/nightly && npx --yes @google/clasp@3.4.1 pull` to confirm the
+repo copy matches what's live before pushing anything.
 
 ### When notifications go quiet
 
