@@ -45,11 +45,46 @@ Tap "Brain dump," speak naturally — e.g. *"Remind me to ask Amon about the tra
 
 **Data note:** the transcribed text is sent to Google's Gemini API for parsing. Google's free tier may use free-tier prompts to improve their models — keep that in mind for anything especially sensitive.
 
+## Telegram notifications (Apps Script)
+
+`Code.gs` runs in a standalone Apps Script project and sends two different
+things over Telegram, using the `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`
+script properties:
+
+| Function | Trigger | What it sends |
+| --- | --- | --- |
+| `sendDailyDigest` | daily, 6am | Star's morning summary of everything due today |
+| `sendTimeSensitiveReminders` | every 5 minutes | one ping per todo whose `notifyAt` has arrived |
+
+**Both only work if their time-based trigger is installed.** A trigger can be
+deleted without any warning or error — the code stays put and simply never
+runs, which looks identical to "notifications are broken." Run
+`setupAllTriggers()` once from the Apps Script editor to install both
+(re-running is safe; it clears its own triggers first), then `checkTriggers()`
+to confirm. `checkTriggers()` names any handler that has no trigger, and is
+the first thing to run whenever notifications go quiet.
+
+Before the first reminder run, `previewTimeSensitive()` logs what *would* be
+sent without sending or marking anything — worth doing if the app has been
+collecting time-sensitive todos while nothing was delivering them.
+
+**Timezone:** `notifyAt` is a local wall-clock string with no timezone in it,
+so reminders fire according to the *Apps Script project's* timezone
+(Project Settings → Time zone). If that doesn't match your phone's, every
+reminder is off by the difference. `checkTriggers()` prints the timezone in
+use.
+
+**Reminders that slipped:** anything more than `MAX_LATE_MINUTES` (3 hours)
+past due is marked as notified without sending, so an outage doesn't dump a
+backlog of stale pings all at once. Raise the constant if you'd rather get
+very late reminders than none.
+
 ## Data model
 
 Everything lives under `users/{uid}/`:
 
 - `todos` — `{ list: "work" | "personal", text, categoryId, due, done, createdAt }`
+  - time-sensitive todos also carry `{ timeSensitive: true, notifyAt: "YYYY-MM-DDTHH:MM:SS", notified }` — `notifyAt` is local wall-clock time, and `notified` flips to `true` once the reminder has gone out
 - `categories` — `{ list: "work" | "personal", name, color, createdAt }`
 - `thoughts` — `{ text, personId, due, done, createdAt }`
 - `people` — `{ name, color, createdAt }`

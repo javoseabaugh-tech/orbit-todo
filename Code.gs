@@ -97,6 +97,26 @@ function eqFilter_(field, value) {
   return { fieldFilter: { field: { fieldPath: field }, op: "EQUAL", value: valueObj } };
 }
 
+function lteFilter_(field, value) {
+  return { fieldFilter: { field: { fieldPath: field }, op: "LESS_THAN_OR_EQUAL", value: { stringValue: value } } };
+}
+
+// PATCH a single field on one document, leaving every other field alone.
+// updateMask is what keeps this from blanking the rest of the todo.
+function patchBooleanField_(token, collectionId, docId, fieldPath, value) {
+  const url = `${firestoreBaseUrl_()}/${collectionId}/${docId}?updateMask.fieldPaths=${fieldPath}`;
+  const res = UrlFetchApp.fetch(url, {
+    method: "patch",
+    contentType: "application/json",
+    headers: { Authorization: "Bearer " + token },
+    payload: JSON.stringify({ fields: { [fieldPath]: { booleanValue: value } } }),
+    muteHttpExceptions: true,
+  });
+  if (res.getResponseCode() >= 300) {
+    throw new Error(`Firestore patch failed (${res.getResponseCode()}): ` + res.getContentText());
+  }
+}
+
 function todayString_() {
   const tz = Session.getScriptTimeZone();
   return Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");
@@ -184,6 +204,142 @@ function setupDailyTrigger() {
     if (t.getHandlerFunction() === "sendDailyDigest") ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger("sendDailyDigest").timeBased().everyDays(1).atHour(6).create();
+}
+
+// ---------- Time-sensitive reminders ----------
+//
+// A todo becomes time-sensitive when the app writes `timeSensitive: true`,
+// `notifyAt: "YYYY-MM-DDTHH:MM:SS"` and `notified: false` (see
+// setTimeSensitive in src/App.jsx). notifyAt is a local wall-clock string
+// with no timezone in it, so every comparison here is done against the
+// script's own timezone — if the Apps Script project's timezone drifts away
+// from the phone's, reminders fire at the wrong moment. checkTriggers()
+// prints the timezone it is using so this is easy to verify.
+//
+// The query mirrors the composite index in firestore.indexes.json exactly:
+// notified (ASC), timeSensitive (ASC), notifyAt (ASC). Changing the filters
+// here without updating that index will make the query fail.
+
+// Reminders whose time slipped past by more than this are marked as notified
+// without sending, so an outage doesn't dump a pile of stale pings at once.
+// Raise it if you'd rather get very late reminders than none.
+const MAX_LATE_MINUTES = 180;
+
+function localNowString_() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
+}
+
+// "2026-09-09T14:30:00" -> minutes it sits behind `now`, or 0 if unparseable.
+function minutesLate_(notifyAt, now) {
+  const parsed = new Date(notifyAt.replace(" ", "T"));
+  if (isNaN(parsed.getTime())) return 0;
+  return Math.round((now.getTime() - parsed.getTime()) / 60000);
+}
+
+// "2026-09-09T14:30:00" -> "2:30pm"
+function formatClock_(notifyAt) {
+  const hhmm = notifyAt.slice(11, 16).split(":");
+  const h = parseInt(hhmm[0], 10);
+  const m = hhmm[1] || "00";
+  if (isNaN(h)) return notifyAt;
+  return `${h % 12 || 12}:${m}${h >= 12 ? "pm" : "am"}`;
+}
+
+function gatherDueReminders_(token) {
+  const nowStr = localNowString_();
+  const due = runQuery_(token, "todos", [
+    eqFilter_("notified", false),
+    eqFilter_("timeSensitive", true),
+    lteFilter_("notifyAt", nowStr),
+  ]);
+  // `done` is filtered here rather than in the query so the existing
+  // composite index keeps working — a fourth field would need a new one,
+  // and the result set at any given minute is tiny.
+  return due.filter((t) => t.done !== true && t.notifyAt);
+}
+
+function reminderMessage_(todo) {
+  const list = todo.list === "work" ? "Work" : "Personal";
+  return `⏰ ${formatClock_(todo.notifyAt)} — [${list}] ${todo.text}`;
+}
+
+function sendTimeSensitiveReminders() {
+  const token = getAccessToken_();
+  const todos = gatherDueReminders_(token);
+  const now = new Date();
+  let sent = 0;
+  let skipped = 0;
+
+  todos.forEach((todo) => {
+    // Each reminder is isolated: one bad token, one deleted doc, or one
+    // Telegram hiccup must not stop the rest of the batch from going out.
+    try {
+      const late = minutesLate_(todo.notifyAt, now);
+      if (late > MAX_LATE_MINUTES) {
+        patchBooleanField_(token, "todos", todo.id, "notified", true);
+        skipped++;
+        Logger.log(`Skipped stale reminder (${late} min late): ${todo.text}`);
+        return;
+      }
+      // Send first, mark second. If the send succeeds but the mark fails,
+      // the reminder repeats next run — visible and fixable. Marking first
+      // would turn the same failure into a silent drop, which is exactly
+      // the failure mode this whole function exists to avoid.
+      sendViaTelegram_(reminderMessage_(todo));
+      patchBooleanField_(token, "todos", todo.id, "notified", true);
+      sent++;
+    } catch (err) {
+      Logger.log(`Reminder failed for "${todo.text}" (${todo.id}): ${err.message}`);
+    }
+  });
+
+  Logger.log(`Time-sensitive run: ${todos.length} due, ${sent} sent, ${skipped} stale.`);
+  return { due: todos.length, sent, skipped };
+}
+
+function setupTimeSensitiveTrigger() {
+  ScriptApp.getProjectTriggers().forEach((t) => {
+    if (t.getHandlerFunction() === "sendTimeSensitiveReminders") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("sendTimeSensitiveReminders").timeBased().everyMinutes(5).create();
+}
+
+// Installs every trigger this project needs. Safe to re-run — each setup
+// function clears its own handler's triggers first, so nothing duplicates.
+function setupAllTriggers() {
+  setupDailyTrigger();
+  setupTimeSensitiveTrigger();
+  checkTriggers();
+}
+
+// Diagnostic: prints what is actually installed right now. Run this whenever
+// notifications go quiet — a missing handler here is the whole answer.
+function checkTriggers() {
+  Logger.log("Script timezone: " + Session.getScriptTimeZone());
+  Logger.log("Local now: " + localNowString_());
+  const triggers = ScriptApp.getProjectTriggers();
+  if (!triggers.length) {
+    Logger.log("NO TRIGGERS INSTALLED — run setupAllTriggers().");
+    return;
+  }
+  triggers.forEach((t) => Logger.log(`trigger: ${t.getHandlerFunction()} (${t.getEventType()})`));
+  const handlers = triggers.map((t) => t.getHandlerFunction());
+  ["sendDailyDigest", "sendTimeSensitiveReminders"].forEach((fn) => {
+    if (handlers.indexOf(fn) === -1) Logger.log(`MISSING: ${fn} has no trigger.`);
+  });
+}
+
+// Dry run: shows what sendTimeSensitiveReminders would do without sending
+// anything or marking anything as notified. Run this first after installing.
+function previewTimeSensitive() {
+  const todos = gatherDueReminders_(getAccessToken_());
+  const now = new Date();
+  Logger.log(`Local now: ${localNowString_()} — ${todos.length} reminder(s) currently due.`);
+  todos.forEach((t) => {
+    const late = minutesLate_(t.notifyAt, now);
+    const verdict = late > MAX_LATE_MINUTES ? `STALE (${late} min late, would be silently marked read)` : `would send (${late} min late)`;
+    Logger.log(`${reminderMessage_(t)} — ${verdict}`);
+  });
 }
 
 function testSendNow() {
