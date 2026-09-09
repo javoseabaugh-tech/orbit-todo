@@ -139,6 +139,8 @@ One-time setup:
 
 ```bash
 npm run script:login                       # opens a browser, stores creds in ~/.clasprc.json
+# ...or, on Cloud Shell / any remote shell:
+npm run script:login:remote                # prints a URL, you paste a code back
 # put the real script ID in apps-script/orbit/.clasp.json (Apps Script editor
 # -> Project Settings -> Script ID), then:
 npm run script:pull                        # overwrite local with live
@@ -165,6 +167,14 @@ running `checkTriggers()` after any push.
 
 clasp is invoked through pinned `npx`, not a devDependency, so CI's `npm ci`
 stays lean and the lockfile is untouched.
+
+**Logging in from Cloud Shell** (or any shell that isn't on the same machine as
+your browser): use `npm run script:login:remote`. The default flow starts a
+callback server on `localhost:8888` *on the shell's machine*, which the browser
+on your laptop cannot reach — you get "localhost refused to connect" with the
+auth code stranded in the URL bar. That code can't be reused in the manual
+flow, since an OAuth code is bound to the redirect URI it was issued for; just
+re-run with the remote login and paste the code it asks for.
 
 **On keyless deploys:** this one can't follow the WIF pattern the Firebase
 deploy uses. The Apps Script API authenticates as a *user*, not a service

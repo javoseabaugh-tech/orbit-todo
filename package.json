@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "script:login": "npx --yes @google/clasp@3.4.1 login",
+    "script:login:remote": "npx --yes @google/clasp@3.4.1 login --no-localhost",
     "script:status": "cd apps-script/orbit && npx --yes @google/clasp@3.4.1 status",
     "script:pull": "cd apps-script/orbit && npx --yes @google/clasp@3.4.1 pull",
     "script:push": "cd apps-script/orbit && npx --yes @google/clasp@3.4.1 push",
