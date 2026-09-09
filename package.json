@@ -6,7 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "script:login": "npx --yes @google/clasp@3.4.1 login",
+    "script:login:remote": "npx --yes @google/clasp@3.4.1 login --no-localhost",
+    "script:status": "cd apps-script/orbit && npx --yes @google/clasp@3.4.1 status",
+    "script:pull": "cd apps-script/orbit && npx --yes @google/clasp@3.4.1 pull",
+    "script:pull:nightly": "cd apps-script/nightly && npx --yes @google/clasp@3.4.1 pull",
+    "script:push": "cd apps-script/orbit && npx --yes @google/clasp@3.4.1 push",
+    "script:push:nightly": "cd apps-script/nightly && npx --yes @google/clasp@3.4.1 push",
+    "script:logs": "cd apps-script/orbit && npx --yes @google/clasp@3.4.1 logs",
+    "script:drift": "npm run script:pull --silent && npm run script:pull:nightly --silent && git status --short -- apps-script/ && echo '^ nothing listed above = repo matches both live projects'"
   },
   "dependencies": {
     "firebase": "^10.14.1",

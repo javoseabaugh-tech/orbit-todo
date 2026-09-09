@@ -45,11 +45,182 @@ Tap "Brain dump," speak naturally — e.g. *"Remind me to ask Amon about the tra
 
 **Data note:** the transcribed text is sent to Google's Gemini API for parsing. Google's free tier may use free-tier prompts to improve their models — keep that in mind for anything especially sensitive.
 
+## Telegram notifications (Apps Script)
+
+`apps-script/orbit/Code.js` runs in a standalone Apps Script project and
+notifies **everyone in the access list**, each through their own Telegram bot:
+
+| Function | Trigger | What it sends |
+| --- | --- | --- |
+| `sendDailyDigest` | daily, 6am | Star's morning summary of that person's items due today |
+| `sendTimeSensitiveReminders` | every 5 minutes | one ping per todo whose `notifyAt` has arrived, to that todo's owner |
+| `checkAssistantDigests` | every 15 minutes | tells a shared-work assistant when something new lands in their category |
+
+A **second** Apps Script project, `apps-script/nightly/Code.js`, sends the 6pm
+nightly-routine nudge (`sendNightlyNudge`). It is read-only — the app is the
+only thing that ever creates `nightly` documents. It works out which recurring
+templates fire tonight rather than reading materialised rows, so the nudge is
+right even on a day nobody opened the app. Those recurrence rules are a copy of
+`templateMatches()` in `src/Nightly.jsx`: **change one and you must change the
+other**, or the nudge and the app will disagree about what is due tonight.
+
+### Who gets notified
+
+A person is notifiable when **both** halves exist:
+
+1. `access/{email}` has a `uid` — the app self-registers this on sign-in, so it
+   appears the first time they log in.
+2. `notifyConfig/{email}` has `telegramBotToken` + `telegramChatId` — written by
+   the in-app Telegram wizard (Menu → Notifications). Everyone registers their
+   own bot with BotFather, so nobody shares a token.
+
+Anyone missing either half is skipped silently. `checkRecipients()` prints the
+whole list with the reason for each skip, and never logs a bot token.
+
+The owner is the one exception: if he has no `notifyConfig` doc, the script
+falls back to the `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` script properties
+that predate the wizard, so going multi-user can't knock the original digest
+offline.
+
+**Star's language.** Star swears in the owner's digest by his own choice —
+that's not something anyone else opted into, so every other recipient gets the
+same warmth without the profanity. Override per person with `starProfanity`
+(boolean) on their `access` doc — there is no UI for it, so add the field in the
+Firebase console. Every write the Access screen makes uses `{ merge: true }`, so
+a hand-added field survives role changes and toggles. Names come from `access.name` if you add
+it, else `USER_NAME` for the owner, else the email's local part.
+
+### Assistant alerts on new shared work
+
+`checkAssistantDigests` (every 15 min) tells anyone with `sharedWorkAccess` when
+something new lands in the single category they can see
+(`sharedWorkCategoryId`, set on the Access screen under "Shared Work +
+Projects"). New todos and new Workbench projects both count — set
+`ALERT_ON_NEW_PROJECTS = false` at the top of that section for todos only.
+
+State is a per-person high-water mark in script properties
+(`assistantSeen_{email}`), holding the newest `createdAt` already reported.
+**The first run for a person sends nothing** and just starts the clock —
+otherwise switching sharing on would dump the category's whole history into
+their chat. The watermark then advances to the newest `createdAt` actually
+seen, not to "now", so anything written mid-run is still caught next time.
+
+`previewAssistantDigests()` dry-runs it without sending or moving any watermark.
+
+### Staying inside the free quota
+
+A consumer Google account allows 20,000 `UrlFetch` calls and 90 minutes of
+trigger runtime per day. The 5-minute reminder trigger is the only thing that
+runs often, so it's built to cost **one HTTP call on a quiet run**:
+
+- the Firestore token is cached 50 minutes, so 288 daily runs need ~29 token
+  fetches rather than 288
+- reminders use a single **collection-group** query across every user's todos,
+  so cost does not grow as people are added (this is what the COLLECTION_GROUP
+  index in `firestore.indexes.json` is for)
+- the routing table is fetched only on runs that actually have something to
+  deliver
+
+A normal day lands near 400 calls and roughly 10 minutes of runtime — a few
+percent of the allowance, with room for the digest and the nightly nudge. The
+trigger is 5 minutes rather than 1 deliberately: at ~2s per run, every-minute
+checks would spend about half the daily runtime budget on empty polls.
+
+The digest costs one Gemini call per person per day.
+
+### Keeping the script in git (clasp)
+
+The Apps Script project is the live source of truth; this repo used to hold a
+hand-typed copy that silently drifted. Two functions were lost that way before
+anyone noticed. `clasp` makes the live project and the repo the same thing, so
+a deletion shows up as a diff you can revert instead of as silence weeks later.
+
+One-time setup:
+
+```bash
+npm run script:login                       # opens a browser, stores creds in ~/.clasprc.json
+# ...or, on Cloud Shell / any remote shell:
+npm run script:login:remote                # prints a URL, you paste a code back
+# put the real script ID in apps-script/orbit/.clasp.json (Apps Script editor
+# -> Project Settings -> Script ID), then:
+npm run script:pull                        # overwrite local with live
+git diff                                   # this is the drift
+```
+
+Day to day:
+
+| Command | Direction | Effect |
+| --- | --- | --- |
+| `npm run script:pull` | live → repo | **overwrites local files** |
+| `npm run script:push` | repo → live | **overwrites the live project** |
+| `npm run script:status` | — | lists what a push would send |
+| `npm run script:drift` | live → repo | pulls **both** projects, then shows what changed |
+| `npm run script:logs` | — | recent execution logs |
+
+Get the direction backwards and you lose work, so check `git status` first.
+Once this is running, edit `Code.js` here and `push` — don't paste into the
+editor, or the two diverge again. clasp names Apps Script files `.js` locally
+even though they are `.gs` server-side; keeping a `.gs` copy alongside would
+push two files with the same server-side name.
+
+`npm run script:drift` on a schedule (or before any change) is what catches a
+function that vanished from the live project — or appeared in it. It reports
+with `git status`, not `git diff`, because a file that is new in the live
+project arrives untracked and a diff would not show it at all. It's also worth
+running `checkTriggers()` after any push.
+
+clasp is invoked through pinned `npx`, not a devDependency, so CI's `npm ci`
+stays lean and the lockfile is untouched.
+
+**Logging in from Cloud Shell** (or any shell that isn't on the same machine as
+your browser): use `npm run script:login:remote`. The default flow starts a
+callback server on `localhost:8888` *on the shell's machine*, which the browser
+on your laptop cannot reach — you get "localhost refused to connect" with the
+auth code stranded in the URL bar. That code can't be reused in the manual
+flow, since an OAuth code is bound to the redirect URI it was issued for; just
+re-run with the remote login and paste the code it asks for.
+
+**On keyless deploys:** this one can't follow the WIF pattern the Firebase
+deploy uses. The Apps Script API authenticates as a *user*, not a service
+account, so there is no Workload Identity path — automating `push` in CI would
+mean storing a clasp refresh token as a secret. Pushing from a laptop is the
+honest trade here; the win is that drift becomes visible in git either way.
+
+The nightly nudge is a second Apps Script project, in `apps-script/nightly/`.
+Put its script ID in that folder's `.clasp.json`, then
+`cd apps-script/nightly && npx --yes @google/clasp@3.4.1 pull` to confirm the
+repo copy matches what's live before pushing anything.
+
+### When notifications go quiet
+
+**Both functions only work if their time-based trigger is installed.** A trigger
+can be deleted with no warning or error — the code stays put and simply never
+runs, which looks identical to "notifications are broken."
+
+1. `checkTriggers()` — names any handler with no trigger, and prints the
+   timezone in use.
+2. `setupAllTriggers()` — installs both. Safe to re-run; it clears its own
+   triggers first.
+3. `previewTimeSensitive()` / `previewAssistantDigests()` — dry runs. Log what
+   *would* be sent, to whom, sending and changing nothing.
+4. `checkRecipients()` — who resolves as notifiable, and why anyone is skipped.
+
+**Timezone:** `notifyAt` is a local wall-clock string with no timezone in it, so
+reminders fire on the Apps Script project's timezone (Project Settings → Time
+zone) — one shared timezone for everyone. If people are ever in different
+timezones, this needs a per-user field; today it does not exist.
+
+**Reminders that slipped:** anything more than `MAX_LATE_MINUTES` (3 hours) past
+due is marked notified without sending, so an outage doesn't dump a backlog.
+A reminder belonging to someone who hasn't connected Telegram is left pending
+rather than marked, so they still get it if they connect inside that window.
+
 ## Data model
 
 Everything lives under `users/{uid}/`:
 
 - `todos` — `{ list: "work" | "personal", text, categoryId, due, done, createdAt }`
+  - time-sensitive todos also carry `{ timeSensitive: true, notifyAt: "YYYY-MM-DDTHH:MM:SS", notified }` — `notifyAt` is local wall-clock time, and `notified` flips to `true` once the reminder has gone out
 - `categories` — `{ list: "work" | "personal", name, color, createdAt }`
 - `thoughts` — `{ text, personId, due, done, createdAt }`
 - `people` — `{ name, color, createdAt }`
