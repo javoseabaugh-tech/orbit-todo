@@ -47,7 +47,7 @@ Tap "Brain dump," speak naturally — e.g. *"Remind me to ask Amon about the tra
 
 ## Telegram notifications (Apps Script)
 
-`apps-script/orbit/Code.gs` runs in a standalone Apps Script project and
+`apps-script/orbit/Code.js` runs in a standalone Apps Script project and
 notifies **everyone in the access list**, each through their own Telegram bot:
 
 | Function | Trigger | What it sends |
@@ -56,7 +56,7 @@ notifies **everyone in the access list**, each through their own Telegram bot:
 | `sendTimeSensitiveReminders` | every 5 minutes | one ping per todo whose `notifyAt` has arrived, to that todo's owner |
 | `checkAssistantDigests` | every 15 minutes | tells a shared-work assistant when something new lands in their category |
 
-A **second** Apps Script project, `apps-script/nightly/Code.gs`, sends the 6pm
+A **second** Apps Script project, `apps-script/nightly/Code.js`, sends the 6pm
 nightly-routine nudge (`sendNightlyNudge`). It is read-only — the app is the
 only thing that ever creates `nightly` documents. It works out which recurring
 templates fire tonight rather than reading materialised rows, so the nudge is
@@ -158,8 +158,10 @@ Day to day:
 | `npm run script:logs` | — | recent execution logs |
 
 Get the direction backwards and you lose work, so check `git status` first.
-Once this is running, edit `Code.gs` here and `push` — don't paste into the
-editor, or the two diverge again.
+Once this is running, edit `Code.js` here and `push` — don't paste into the
+editor, or the two diverge again. clasp names Apps Script files `.js` locally
+even though they are `.gs` server-side; keeping a `.gs` copy alongside would
+push two files with the same server-side name.
 
 `npm run script:drift` on a schedule (or before any change) is what catches a
 trigger or function that vanished from the live project. It's also worth
