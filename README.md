@@ -239,6 +239,11 @@ Everything lives under `users/{uid}/`:
 
 - `todos` — `{ list: "work" | "personal", text, categoryId, due, done, createdAt }`
   - time-sensitive todos also carry `{ timeSensitive: true, notifyAt: "YYYY-MM-DDTHH:MM:SS", notified }` — `notifyAt` is local wall-clock time, and `notified` flips to `true` once the reminder has gone out
+  - `notifyAt` holds its **own copy of the date**, so it has to be re-stamped
+    whenever `due` changes, or the card sits under one day while the reminder
+    fires on another. `editTodo` does this; anything new that writes `due` must
+    too. Setting a time on a todo with no `due` date gives it one, for the same
+    reason
 - `categories` — `{ list: "work" | "personal", name, color, createdAt }`
 - `thoughts` — `{ text, personId, due, done, createdAt }`
 - `people` — `{ name, color, createdAt }`
