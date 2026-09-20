@@ -168,6 +168,17 @@ function fmtTime(notifyAt) {
   return `${h % 12 || 12}:${String(m).padStart(2, "0")}${ampm}`;
 }
 
+// Normally just the time, because the reminder lands on the day the card is
+// filed under. When notifyAt's own date has drifted from `due` the reminder
+// will fire on a different day, so show that date rather than letting the
+// mismatch stay invisible — the badge showing only a time is exactly why a
+// reminder stamped with the wrong date used to look correct.
+function fmtReminder(todo) {
+  const time = fmtTime(todo.notifyAt);
+  const stamped = todo.notifyAt.slice(0, 10);
+  return todo.due && stamped !== todo.due ? `${fmtDate(stamped)} ${time}` : time;
+}
+
 // Minutes past midnight for a time-sensitive todo, or null if it has no time.
 // Used to lead a date group chronologically.
 function timeOfDay(todo) {
@@ -719,7 +730,22 @@ function TodoApp({ user, access }) {
   async function editTodo(id, text, due, categoryId) {
     const todo = findTodo(id);
     const targetUid = todo?.isShared ? ownerUid : uid;
-    await updateDoc(doc(db, "users", targetUid, "todos", id), { text, due, categoryId: categoryId ?? null });
+    const patch = { text, due, categoryId: categoryId ?? null };
+
+    // notifyAt carries its own copy of the date, so changing `due` alone would
+    // leave the reminder stamped with the old day: it fires then, while the
+    // card sits under the new date. Keep the time, take the new date, and let
+    // it fire again — but only when the date actually moved, or editing the
+    // text of an already-delivered reminder would re-send it.
+    if (todo?.timeSensitive && todo.notifyAt && due) {
+      const moved = `${due}T${todo.notifyAt.slice(11, 19)}`;
+      if (moved !== todo.notifyAt) {
+        patch.notifyAt = moved;
+        patch.notified = false;
+      }
+    }
+
+    await updateDoc(doc(db, "users", targetUid, "todos", id), patch);
   }
 
   // The "Sort by time" button. Restamps `order` within every date of one list:
@@ -764,12 +790,27 @@ function TodoApp({ user, access }) {
     if (!timeValue) return;
     const targetUid = todo.isShared ? ownerUid : uid;
     const now = new Date();
-    const baseDate = todo.due || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const pad = (n) => String(n).padStart(2, "0");
+    const dateString = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+    let baseDate = todo.due;
+    if (!baseDate) {
+      // No due date, so the time has to pick a day of its own. Today, unless
+      // that moment has already passed — a reminder born in the past never
+      // rings, it just ages out.
+      const t = new Date(now);
+      if (timeValue <= `${pad(now.getHours())}:${pad(now.getMinutes())}`) t.setDate(t.getDate() + 1);
+      baseDate = dateString(t);
+    }
+
     const notifyAt = `${baseDate}T${timeValue}:00`;
     await updateDoc(doc(db, "users", targetUid, "todos", todo.id), {
       timeSensitive: true,
       notifyAt,
       notified: false,
+      // Give the todo the day its reminder lands on, so the card can never be
+      // filed under one date while the ping is scheduled for another.
+      due: baseDate,
     });
     setSettingTimeFor(null);
     setDraftTimeValue("");
@@ -2456,7 +2497,7 @@ function TaskBadges({ todo, overdue, category }) {
         </Badge>
       )}
       {todo.timeSensitive && todo.notifyAt && (
-        <Badge tone="gold" icon={Clock}>{fmtTime(todo.notifyAt)}</Badge>
+        <Badge tone="gold" icon={Clock}>{fmtReminder(todo)}</Badge>
       )}
       {todo.recurrence && (
         <Badge icon={Repeat} capitalize>{todo.recurrence.type}</Badge>
