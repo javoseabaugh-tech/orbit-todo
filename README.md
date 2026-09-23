@@ -154,7 +154,7 @@ Day to day:
 | `npm run script:pull` | live → repo | **overwrites local files** |
 | `npm run script:push` | repo → live | **overwrites the live project** |
 | `npm run script:status` | — | lists what a push would send |
-| `npm run script:drift` | live → repo | pulls **both** projects, then shows what changed |
+| `npm run script:drift` | live → repo | pulls **all three** projects, then shows what changed |
 | `npm run script:logs` | — | recent execution logs |
 
 Get the direction backwards and you lose work, so check `git status` first.
@@ -186,10 +186,19 @@ account, so there is no Workload Identity path — automating `push` in CI would
 mean storing a clasp refresh token as a secret. Pushing from a laptop is the
 honest trade here; the win is that drift becomes visible in git either way.
 
-The nightly nudge is a second Apps Script project, in `apps-script/nightly/`.
-Put its script ID in that folder's `.clasp.json`, then
-`cd apps-script/nightly && npx --yes @google/clasp@3.4.1 pull` to confirm the
-repo copy matches what's live before pushing anything.
+There are three Apps Script projects, each its own folder with its own
+`.clasp.json`, and each with `:nightly` / `:backup` variants of the pull and
+push commands:
+
+| Folder | Project | What it does |
+| --- | --- | --- |
+| `apps-script/orbit/` | Orbit digest | daily digest, reminders, assistant alerts |
+| `apps-script/nightly/` | Orbit Nightly Nudge | the 6pm nudge |
+| `apps-script/backup/` | Orbit backup | 4-hourly Firestore snapshot to Drive |
+
+All three run as the same Google account, which matters for quota: Apps Script
+counts URL Fetch calls and data **per account per day**, not per script. A
+runaway in one starves the other two.
 
 ### When notifications go quiet
 
@@ -214,6 +223,51 @@ timezones, this needs a per-user field; today it does not exist.
 due is marked notified without sending, so an outage doesn't dump a backlog.
 A reminder belonging to someone who hasn't connected Telegram is left pending
 rather than marked, so they still get it if they connect inside that window.
+
+## Backups
+
+`apps-script/backup/` snapshots Firestore to Google Drive every 4 hours. It
+discovers subcollections by listing them rather than naming them, so a new
+feature's data is included without touching the script.
+
+Each run writes its own dated file, `orbit-backup-YYYY-MM-DD-HHmm.json`, into a
+Drive folder called **Orbit backups**. Retention keeps every backup from the
+last 2 days, then the newest from each day for 30 days — roughly 40 files, a
+couple of megabytes.
+
+It used to write one file and trash the previous one. That protects you against
+losing the database and nothing else: a bug, a bad restore, or a snapshot that
+came back empty would replace the last good copy, and four hours later there
+was nothing to go back to. Two guards now sit either side of that:
+
+- the Firestore helpers check their HTTP status, so a failed read raises
+  instead of quietly reading as "this collection is empty"
+- `runBackup()` refuses to write a snapshot containing zero documents, and
+  writes the new file **before** pruning old ones, so a failure mid-run can
+  never leave you with fewer backups than you started with
+
+| Function | What it does |
+| --- | --- |
+| `runBackup()` | the scheduled job |
+| `testBackupNow()` | run it now |
+| `checkBackups()` | lists the dated files, sizes, ids, and whether the trigger exists |
+| `previewRestore()` | which file a restore would read and what it holds — **writes nothing** |
+| `restoreFromBackup()` | writes the newest backup back into Firestore |
+| `setupBackupTrigger()` | installs the 4-hourly trigger |
+
+`restoreFromBackup()` overwrites live data, so run `previewRestore()` first —
+it names the file, its age, the document counts, and warns if the backup came
+from a different uid than the one configured. Both take an optional Drive file
+id if you want a specific older generation; `checkBackups()` prints the ids.
+
+The pre-folder `orbit-backup.json` in your Drive root is still read as a last
+resort if the folder is empty, but is never written or pruned. Delete it once a
+few dated backups exist.
+
+**Known gap: the backup only covers the owner's data.** It reads
+`users/{FIREBASE_UID}` only, which predates Orbit going multi-user — every
+other person's todos, thoughts and Workbench are not backed up, and neither are
+the root `access` and `notifyConfig` collections.
 
 ## Firestore indexes
 
