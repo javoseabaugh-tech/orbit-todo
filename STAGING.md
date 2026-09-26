@@ -1,10 +1,15 @@
 # Staging: test the redesign before live users see it
 
+**`orbit-cbd4e` stays your live project. Nothing here turns it into staging.**
+Staging is a *brand-new, second* Firebase project that you create in step 2.
+Steps 1 and 5 only change *how* live gets deployed (a keyless login instead of
+a stored key); live's data, users, URL and settings don't change.
+
 Orbit now has two environments, built and deployed the same way:
 
-| | Live | Staging |
+| | Live (existing, unchanged) | Staging (new) |
 | --- | --- | --- |
-| Firebase project | `orbit-cbd4e` | your new staging project |
+| Firebase project | `orbit-cbd4e` | a new project you create in step 2 |
 | URL | https://orbit-cbd4e.web.app | `https://<staging-id>.web.app` |
 | Deploys from | `main` (`deploy.yml`) | `redesign` (`deploy-staging.yml`) |
 | Build config | `.env.production` | `.env.staging` (and `.env.development` for `npm run dev`) |
@@ -23,7 +28,7 @@ icon). They are short enough to paste. Run each block exactly once.
 
 ---
 
-## Step 1: Make live deploys keyless (do this BEFORE merging this PR)
+## Step 1: LIVE (`orbit-cbd4e`): switch its deploys to keyless (do this BEFORE merging)
 
 The old workflow used a stored service account key (`FIREBASE_SERVICE_ACCOUNT`).
 The new one uses WIF, so the pool and deployer account must exist before the
@@ -61,7 +66,7 @@ gcloud iam service-accounts add-iam-policy-binding $SA \
 
 These names already match what `deploy.yml` expects, so nothing needs editing.
 
-## Step 2: Create the staging Firebase project
+## Step 2: STAGING: create the new, separate Firebase project
 
 - [ ] **Create the project.** Go to console.firebase.google.com → Add project.
   Pick an ID such as `orbit-staging-js` (project IDs are global, so plain
@@ -85,19 +90,42 @@ These names already match what `deploy.yml` expects, so nothing needs editing.
   `.github/workflows/deploy-staging.yml` through a PR. None of these are
   secrets: they all end up in the page source anyway.
 
-## Step 3: Keyless deploys for staging
+## Step 3: STAGING (the new project): keyless deploys
 
-- [ ] Same commands as step 1, with the staging values. Note `BRANCH=redesign`:
+- [ ] Fill in the first two lines with the **new staging project's** ID and
+  number (Project settings → General). Don't use `orbit-cbd4e` here. Then
+  paste the whole block:
 
 ```bash
 PROJECT=<staging-id>
 PROJECT_NUMBER=<staging project number>
 REPO=javoseabaugh-tech/orbit-todo
 BRANCH=redesign
+
+gcloud config set project $PROJECT
+gcloud services enable iamcredentials.googleapis.com sts.googleapis.com \
+  firebasehosting.googleapis.com firebaserules.googleapis.com firestore.googleapis.com
+
+gcloud iam service-accounts create orbit-deployer --display-name="Orbit GitHub deployer"
+SA=orbit-deployer@$PROJECT.iam.gserviceaccount.com
+for ROLE in roles/firebasehosting.admin roles/firebaserules.admin roles/datastore.indexAdmin; do
+  gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:$SA" --role=$ROLE --condition=None
+done
+
+gcloud iam workload-identity-pools create github-pool --location=global --display-name="GitHub"
+gcloud iam workload-identity-pools providers create-oidc github-provider \
+  --location=global --workload-identity-pool=github-pool \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.ref=assertion.ref" \
+  --attribute-condition="assertion.repository == '$REPO' && assertion.ref == 'refs/heads/$BRANCH'"
+
+gcloud iam service-accounts add-iam-policy-binding $SA \
+  --role=roles/iam.workloadIdentityUser \
+  --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/attribute.repository/$REPO"
 ```
 
-Then paste everything from `gcloud config set project $PROJECT` down to the
-end of the step 1 block.
+The first command prints the project it switched to. If it says
+`orbit-cbd4e`, stop: the placeholder wasn't replaced.
 
 ## Step 4: GitHub settings
 
@@ -112,7 +140,7 @@ Go to the repo → Settings → Secrets and variables → Actions.
 - [ ] If the Gemini key has **website restrictions** (Cloud console → APIs &
   Services → Credentials), add `<staging-id>.web.app/*` to its list.
 
-## Step 5: Merge, then remove the old key
+## Step 5: LIVE: merge, then remove the old key
 
 - [ ] Merge this PR. Actions → "Deploy live Orbit" should go green, and
   https://orbit-cbd4e.web.app should behave exactly as before.
@@ -123,7 +151,7 @@ Go to the repo → Settings → Secrets and variables → Actions.
   whose key was in that secret (usually `github-action-…@orbit-cbd4e`), and
   delete the account or at least its **key** under Keys.
 
-## Step 6: Start the redesign
+## Step 6: STAGING: start the redesign
 
 - [ ] Create the `redesign` branch from `main` (GitHub → branch dropdown → type
   `redesign` → "Create branch from main"). Creating it runs the first staging
