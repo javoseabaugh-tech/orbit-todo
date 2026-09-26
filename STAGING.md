@@ -26,6 +26,15 @@ from `redesign` can't deploy live, and a run from `main` can't deploy staging.
 Run all the commands below in **Cloud Shell** (console.cloud.google.com, `>_`
 icon). They are short enough to paste. Run each block exactly once.
 
+Two Cloud Shell gotchas that cost time during setup:
+- No spaces around `=` when setting a variable. `PROJECT= orbit-x` leaves
+  `PROJECT` empty, and every command after it runs against the wrong project
+  or fails.
+- If commands suddenly print nothing at all, not even `echo hello`, a mangled
+  paste has swallowed the terminal's output. Open a new tab with **+** and
+  carry on there. Check that the last command of each block prints
+  `Updated IAM policy`.
+
 ---
 
 ## Step 1: LIVE (`orbit-cbd4e`): switch its deploys to keyless (do this BEFORE merging)
@@ -84,6 +93,18 @@ These names already match what `deploy.yml` expects, so nothing needs editing.
   key with domains `orbit-staging-49988.web.app` and `localhost`. Then go to Firebase
   → App Check → the web app → reCAPTCHA v3, and paste in the **secret** key.
   Keep the **site** key for the next step.
+- [ ] **Allow sign-in on the `web.app` address.** Orbit signs in through
+  `orbit-staging-49988.web.app` (see the `authDomain` note in `src/firebase.js`),
+  but a new project's Google sign-in client only allows `firebaseapp.com`.
+  Without this, sign-in fails with **Error 400: redirect_uri_mismatch**.
+  Go to Cloud console (project `orbit-staging-49988`) → APIs & Services →
+  Credentials → **Web client (auto created by Google Service)**, and add:
+  - Authorized JavaScript origins: `https://orbit-staging-49988.web.app`
+  - Authorized redirect URIs: `https://orbit-staging-49988.web.app/__/auth/handler`
+
+  Both lists are needed, and the redirect URI is the one Google checks. Click
+  **Save** at the bottom of the page. It can take a few minutes to apply, so
+  test in a private window.
 - [ ] **Hand the values over.** Send Claude the project ID, the project number
   (Project settings → General), the `firebaseConfig` values and the reCAPTCHA
   site key. Claude fills them into `.env.staging`, `.env.development` and
