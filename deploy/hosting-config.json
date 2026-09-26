@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "glob": "**", "path": "/index.html" }
+  ]
+}

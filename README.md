@@ -15,18 +15,21 @@ npm install
 npm run dev
 ```
 
-Visit the local URL it prints, sign in with Google, and you're working against your real Firestore project already.
+`npm run dev` talks to the **staging** project (`.env.development`), not live,
+so local testing never touches real data. See [STAGING.md](STAGING.md).
 
 ## Deploy
 
-```bash
-npm install -g firebase-tools   # if you don't have the CLI yet
-firebase login
-npm run build
-firebase deploy
-```
+Nothing is deployed by hand. Deploys are keyless GitHub Actions runs over
+Workload Identity Federation, and each one publishes Hosting, Firestore rules
+and indexes together:
 
-This deploys both **Hosting** (the built app) and the **Firestore security rules** in `firestore.rules`, which restrict every user to reading and writing only their own data under `users/{their-uid}/...`.
+- merge to `main` → live (`orbit-cbd4e`), via `.github/workflows/deploy.yml`
+- push to `redesign` → staging, via `.github/workflows/deploy-staging.yml`
+
+Setup, the staging workflow and how to ship the redesign are all in
+[STAGING.md](STAGING.md). Why CI uses REST calls instead of `firebase deploy`
+is explained in [deploy/README.md](deploy/README.md).
 
 ## Brain Dump voice capture (Thoughts tab)
 

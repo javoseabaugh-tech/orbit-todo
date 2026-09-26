@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:staging": "vite build --mode staging",
     "preview": "vite preview",
     "script:login": "npx --yes @google/clasp@3.4.1 login",
     "script:login:remote": "npx --yes @google/clasp@3.4.1 login --no-localhost",
