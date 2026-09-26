@@ -23,8 +23,8 @@ jobs:
     with:
       mode: staging
       # Filled in from STAGING.md step 2.
-      project_id: REPLACE_ME
-      workload_identity_provider: projects/REPLACE_ME_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github-provider
-      service_account: orbit-deployer@REPLACE_ME.iam.gserviceaccount.com
+      project_id: orbit-staging-49988
+      workload_identity_provider: projects/2531876823/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+      service_account: orbit-deployer@orbit-staging-49988.iam.gserviceaccount.com
       # No worker: staging never sends real budget-access notifications.
       worker_url: ""

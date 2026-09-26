@@ -10,7 +10,7 @@ Orbit now has two environments, built and deployed the same way:
 | | Live (existing, unchanged) | Staging (new) |
 | --- | --- | --- |
 | Firebase project | `orbit-cbd4e` | a new project you create in step 2 |
-| URL | https://orbit-cbd4e.web.app | `https://<staging-id>.web.app` |
+| URL | https://orbit-cbd4e.web.app | `https://orbit-staging-49988.web.app` |
 | Deploys from | `main` (`deploy.yml`) | `redesign` (`deploy-staging.yml`) |
 | Build config | `.env.production` | `.env.staging` (and `.env.development` for `npm run dev`) |
 | Data, rules, sign-in | real users | separate, empty until you seed it |
@@ -81,7 +81,7 @@ These names already match what `deploy.yml` expects, so nothing needs editing.
   "Orbit staging" (no Hosting checkbox needed). Copy the `firebaseConfig`
   values it shows.
 - [ ] **App Check key.** At google.com/recaptcha/admin, create a **reCAPTCHA v3**
-  key with domains `<staging-id>.web.app` and `localhost`. Then go to Firebase
+  key with domains `orbit-staging-49988.web.app` and `localhost`. Then go to Firebase
   → App Check → the web app → reCAPTCHA v3, and paste in the **secret** key.
   Keep the **site** key for the next step.
 - [ ] **Hand the values over.** Send Claude the project ID, the project number
@@ -92,13 +92,12 @@ These names already match what `deploy.yml` expects, so nothing needs editing.
 
 ## Step 3: STAGING (the new project): keyless deploys
 
-- [ ] Fill in the first two lines with the **new staging project's** ID and
-  number (Project settings → General). Don't use `orbit-cbd4e` here. Then
-  paste the whole block:
+- [ ] Paste the whole block. The values are already filled in for the staging
+  project, `orbit-staging-49988`:
 
 ```bash
-PROJECT=<staging-id>
-PROJECT_NUMBER=<staging project number>
+PROJECT=orbit-staging-49988
+PROJECT_NUMBER=2531876823
 REPO=javoseabaugh-tech/orbit-todo
 BRANCH=redesign
 
@@ -125,7 +124,7 @@ gcloud iam service-accounts add-iam-policy-binding $SA \
 ```
 
 The first command prints the project it switched to. If it says
-`orbit-cbd4e`, stop: the placeholder wasn't replaced.
+anything other than `orbit-staging-49988`, stop and check.
 
 ## Step 4: GitHub settings
 
@@ -138,7 +137,7 @@ Go to the repo → Settings → Secrets and variables → Actions.
 - [ ] **Variables** → New repository variable `VITE_WORKER_URL`, set to your
   Cloudflare Worker's URL (the one budget-access requests call). Live only.
 - [ ] If the Gemini key has **website restrictions** (Cloud console → APIs &
-  Services → Credentials), add `<staging-id>.web.app/*` to its list.
+  Services → Credentials), add `orbit-staging-49988.web.app/*` to its list.
 
 ## Step 5: LIVE: merge, then remove the old key
 
@@ -160,7 +159,7 @@ Go to the repo → Settings → Secrets and variables → Actions.
   anyone with no access record. In the staging project's Firestore console:
   1. Add collection `access` with document ID `javoseabaugh@gmail.com` and
      field `role` (string) = `owner`.
-  2. Sign in at `https://<staging-id>.web.app`. The app writes your `uid` onto
+  2. Sign in at `https://orbit-staging-49988.web.app`. The app writes your `uid` onto
      that document.
   3. Add collection `meta` with document ID `owner` and field `uid` (string) =
      the uid from step 2. You can also find it in Authentication → Users.
