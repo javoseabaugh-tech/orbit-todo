@@ -1,0 +1,226 @@
+name: Deploy Orbit to a Firebase project (reusable)
+
+# Shared by deploy.yml (main -> live) and deploy-staging.yml (redesign ->
+# staging), so both environments are built and published the same way.
+#
+# Keyless: GitHub proves who it is to Google over OIDC (Workload Identity
+# Federation) and impersonates a deployer service account. There is no
+# service account key anywhere.
+#
+# We deliberately do NOT use `firebase deploy` here. firebase-tools cannot
+# authenticate with WIF-issued credentials (it expects a key-shaped JSON with
+# a client_email field). The REST calls below take a plain access token.
+# Same approach as the Pulse pipeline; see deploy/README.md.
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: Vite mode, which picks the .env.<mode> Firebase config
+        required: true
+        type: string
+      project_id:
+        required: true
+        type: string
+      workload_identity_provider:
+        required: true
+        type: string
+      service_account:
+        required: true
+        type: string
+      worker_url:
+        description: Cloudflare Worker for budget-access notifications (empty = none)
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT: ${{ inputs.project_id }}
+      SITE: ${{ inputs.project_id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Catches deploying one environment's bundle to the other project, and
+      # a staging deploy before STAGING.md step 2 filled in its config.
+      - name: Check the build config matches the target project
+        run: |
+          set -euo pipefail
+          CONFIG_PROJECT=$(grep '^VITE_FIREBASE_PROJECT_ID=' ".env.${{ inputs.mode }}" | cut -d= -f2)
+          if grep -q 'REPLACE_ME' ".env.${{ inputs.mode }}"; then
+            echo "::error::.env.${{ inputs.mode }} still has REPLACE_ME values. See STAGING.md."
+            exit 1
+          fi
+          if [ "$CONFIG_PROJECT" != "$PROJECT" ]; then
+            echo "::error::.env.${{ inputs.mode }} targets '$CONFIG_PROJECT' but this deploy targets '$PROJECT'."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npx vite build --mode "${{ inputs.mode }}"
+        env:
+          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
+          VITE_WORKER_URL: ${{ inputs.worker_url }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ inputs.project_id }}
+          workload_identity_provider: ${{ inputs.workload_identity_provider }}
+          service_account: ${{ inputs.service_account }}
+
+      - name: Deploy Firestore rules (direct REST API)
+        run: |
+          set -euo pipefail
+          TOKEN=$(gcloud auth print-access-token)
+          RULES_CONTENT=$(jq -Rs '.' firestore.rules)
+
+          RULESET=$(curl -sS -X POST \
+            "https://firebaserules.googleapis.com/v1/projects/${PROJECT}/rulesets" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"source\":{\"files\":[{\"name\":\"firestore.rules\",\"content\":${RULES_CONTENT}}]}}")
+          RULESET_NAME=$(echo "$RULESET" | jq -r '.name // empty')
+          if [ -z "$RULESET_NAME" ]; then
+            echo "::error::Ruleset creation failed"
+            echo "$RULESET" | jq .
+            exit 1
+          fi
+          echo "Ruleset: $RULESET_NAME"
+
+          RELEASE=$(curl -sS -X PATCH \
+            "https://firebaserules.googleapis.com/v1/projects/${PROJECT}/releases/cloud.firestore" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"release\":{\"name\":\"projects/${PROJECT}/releases/cloud.firestore\",\"rulesetName\":\"${RULESET_NAME}\"}}")
+          if [ -z "$(echo "$RELEASE" | jq -r '.name // empty')" ]; then
+            echo "::error::Rules release failed"
+            echo "$RELEASE" | jq .
+            exit 1
+          fi
+          echo "Rules released."
+
+      - name: Deploy Firestore indexes (direct REST API)
+        run: |
+          set -euo pipefail
+          TOKEN=$(gcloud auth print-access-token)
+          BASE="https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/collectionGroups"
+          COUNT=$(jq '.indexes | length' firestore.indexes.json)
+          echo "Reconciling ${COUNT} composite index(es)."
+
+          for i in $(seq 0 $((COUNT - 1))); do
+            CG=$(jq -r ".indexes[$i].collectionGroup" firestore.indexes.json)
+            BODY=$(jq -c ".indexes[$i] | {queryScope, fields}" firestore.indexes.json)
+            RESP=$(curl -sS -X POST "${BASE}/${CG}/indexes" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "${BODY}")
+            if [ -n "$(echo "$RESP" | jq -r '.name // empty')" ]; then
+              echo "  ${CG}: build started"
+            elif [ "$(echo "$RESP" | jq -r '.error.status // empty')" = "ALREADY_EXISTS" ]; then
+              echo "  ${CG}: already present"
+            else
+              echo "::error::Index creation failed for ${CG}"
+              echo "$RESP" | jq .
+              exit 1
+            fi
+          done
+
+      - name: Deploy Hosting (direct REST API)
+        run: |
+          set -euo pipefail
+          TOKEN=$(gcloud auth print-access-token)
+
+          # The REST API never reads firebase.json; serving config goes in the
+          # version payload. Keep deploy/hosting-config.json in step with the
+          # "hosting" block of firebase.json.
+          VERSION_BODY=$(jq -n --slurpfile cfg deploy/hosting-config.json '{config: $cfg[0]}')
+          VERSION_JSON=$(curl -sS -X POST \
+            "https://firebasehosting.googleapis.com/v1beta1/sites/${SITE}/versions" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "${VERSION_BODY}")
+          VERSION_NAME=$(echo "$VERSION_JSON" | jq -r '.name // empty')
+          if [ -z "$VERSION_NAME" ]; then
+            echo "::error::Version creation failed"
+            echo "$VERSION_JSON" | jq .
+            exit 1
+          fi
+          echo "Version: $VERSION_NAME"
+
+          GZ="$RUNNER_TEMP/gz"
+          mkdir -p "$GZ"
+          FILES_JSON="{}"
+          declare -A HASH_TO_FILE
+          cd dist
+          # Skip dotfiles, matching firebase.json's "**/.*" ignore.
+          while IFS= read -r f; do
+            relpath="/${f#./}"
+            safe=$(echo "$relpath" | sed 's/\//_/g')
+            gzip -c -9 "$f" > "$GZ/${safe}"
+            hash=$(sha256sum "$GZ/${safe}" | cut -d' ' -f1)
+            HASH_TO_FILE[$hash]="$GZ/${safe}"
+            FILES_JSON=$(echo "$FILES_JSON" | jq --arg p "$relpath" --arg h "$hash" '. + {($p): $h}')
+          done < <(find . -type f -not -path '*/.*')
+          cd ..
+          echo "Staged $(echo "$FILES_JSON" | jq 'length') files."
+
+          POPULATE=$(curl -sS -X POST \
+            "https://firebasehosting.googleapis.com/v1beta1/${VERSION_NAME}:populateFiles" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"files\": ${FILES_JSON}}")
+          UPLOAD_URL=$(echo "$POPULATE" | jq -r '.uploadUrl // empty')
+          if [ -z "$UPLOAD_URL" ]; then
+            echo "::error::populateFiles failed"
+            echo "$POPULATE" | jq .
+            exit 1
+          fi
+          for hash in $(echo "$POPULATE" | jq -r '.uploadRequiredHashes[]? // empty'); do
+            gzfile="${HASH_TO_FILE[$hash]}"
+            code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "${UPLOAD_URL}/${hash}" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @"$gzfile")
+            if [ "$code" != "200" ]; then
+              echo "::error::Upload failed for ${gzfile} (HTTP ${code})"
+              exit 1
+            fi
+          done
+
+          FINALIZE=$(curl -sS -X PATCH \
+            "https://firebasehosting.googleapis.com/v1beta1/${VERSION_NAME}?update_mask=status" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"status":"FINALIZED"}')
+          if [ "$(echo "$FINALIZE" | jq -r '.status // empty')" != "FINALIZED" ]; then
+            echo "::error::Finalize failed"
+            echo "$FINALIZE" | jq .
+            exit 1
+          fi
+
+          RELEASE=$(curl -sS -X POST \
+            "https://firebasehosting.googleapis.com/v1beta1/sites/${SITE}/releases?versionName=${VERSION_NAME}" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{}')
+          if [ -z "$(echo "$RELEASE" | jq -r '.name // empty')" ]; then
+            echo "::error::Release failed"
+            echo "$RELEASE" | jq .
+            exit 1
+          fi
+          echo "Deployed: https://${SITE}.web.app"

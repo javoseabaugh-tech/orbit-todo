@@ -1,56 +1,28 @@
-name: Deploy to Firebase Hosting
+name: Deploy live Orbit
 
-# Build the Vite app and publish dist/ to the live Firebase Hosting channel
-# on every push to main, so a merged change actually reaches the live site.
+# Every merge to main publishes the app, Firestore rules and indexes to the
+# live project (orbit-cbd4e). Keyless; see _deploy-firebase.yml.
 on:
   push:
     branches: [main]
   workflow_dispatch: {}
 
 permissions:
+  id-token: write
   contents: read
 
 concurrency:
-  group: firebase-hosting-live
-  cancel-in-progress: true
+  group: firebase-deploy-live
+  cancel-in-progress: false
 
 jobs:
-  build_and_deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Deploy to Firebase Hosting (live)
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: orbit-cbd4e
-          channelId: live
-
-      # Publish the Firestore Security Rules and indexes too, so the access
-      # rules in firestore.rules (e.g. letting a shared assistant tick Work
-      # tasks done) actually reach the live project instead of drifting.
-      # Uses the same service account as the Hosting deploy above.
-      - name: Deploy Firestore rules & indexes (live)
-        run: |
-          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/service-account.json"
-          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/service-account.json"
-          npx --yes firebase-tools@13 deploy \
-            --only firestore:rules,firestore:indexes \
-            --project orbit-cbd4e \
-            --non-interactive \
-            --force
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+  deploy:
+    uses: ./.github/workflows/_deploy-firebase.yml
+    secrets: inherit
+    with:
+      mode: production
+      project_id: orbit-cbd4e
+      # Filled in from STAGING.md step 1.
+      workload_identity_provider: projects/944702899935/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+      service_account: orbit-deployer@orbit-cbd4e.iam.gserviceaccount.com
+      worker_url: ${{ vars.VITE_WORKER_URL }}

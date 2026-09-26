@@ -1,0 +1,30 @@
+name: Deploy staging Orbit
+
+# Every push to the redesign branch publishes it to the separate staging
+# project, with its own data and rules. Live users never see it until
+# redesign is merged into main. See STAGING.md.
+on:
+  push:
+    branches: [redesign]
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: firebase-deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/_deploy-firebase.yml
+    secrets: inherit
+    with:
+      mode: staging
+      # Filled in from STAGING.md step 2.
+      project_id: REPLACE_ME
+      workload_identity_provider: projects/REPLACE_ME_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+      service_account: orbit-deployer@REPLACE_ME.iam.gserviceaccount.com
+      # No worker: staging never sends real budget-access notifications.
+      worker_url: ""

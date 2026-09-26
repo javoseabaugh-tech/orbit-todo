@@ -2,6 +2,22 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
 import "./index.css";
+import { theme } from "./theme";
+
+// A staging build gets a fixed badge and a tab-title prefix so it can never
+// be mistaken for live Orbit, on a laptop or installed to a Home Screen.
+if (import.meta.env.VITE_APP_ENV === "staging") {
+  document.title = `[STAGING] ${document.title}`;
+  const badge = document.createElement("div");
+  badge.textContent = "STAGING";
+  Object.assign(badge.style, {
+    position: "fixed", top: "calc(env(safe-area-inset-top) + 4px)", left: "50%",
+    transform: "translateX(-50%)", zIndex: "2147483647", pointerEvents: "none",
+    padding: "2px 10px", borderRadius: "999px", font: "700 11px/1.6 Geist, system-ui, sans-serif",
+    letterSpacing: "0.08em", background: theme.accentRed, color: theme.accentInk,
+  });
+  document.body.appendChild(badge);
+}
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
