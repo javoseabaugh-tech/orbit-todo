@@ -1,5 +1,4 @@
 import PaletteMenu from "./PaletteMenu";
-import SwipeToDelete, { HOVER_CAPABLE } from "./SwipeToDelete";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { onAuthStateChanged, signInWithRedirect, signOut } from "firebase/auth";
@@ -7,21 +6,22 @@ import {
   addDoc, collection, deleteDoc, doc, documentId, getDocs, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
 } from "firebase/firestore";
 import {
-  Plus, Briefcase, User, Calendar, Check, Trash2,
+  Plus, Calendar, Check, Trash2,
   GripVertical, Inbox, X, MessageCircleMore, UserPlus, Clock, Pencil, LogOut,
-  ChevronDown, Search, Tag, Settings, Repeat, FolderKanban,
-  Moon, Eye, EyeOff, Wallet, Users,
+  ChevronDown, Search, Tag, Settings, Repeat,
+  Moon, Wallet, Users,
 } from "lucide-react";
 import { auth, googleProvider, db } from "./firebase";
-import BrainDumpButton from "./BrainDump";
 import Budget from "./Budget";
 import AccessScreen from "./AccessScreen";
-import Workbench from "./Workbench";
 import BudgetGate from "./BudgetGate";
-import { suggestCategory } from "./gemini";
 import { getMyNotifyConfig, saveMyNotifyConfig } from "./notifyConfig";
 import { createBudgetAccessRequest, watchMyPendingBudgetRequest } from "./budgetAccessRequests";
 import Nightly from "./Nightly";
+import TodoSection from "./dial/TodoSection";
+import QuickAdd from "./dial/QuickAdd";
+import { D, FONT_DISPLAY, FONT_BODY, pageBackground } from "./dial/tokens";
+import { dateStr, addDays, nowHM } from "./dial/dates";
 
 // Liquid-glass theme layer. The category keys stay blue/green/orange/yellow —
 // every saved category and person in Firestore references those keys directly,
@@ -29,47 +29,16 @@ import Nightly from "./Nightly";
 // old fixed plum/sage/clay/ochre swatches.
 import { PALETTE, theme, glass, SPRING, EASE_OUT, BLUR_LIST_LIMIT, applyThemeVars, applyThemeColor } from "./theme";
 import {
-  DISPLAY, MONO, display, mix, pillStyle, accentButtonStyle, fieldStyle, quietButtonStyle,
+  MONO, display, mix, accentButtonStyle, fieldStyle, quietButtonStyle,
   IconAction, GlassBackdrop,
 } from "./ui";
 const PALETTE_ORDER = ["blue", "green", "orange", "yellow"];
 const UNSORTED = "__unsorted__";
 const STALE_DAYS = 7;
 
-// Desktop is 1100px and up: three columns, no swipe, explicit row buttons.
-// Bottom clearance inside every scroll region: the floating tab bar and FAB
-// sit on top of the list, so the last row needs room to come out from under.
+// Bottom clearance inside every scroll region: the floating + button sits on
+// top of the list, so the last row needs room to come out from under it.
 const LIST_TAIL = "calc(120px + env(safe-area-inset-bottom))";
-
-const COLS_WIDE_QUERY = "(min-width: 1100px)"; // Work · Personal · Projects
-const COLS_MED_QUERY = "(min-width: 760px)";   // Work · Personal
-// How many todo columns fit the window: 3 (full desktop), 2 (Work + Personal
-// side by side, bottom tab bar still present for the other sections), or 1
-// (mobile — a single list plus the tab bar). Driven by width so the layout
-// grows smoothly instead of snapping straight from mobile to three columns.
-function useColumns() {
-  const read = () => {
-    if (typeof window === "undefined" || !window.matchMedia) return 1;
-    if (window.matchMedia(COLS_WIDE_QUERY).matches) return 3;
-    if (window.matchMedia(COLS_MED_QUERY).matches) return 2;
-    return 1;
-  };
-  const [cols, setCols] = useState(read);
-  useEffect(() => {
-    if (!window.matchMedia) return;
-    const wide = window.matchMedia(COLS_WIDE_QUERY);
-    const med = window.matchMedia(COLS_MED_QUERY);
-    const onChange = () => setCols(read());
-    onChange();
-    wide.addEventListener("change", onChange);
-    med.addEventListener("change", onChange);
-    return () => {
-      wide.removeEventListener("change", onChange);
-      med.removeEventListener("change", onChange);
-    };
-  }, []);
-  return cols;
-}
 
 const GLOBAL_CSS = `
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -135,27 +104,6 @@ function OrbitMark({ size = 26 }) {
   );
 }
 
-// 34px glass squircle used for every top-bar destination.
-function ChromeButton({ title, onClick, children }) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      style={{
-        width: 34, height: 34, borderRadius: 12, flexShrink: 0,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        color: theme.textSecondary, background: theme.glassFill,
-        border: `1px solid ${theme.glassBorder}`,
-        backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
-        boxShadow: `inset 0 1px 0 ${theme.glassSpec}`,
-        cursor: "pointer", transition: `transform .3s ${SPRING}`,
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
 function fmtDate(d) {
   const date = new Date(d + "T00:00:00");
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -179,27 +127,11 @@ function fmtReminder(todo) {
   return todo.due && stamped !== todo.due ? `${fmtDate(stamped)} ${time}` : time;
 }
 
-// Minutes past midnight for a time-sensitive todo, or null if it has no time.
-// Used to lead a date group chronologically.
-function timeOfDay(todo) {
-  if (!todo.timeSensitive || !todo.notifyAt) return null;
-  const [h, m] = todo.notifyAt.slice(11, 16).split(":").map(Number);
-  if (Number.isNaN(h) || Number.isNaN(m)) return null;
-  return h * 60 + m;
-}
-
 function isOverdue(dueDate, done) {
   if (!dueDate || done) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return new Date(dueDate + "T00:00:00") < today;
-}
-
-function isFutureDate(dueDate) {
-  if (!dueDate) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return new Date(dueDate + "T00:00:00") > today;
 }
 
 // Firestore Timestamp -> millis, tolerating pending server timestamps (null while unsynced)
@@ -254,7 +186,6 @@ function useUserCollection(uid, name, filter) {
 }
 
 // ---------- Top-level auth gate ----------
-const ALLOWED_EMAIL = "javoseabaugh@gmail.com";
 function emailToDocId(email) {
   return email.toLowerCase();
 }
@@ -315,8 +246,11 @@ export default function App() {
     applyThemeVars(document.documentElement);
     applyThemeColor();
     document.documentElement.style.setProperty("--gl2", theme.inputBg);
-    document.body.style.background = theme.gradB;
-    document.body.style.color = theme.textPrimary;
+    // The redesign's colours own the page itself: the status bar and iOS
+    // overscroll show these, not the old theme's.
+    document.querySelectorAll('meta[name="theme-color"]').forEach((el) => { el.content = D.bgTop; });
+    document.body.style.background = D.bgBottom;
+    document.body.style.color = D.text;
   }, []);
 
   let screen;
@@ -426,29 +360,38 @@ function TodoApp({ user, access }) {
     return () => { cancelled = true; };
   }, []);
   const sharingWork = access?.sharedWorkAccess === true && !!ownerUid && ownerUid !== uid;
-  const workUid = sharingWork ? ownerUid : uid;
   const ownTodos = useUserCollection(uid, "todos");
   const sharedTodos = useUserCollection(sharingWork ? ownerUid : null, "todos", { categoryField: access?.sharedWorkCategoryId });
   const ownCategories = useUserCollection(uid, "categories");
-  const sharedCategories = useUserCollection(sharingWork ? ownerUid : null, "categories", { docId: access?.sharedWorkCategoryId });
   const thoughts = useUserCollection(uid, "thoughts");
   const people = useUserCollection(uid, "people");
 
-  const cols = useColumns();
-  const isDesktop = cols === 3;  // full three-column desktop layout
-  const twoCol = cols === 2;     // Work + Personal side by side
-  const panelCols = cols >= 2;   // render each list as a titled column panel
-  // Swipe is mobile-only, so anywhere it isn't the interaction — desktop, or a
-  // narrow window driven by a mouse — rows show explicit clock/trash buttons.
-  const showRowButtons = isDesktop || HOVER_CAPABLE;
-  const [activeList, setActiveList] = useState("work");
-  const [showAddPanel, setShowAddPanel] = useState(false);
-  const [sortingList, setSortingList] = useState(null);
-  const [captureOpen, setCaptureOpen] = useState(true);
-  const [expandedFilters, setExpandedFilters] = useState({});
-  const [addTarget, setAddTarget] = useState("work"); // which list the open add panel writes to
-  const [settingTimeFor, setSettingTimeFor] = useState(null);
-  const [draftTimeValue, setDraftTimeValue] = useState("");
+  // People you can assign Work todos to: everyone with shared Work access
+  // scoped to one of your categories. Assigning a todo to someone files it
+  // in that category, which is exactly what their access rule lets them see,
+  // so no data has to move and the Firestore rules stay the boundary.
+  const isOwner = access?.role === "owner";
+  const [accessList, setAccessList] = useState([]);
+  useEffect(() => {
+    if (!isOwner) return;
+    const unsub = onSnapshot(collection(db, "access"),
+      (snap) => setAccessList(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (err) => console.error("access list error", err));
+    return () => unsub();
+  }, [isOwner]);
+  const assignable = isOwner
+    ? accessList
+        .filter((a) => a.sharedWorkAccess === true && a.sharedWorkCategoryId && a.uid !== uid)
+        .map((a) => {
+          const cat = ownCategories.find((c) => c.id === a.sharedWorkCategoryId);
+          return { id: a.id, email: a.email || a.id, categoryId: a.sharedWorkCategoryId, name: cat?.name || (a.email || a.id).split("@")[0] };
+        })
+    : [];
+  const assigneeOf = (todo) => (todo.isShared ? null : assignable.find((p) => p.categoryId === todo.categoryId) || null);
+  const sharedFromOf = (todo) => (todo.isShared ? "owner" : null);
+
+  const [section, setSection] = useState("work"); // 'work' | 'personal' | 'thoughts'
+  const [sheet, setSheet] = useState(null); // null | { todo } | { todo: null }
   const [pendingBudgetRequest, setPendingBudgetRequest] = useState(null);
   useEffect(() => {
     if (access?.role !== "guardian") return;
@@ -458,173 +401,49 @@ function TodoApp({ user, access }) {
   async function handleRequestBudgetAccess() {
     await createBudgetAccessRequest(user.email);
   }
-  const [page, setPage] = useState("main"); // 'main' | 'budget'
+  const [page, setPage] = useState("main"); // 'main' | 'budget' | 'sharedBudget' | 'access' | 'nightly'
 
-  // Every screen is now a fixed-height shell with its own internal scrolling,
-  // so the document must never scroll behind one (that's what produces the
-  // second, rubber-banding scrollbar).
+  // Every screen is a fixed-height shell with its own internal scrolling, so
+  // the document must never scroll behind one.
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
   }, []);
 
-  const [draft, setDraft] = useState("");
-  const [draftDue, setDraftDue] = useState("");
-  const draftDueRef = useRef(null);
-  const [draftCategoryId, setDraftCategoryId] = useState(null);
-  const [draftRecurrence, setDraftRecurrence] = useState(null);
-  const [newCatName, setNewCatName] = useState("");
-  const [showNewCat, setShowNewCat] = useState(false);
-  const [showMoreCats, setShowMoreCats] = useState(false);
+  // Thoughts state (the Thoughts screen is redesigned in its own step; until
+  // then it keeps its current behaviour inside the new shell).
+  const [captureOpen, setCaptureOpen] = useState(true);
   const [showManagePeople, setShowManagePeople] = useState(false);
-
-  // ---------- Layout (>=1100px = desktop columns) ----------
-  // Which column last had a click — used as the target for the shared "+"
-  // button. Category filters are per-list on both layouts: filtering Work must
-  // never affect Personal. Workbench has no entry since it doesn't use chips.
-  const [focusedColumn, setFocusedColumn] = useState("work");
-  const [desktopCategoryFilters, setDesktopCategoryFilters] = useState({ work: [], personal: [] });
-  const [desktopManageCatsFor, setDesktopManageCatsFor] = useState(null);
-  const [showThoughtsPanel, setShowThoughtsPanel] = useState(false);
-
   const [thoughtDraft, setThoughtDraft] = useState("");
   const [thoughtDue, setThoughtDue] = useState("");
   const thoughtDueRef = useRef(null);
   const [thoughtPersonId, setThoughtPersonId] = useState(null);
   const [newPersonName, setNewPersonName] = useState("");
   const [showNewPerson, setShowNewPerson] = useState(false);
-
   const [dragOverZone, setDragOverZone] = useState(null);
   const draggedId = useRef(null);
   const draggedKind = useRef(null);
-  const draggedTodoRef = useRef(null);
-  const [todoDragState, setTodoDragState] = useState(null);
-
-  // Hide/show future-dated todos. Persisted on the user's own access doc so
-  // it stays in sync across devices (same doc already used for uid
-  // self-registration). Overdue and undated todos always stay visible —
-  // only strictly-future due dates get hidden.
-  const hideFutureTodos = access?.hideFutureTodos === true;
-  async function toggleHideFutureTodos() {
-    try {
-      await setDoc(doc(db, "access", emailToDocId(user.email)), { hideFutureTodos: !hideFutureTodos }, { merge: true });
-    } catch (err) {
-      console.error("hideFutureTodos toggle error", err);
-    }
-  }
-
-  const listMeta = {
-    work: { label: "Work", icon: Briefcase, color: PALETTE.blue },
-    personal: { label: "Personal", icon: User, color: PALETTE.green },
-    thoughts: { label: "Thoughts", icon: MessageCircleMore, color: PALETTE.yellow },
-    workbench: { label: "Projects", icon: FolderKanban, color: PALETTE.orange },
-  };
 
   // ---------- Work / Personal ----------
-  // Generalized per-list helpers. The mobile view below keeps using
-  // activeList-scoped currentTodos/currentCategories (unchanged output —
-  // just now sourced from these), while the desktop columns call these
-  // directly for "work"/"personal"/"workbench" independently and
-  // simultaneously.
-  function uidForList(listKey) {
-    return listKey === "work" && sharingWork ? ownerUid : uid;
+  // Categories that aren't someone's shared bucket still show as a small label
+  // on the row, so nothing filed under them is lost from view.
+  const shareCategoryIds = new Set(assignable.map((p) => p.categoryId));
+  function withCategoryName(t) {
+    if (!t.categoryId || shareCategoryIds.has(t.categoryId)) return t;
+    const cat = ownCategories.find((c) => c.id === t.categoryId);
+    return cat ? { ...t, categoryName: cat.name } : t;
   }
   function todosForList(listKey) {
+    const own = ownTodos.filter((t) => t.list === listKey).map(withCategoryName);
     if (listKey === "work" && sharingWork) {
-      const own = ownTodos.filter((t) => t.list === "work");
       const shared = sharedTodos
         .filter((t) => t.list === "work" && t.categoryId === access?.sharedWorkCategoryId)
         .map((t) => ({ ...t, isShared: true }));
       return [...own, ...shared];
     }
-    return ownTodos.filter((t) => t.list === listKey);
+    return own;
   }
-  function categoriesForList(listKey) {
-    const source = listKey === "work" && sharingWork ? sharedCategories : ownCategories;
-    return source.filter((c) => c.list === listKey);
-  }
-  function dateFilterList(items) {
-    return hideFutureTodos ? items.filter((t) => !isFutureDate(t.due)) : items;
-  }
-
-  // Both layouts now render lists through renderTodoColumn, so a todo has to
-  // be findable regardless of which list is on screen.
-  function findTodo(id) {
-    const own = ownTodos.find((t) => t.id === id);
-    if (own) return own;
-    const shared = sharedTodos.find((t) => t.id === id);
-    return shared ? { ...shared, isShared: true } : null;
-  }
-
-  const currentTodos = todosForList(activeList);
-  const currentCategories = categoriesForList(activeList);
-  const activeCount = currentTodos.filter((t) => !t.done).length;
-
-  // Suggest an existing category as the user types a new task, debounced
-  // so it doesn't fire on every keystroke. Never overrides a category the
-  // person already picked themselves.
-  useEffect(() => {
-    if (draftCategoryId) return;
-    if (!draft.trim() || draft.trim().length < 4) return;
-    if (activeList === "thoughts") return;
-    const names = currentCategories.map((c) => c.name);
-    if (!names.length) return;
-    const handle = setTimeout(async () => {
-      const suggested = await suggestCategory(draft, names);
-      if (suggested) {
-        const match = currentCategories.find((c) => c.name === suggested);
-        if (match) setDraftCategoryId(match.id);
-      }
-    }, 700);
-    return () => clearTimeout(handle);
-  }, [draft]);
-
-  async function addCategoryToList(listKey, name) {
-    const trimmed = name.trim();
-    if (!trimmed) return null;
-    const targetUid = uidForList(listKey);
-    const existingCount = categoriesForList(listKey).length;
-    const ref = await addDoc(collection(db, "users", targetUid, "categories"), {
-      list: listKey,
-      name: trimmed,
-      color: PALETTE_ORDER[existingCount % 4],
-      createdAt: serverTimestamp(),
-    });
-    return ref.id;
-  }
-
-  async function addCategory() {
-    const id = await addCategoryToList(activeList, newCatName);
-    if (id) {
-      setNewCatName("");
-      setShowNewCat(false);
-    }
-    return id;
-  }
-
-  async function addCategoryAndSelect() {
-    const id = await addCategoryToList(addTarget, newCatName);
-    if (id) {
-      setNewCatName("");
-      setShowNewCat(false);
-      setDraftCategoryId(id);
-    }
-    setShowMoreCats(false);
-  }
-
-  async function deleteCategoryFromList(listKey, catId) {
-    const targetUid = uidForList(listKey);
-    await deleteDoc(doc(db, "users", targetUid, "categories", catId));
-    const affected = todosForList(listKey).filter((t) => t.categoryId === catId);
-    await Promise.all(affected.map((t) => {
-      const tUid = t.isShared ? ownerUid : uid;
-      return updateDoc(doc(db, "users", tUid, "todos", t.id), { categoryId: null });
-    }));
-  }
-
-  async function deleteCategory(catId) {
-    await deleteCategoryFromList(activeList, catId);
-  }
+  const targetUidOf = (todo) => (todo.isShared ? ownerUid : uid);
 
   function computeNextDue(currentDue, recurrence) {
     const base = currentDue ? new Date(currentDue + "T00:00:00") : new Date();
@@ -632,200 +451,105 @@ function TodoApp({ user, access }) {
     else if (recurrence.type === "weekly") base.setDate(base.getDate() + 7);
     else if (recurrence.type === "monthly") base.setMonth(base.getMonth() + 1);
     else if (recurrence.type === "custom") base.setDate(base.getDate() + (recurrence.intervalDays || 1));
-    return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
+    return dateStr(base);
   }
 
-  // Generalized add — writes to the caller-specified list. Always saves to
-  // the signed-in user's own private list (uid), matching the original:
-  // assistants keep their own copy even when adding into a shared category.
-  async function addTodoToList(listKey, { text, due, categoryId, recurrence }) {
-    const trimmed = text.trim();
-    if (!trimmed) return;
+  function recurrenceFor(repeat, existing) {
+    if (repeat === "none") return null;
+    if (repeat === "custom") return existing || { type: "custom", intervalDays: 1 };
+    return { type: repeat };
+  }
+
+  // A time with no date lands today, or tomorrow once that slot has passed,
+  // so a reminder is never born in the past.
+  function reminderFields(due, time) {
+    if (!time) return { due: due || null, timeSensitive: false, notifyAt: null };
+    const today = dateStr();
+    const day = due || (time <= nowHM() ? addDays(today, 1) : today);
+    return { due: day, timeSensitive: true, notifyAt: `${day}T${time}:00` };
+  }
+
+  async function saveTodo(values) {
+    const existing = sheet?.todo || null;
+    const person = values.who && values.who !== "me" ? assignable.find((p) => p.id === values.who) : null;
+    const rem = reminderFields(values.due, values.time);
     try {
-      await addDoc(collection(db, "users", uid, "todos"), {
-        list: listKey,
-        text: trimmed,
-        categoryId: categoryId || null,
-        due: due || null,
-        done: false,
-        recurrence: recurrence
-          ? recurrence.type === "custom"
-            ? { type: "custom", intervalDays: Number(recurrence.intervalDays) || 1 }
-            : recurrence
-          : null,
-        createdAt: serverTimestamp(),
-      });
+      if (!existing) {
+        await addDoc(collection(db, "users", uid, "todos"), {
+          list: values.list,
+          text: values.text,
+          categoryId: values.list === "work" && person ? person.categoryId : null,
+          due: rem.due,
+          done: false,
+          recurrence: recurrenceFor(values.repeat, null),
+          timeSensitive: rem.timeSensitive,
+          notifyAt: rem.notifyAt,
+          notified: false,
+          createdAt: serverTimestamp(),
+        });
+      } else {
+        const patch = {
+          text: values.text,
+          list: values.list,
+          due: rem.due,
+          recurrence: recurrenceFor(values.repeat, existing.recurrence),
+          timeSensitive: rem.timeSensitive,
+          notifyAt: rem.notifyAt,
+        };
+        // Only re-arm the Telegram ping when the moment actually moved;
+        // editing the text of a delivered reminder mustn't send it again.
+        if ((rem.notifyAt || null) !== (existing.notifyAt || null)) patch.notified = false;
+        if (values.who !== undefined && !existing.isShared) {
+          patch.categoryId = values.list === "work" && person ? person.categoryId : null;
+        }
+        // Moving a todo to Personal takes it out of anyone's shared bucket.
+        if (values.list !== "work" && assigneeOf(existing)) patch.categoryId = null;
+        await updateDoc(doc(db, "users", targetUidOf(existing), "todos", existing.id), patch);
+      }
+      setSheet(null);
     } catch (err) {
-      alert("Error saving: " + err.message);
+      console.error("save todo error", err);
+      alert("Couldn't save that: " + err.message);
     }
   }
 
-  async function addTodo() {
-    await addTodoToList(addTarget, {
-      text: draft, due: draftDue, categoryId: draftCategoryId, recurrence: draftRecurrence,
-    });
-    setDraft("");
-    setDraftDue("");
-    setDraftCategoryId(null);
-    setDraftRecurrence(null);
-    setShowAddPanel(false);
-  }
-
-  // Backing out of the add sheet throws the draft away, so an accidental tap on
-  // the + leaves nothing behind to clean up next time it opens.
-  function closeAddPanel() {
-    setDraft("");
-    setDraftDue("");
-    setDraftCategoryId(null);
-    setDraftRecurrence(null);
-    setShowNewCat(false);
-    setNewCatName("");
-    setShowMoreCats(false);
-    setShowAddPanel(false);
-  }
-
-  // Esc backs out from anywhere in the sheet, not just the title field.
-  useEffect(() => {
-    if (!showAddPanel) return;
-    const onKey = (e) => { if (e.key === "Escape") closeAddPanel(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [showAddPanel]);
-
   async function toggleDone(todo) {
-    const targetUid = todo.isShared ? ownerUid : uid;
+    const targetUid = targetUidOf(todo);
     const nowDone = !todo.done;
     await updateDoc(doc(db, "users", targetUid, "todos", todo.id), { done: nowDone });
     if (nowDone && todo.recurrence) {
+      const nextDue = computeNextDue(todo.due, todo.recurrence);
+      const time = todo.timeSensitive && todo.notifyAt ? todo.notifyAt.slice(11, 16) : null;
       await addDoc(collection(db, "users", targetUid, "todos"), {
         list: todo.list,
         text: todo.text,
         categoryId: todo.categoryId || null,
-        due: computeNextDue(todo.due, todo.recurrence),
+        due: nextDue,
         done: false,
         recurrence: todo.recurrence,
+        // The next one keeps the same reminder time, on its own day.
+        timeSensitive: !!time,
+        notifyAt: time ? `${nextDue}T${time}:00` : null,
+        notified: false,
         createdAt: serverTimestamp(),
       });
     }
-    if (todo.workbenchProjectId && todo.workbenchMilestoneId) {
-      await updateDoc(doc(db, "users", targetUid, "workbench", todo.workbenchProjectId, "milestones", todo.workbenchMilestoneId), { done: nowDone });
-    }
   }
 
-  function removeTodo(todoId) {
-    const todo = findTodo(todoId);
-    if (!todo) return false;
-
+  async function deleteTodo() {
+    const todo = sheet?.todo;
+    if (!todo) return;
     if (todo.isShared) {
-      alert("Only the Owner can delete shared tasks.");
-      return false;
+      alert("Only the owner can delete shared todos.");
+      return;
     }
-
-    deleteDoc(doc(db, "users", uid, "todos", todoId)).catch((err) => {
-      console.error("Delete failed:", err);
-    });
-    return true;
-  }
-
-  async function editTodo(id, text, due, categoryId) {
-    const todo = findTodo(id);
-    const targetUid = todo?.isShared ? ownerUid : uid;
-    const patch = { text, due, categoryId: categoryId ?? null };
-
-    // notifyAt carries its own copy of the date, so changing `due` alone would
-    // leave the reminder stamped with the old day: it fires then, while the
-    // card sits under the new date. Keep the time, take the new date, and let
-    // it fire again — but only when the date actually moved, or editing the
-    // text of an already-delivered reminder would re-send it.
-    if (todo?.timeSensitive && todo.notifyAt && due) {
-      const moved = `${due}T${todo.notifyAt.slice(11, 19)}`;
-      if (moved !== todo.notifyAt) {
-        patch.notifyAt = moved;
-        patch.notified = false;
-      }
-    }
-
-    await updateDoc(doc(db, "users", targetUid, "todos", id), patch);
-  }
-
-  // The "Sort by time" button. Restamps `order` within every date of one list:
-  // time-sensitive todos lead, earliest first, then the rest in the order they
-  // were created. Dates themselves are already ordered by the `due` comparison
-  // in sortTodosFlat, so only the within-date sequence needs writing.
-  //
-  // This is the only thing that reorders on its own, and only when pressed —
-  // drags afterwards overwrite `order` freely, and pressing again re-sorts.
-  async function sortListByTime(listKey) {
-    if (sortingList) return;
-    setSortingList(listKey);
     try {
-      const byDate = new Map();
-      todosForList(listKey).filter((t) => !t.done).forEach((t) => {
-        const key = t.due || "";
-        if (!byDate.has(key)) byDate.set(key, []);
-        byDate.get(key).push(t);
-      });
-
-      const byAge = (a, b) => toMillis(a.createdAt) - toMillis(b.createdAt);
-      const writes = [];
-      byDate.forEach((group) => {
-        const timed = group
-          .filter((t) => timeOfDay(t) !== null)
-          .sort((a, b) => timeOfDay(a) - timeOfDay(b) || byAge(a, b));
-        const untimed = group.filter((t) => timeOfDay(t) === null).sort(byAge);
-        [...timed, ...untimed].forEach((t, i) => {
-          const targetUid = t.isShared ? ownerUid : uid;
-          writes.push(updateDoc(doc(db, "users", targetUid, "todos", t.id), { order: (i + 1) * 10 }));
-        });
-      });
-      await Promise.all(writes);
+      await deleteDoc(doc(db, "users", uid, "todos", todo.id));
+      setSheet(null);
     } catch (err) {
-      alert("Could not sort: " + err.message);
-    } finally {
-      setSortingList(null);
+      console.error("delete todo error", err);
     }
   }
-
-  async function setTimeSensitive(todo, timeValue) {
-    if (!timeValue) return;
-    const targetUid = todo.isShared ? ownerUid : uid;
-    const now = new Date();
-    const pad = (n) => String(n).padStart(2, "0");
-    const dateString = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-
-    let baseDate = todo.due;
-    if (!baseDate) {
-      // No due date, so the time has to pick a day of its own. Today, unless
-      // that moment has already passed — a reminder born in the past never
-      // rings, it just ages out.
-      const t = new Date(now);
-      if (timeValue <= `${pad(now.getHours())}:${pad(now.getMinutes())}`) t.setDate(t.getDate() + 1);
-      baseDate = dateString(t);
-    }
-
-    const notifyAt = `${baseDate}T${timeValue}:00`;
-    await updateDoc(doc(db, "users", targetUid, "todos", todo.id), {
-      timeSensitive: true,
-      notifyAt,
-      notified: false,
-      // Give the todo the day its reminder lands on, so the card can never be
-      // filed under one date while the ping is scheduled for another.
-      due: baseDate,
-    });
-    setSettingTimeFor(null);
-    setDraftTimeValue("");
-  }
-  async function clearTimeSensitive(todo) {
-    const targetUid = todo.isShared ? ownerUid : uid;
-    await updateDoc(doc(db, "users", targetUid, "todos", todo.id), {
-      timeSensitive: false,
-      notifyAt: null,
-      notified: false,
-    });
-    setSettingTimeFor(null);
-    setDraftTimeValue("");
-  }
-
 
   // ---------- Thoughts ----------
   async function addPerson(name) {
@@ -879,23 +603,6 @@ function TodoApp({ user, access }) {
     setShowNewPerson(false);
   }
 
-  async function handleBrainDumpResult(parsed) {
-    if (parsed.itemType === "todo") {
-      setActiveList(parsed.list);
-      setDraft(parsed.text);
-      setDraftDue(parsed.dueDate || "");
-    } else {
-      setActiveList("thoughts");
-      setThoughtDraft(parsed.text);
-      setThoughtDue(parsed.dueDate || "");
-      if (parsed.personName) {
-        const id = await addPerson(parsed.personName);
-        setThoughtPersonId(id);
-      } else {
-        setThoughtPersonId(null);
-      }
-    }
-  }
 
   // ---------- Drag and drop (shared) ----------
   function handleDragStart(e, id, kind) {
@@ -916,112 +623,6 @@ function TodoApp({ user, access }) {
     if (kind === "thought") assignPerson(id, targetId);
   }
 
-  // Same-due-date drag-to-reorder for todos, implemented with Pointer
-  // Events (not native HTML5 drag-and-drop) so it behaves consistently on
-  // both mouse and touch/mobile, and so the dragged row visually follows
-  // the pointer instead of relying on the browser's native drag ghost
-  // (which broke down once dragging only started from the small handle).
-  function startTodoReorderDrag(e, todo, sortedList) {
-    if (typeof e.button === "number" && e.button !== 0) return;
-    e.preventDefault();
-    e.stopPropagation();
-
-    const groupKey = todo.due || null;
-    const group = sortedList.filter((t) => (t.due || null) === groupKey);
-    if (group.length < 2) return;
-
-    const rects = {};
-    group.forEach((t) => {
-      const el = document.querySelector(`[data-todo-id="${CSS.escape(String(t.id))}"]`);
-      if (el) rects[t.id] = el.getBoundingClientRect();
-    });
-    const startY = e.clientY;
-    let overId = todo.id;
-    const prevUserSelect = document.body.style.userSelect;
-    document.body.style.userSelect = "none";
-
-    function pickOverId(pointerY) {
-      const entries = group.map((t) => ({ id: t.id, rect: rects[t.id] })).filter((x) => x.rect);
-      if (!entries.length) return overId;
-      const first = entries[0], last = entries[entries.length - 1];
-      if (pointerY <= first.rect.top + first.rect.height / 2) return first.id;
-      if (pointerY >= last.rect.top + last.rect.height / 2) return last.id;
-      for (const en of entries) {
-        if (pointerY >= en.rect.top && pointerY < en.rect.top + en.rect.height) return en.id;
-      }
-      return overId;
-    }
-
-    function onMove(ev) {
-      const deltaY = ev.clientY - startY;
-      overId = pickOverId(ev.clientY);
-      setTodoDragState({ id: todo.id, deltaY, overId });
-    }
-
-    async function onUp() {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-      document.body.style.userSelect = prevUserSelect;
-      setTodoDragState(null);
-      if (overId != null && overId !== todo.id) {
-        const ids = group.map((t) => t.id);
-        const fromIdx = ids.indexOf(todo.id);
-        const toIdx = ids.indexOf(overId);
-        if (fromIdx !== -1 && toIdx !== -1) {
-          const reordered = [...group];
-          const [moved] = reordered.splice(fromIdx, 1);
-          reordered.splice(toIdx, 0, moved);
-          await Promise.all(reordered.map((t, i) => {
-            const targetUid = t.isShared ? ownerUid : uid;
-            return updateDoc(doc(db, "users", targetUid, "todos", t.id), { order: (i + 1) * 10 });
-          }));
-        }
-      }
-    }
-
-    setTodoDragState({ id: todo.id, deltaY: 0, overId: todo.id });
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
-  }
-
-  function sortTodosFlat(items) {
-    return [...items].sort((a, b) => {
-      if (a.done !== b.done) return a.done ? 1 : -1;
-      if (a.due && b.due && a.due !== b.due) return a.due.localeCompare(b.due);
-      if (a.due && !b.due) return -1;
-      if (!a.due && b.due) return 1;
-      // Same due date (or both undated) - respect manual drag order within that
-      // group, falling back to creation order for todos never manually reordered.
-      // `order` is written by drags and by the Sort by time button; nothing
-      // reorders on its own.
-      const aOrder = typeof a.order === "number" ? a.order : null;
-      const bOrder = typeof b.order === "number" ? b.order : null;
-      if (aOrder !== null || bOrder !== null) {
-        if (aOrder === null) return 1;
-        if (bOrder === null) return -1;
-        if (aOrder !== bOrder) return aOrder - bOrder;
-      }
-      return toMillis(a.createdAt) - toMillis(b.createdAt);
-    });
-  }
-
-  // Recently used = categories whose most recently created todo is newest.
-  // Categories never used sink to the end.
-  function recentCategoriesForList(listKey, limit) {
-    const listTodos = todosForList(listKey);
-    const listCats = categoriesForList(listKey);
-    const lastUsed = {};
-    listTodos.forEach((t) => {
-      if (!t.categoryId) return;
-      const ms = toMillis(t.createdAt);
-      if (!lastUsed[t.categoryId] || ms > lastUsed[t.categoryId]) lastUsed[t.categoryId] = ms;
-    });
-    return [...listCats]
-      .sort((a, b) => (lastUsed[b.id] || -1) - (lastUsed[a.id] || -1))
-      .slice(0, limit);
-  }
 
   function sortByDue(items) {
     return [...items].sort((a, b) => {
@@ -1056,182 +657,7 @@ function TodoApp({ user, access }) {
       }),
   ];
 
-  const isThoughts = activeList === "thoughts";
-  const isWorkbench = activeList === "workbench";
 
-  // Renders one list of todos — a glass column on desktop, the page body on
-  // mobile. Category filters, sorting and the empty state are per-list; the
-  // per-todo callbacks are shared with every other surface.
-  function renderTodoColumn(listKey) {
-    const meta = listMeta[listKey];
-    const Icon = meta.icon;
-    const accent = meta.color.dot;
-    const colTodos = todosForList(listKey);
-    const colCategories = categoriesForList(listKey);
-    const colDateFiltered = dateFilterList(colTodos);
-    const colFilter = desktopCategoryFilters[listKey] || [];
-    const colFiltered = colFilter.length === 0
-      ? colDateFiltered
-      : colDateFiltered.filter((t) => colFilter.includes(t.categoryId));
-    const colSorted = sortTodosFlat(colFiltered);
-    const colActiveCount = colTodos.filter((t) => !t.done).length;
-    const focused = isDesktop && focusedColumn === listKey;
-    const chipCategories = colCategories.filter((cat) =>
-      colDateFiltered.some((t) => t.categoryId === cat.id && !t.done)
-    );
-
-    function setColFilter(updater) {
-      setDesktopCategoryFilters((prev) => ({ ...prev, [listKey]: updater(prev[listKey] || []) }));
-    }
-
-    // Category filters stay hidden per list by default so the chip row never
-    // steals height from the tasks until asked for. The active-filter count
-    // stays on the toggle so a filtered list never looks unfiltered while the
-    // chips are hidden.
-    const filtersOpen = expandedFilters[listKey] === true;
-    const filtersButton = chipCategories.length > 0 && (
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          setExpandedFilters((prev) => ({ ...prev, [listKey]: !filtersOpen }));
-        }}
-        title={filtersOpen ? "Hide category filters" : "Show category filters"}
-        style={{
-          ...quietButtonStyle,
-          display: "flex", alignItems: "center", gap: 5, cursor: "pointer",
-          color: colFilter.length ? theme.accentPlum : theme.textFainter,
-        }}
-      >
-        <Tag size={12} />
-        {colFilter.length ? `Filters · ${colFilter.length}` : "Filters"}
-        <ChevronDown
-          size={13}
-          style={{ transform: filtersOpen ? "rotate(180deg)" : "none", transition: "transform .25s ease" }}
-        />
-      </button>
-    );
-
-    const sortingThis = sortingList === listKey;
-    const sortButton = (
-      <button
-        onClick={(e) => { e.stopPropagation(); sortListByTime(listKey); }}
-        disabled={!!sortingList}
-        title="Put time-sensitive todos first within each date, earliest first"
-        style={{
-          ...quietButtonStyle,
-          display: "flex", alignItems: "center", gap: 5,
-          cursor: sortingList ? "default" : "pointer",
-          opacity: sortingList && !sortingThis ? 0.4 : 1,
-          color: sortingThis ? theme.accentPlum : theme.textFainter,
-        }}
-      >
-        <Clock size={12} />
-        {sortingThis ? "Sorting…" : "Sort by time"}
-      </button>
-    );
-
-    return (
-      <div
-        key={listKey}
-        onClick={isDesktop ? () => setFocusedColumn(listKey) : undefined}
-        style={panelCols ? {
-          ...glass.panel, flex: "1 1 0", minWidth: 0, padding: 16, borderRadius: 26,
-          display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden",
-          border: `1px solid ${focused ? accent : theme.glassBorder}`,
-          boxShadow: focused
-            ? `inset 0 1px 0 ${theme.glassSpec}, 0 0 0 3px ${mix(accent, 22)}, 0 18px 44px -26px ${theme.glassShadow}`
-            : `inset 0 1px 0 ${theme.glassSpec}, 0 18px 44px -26px ${theme.glassShadow}`,
-          transition: "border-color .3s ease, box-shadow .3s ease",
-        } : { minWidth: 0, flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}
-      >
-        {panelCols ? (
-          <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
-            <Icon size={15} color={accent} />
-            <span style={display(16)}>{meta.label}</span>
-            <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: 11.5, color: theme.textFainter }}>
-              {colActiveCount} left
-            </span>
-            {filtersButton}
-            {sortButton}
-            <button
-              onClick={(e) => { e.stopPropagation(); setDesktopManageCatsFor(listKey); }}
-              style={quietButtonStyle}
-            >
-              Categories
-            </button>
-          </div>
-        ) : (
-          <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4, marginBottom: 10 }}>
-            {filtersButton}
-            {sortButton}
-            <button onClick={() => setDesktopManageCatsFor(listKey)} style={quietButtonStyle}>
-              Manage categories
-            </button>
-          </div>
-        )}
-
-        {chipCategories.length > 0 && filtersOpen && (
-          <div style={{ flexShrink: 0, display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
-            {chipCategories.map((cat) => {
-              const on = colFilter.includes(cat.id);
-              const palette = PALETTE[cat.color] || PALETTE.blue;
-              return (
-                <button
-                  key={cat.id}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setColFilter((prev) => prev.includes(cat.id) ? prev.filter((id) => id !== cat.id) : [...prev, cat.id]);
-                  }}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 999,
-                    fontSize: 12.5, fontWeight: 500, cursor: "pointer",
-                    color: on ? palette.text : theme.textMuted,
-                    background: on ? palette.bg : theme.inputBg,
-                    border: `1px solid ${on ? palette.dot : theme.glassBorder2}`,
-                    backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
-                    transition: `all .25s ${SPRING}`,
-                  }}
-                >
-                  <span style={{ width: 6, height: 6, borderRadius: 99, flexShrink: 0, background: palette.dot }} />
-                  {cat.name}
-                </button>
-              );
-            })}
-            {colFilter.length > 0 && (
-              <button
-                onClick={(e) => { e.stopPropagation(); setColFilter(() => []); }}
-                style={{ padding: "5px 12px", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "none", background: "transparent", color: theme.accentRed }}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* The only scrolling region on this screen. */}
-        <div
-          className="orbit-scroll"
-          style={{
-            flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 9,
-            paddingBottom: panelCols ? 4 : LIST_TAIL,
-          }}
-        >
-          {colSorted.length === 0 && (
-            <div style={{ padding: "34px 16px", borderRadius: 20, border: `1px dashed ${theme.glassBorder2}`, textAlign: "center", fontSize: 13, color: theme.textFainter }}>
-              {colFilter.length ? "Nothing matches those filters." : "Nothing here yet — tap + to add the first thing."}
-            </div>
-          )}
-          {colSorted.map((todo, idx) => renderTodoRow(todo, colCategories, colSorted, idx))}
-        </div>
-      </div>
-    );
-  }
-
-  // Thoughts, rendered identically by the mobile tab and the desktop drawer —
-  // one implementation so the two can't drift apart.
-  // Capture card and the "Manage people" row are chrome and stay put; only the
-  // thoughts below them scroll. `listTail` is the bottom padding the scrolling
-  // region needs to clear whatever floats over it (tab bar on mobile).
   function renderThoughts(listTail) {
     const captureReady = !!thoughtDraft.trim();
 
@@ -1434,102 +860,6 @@ function TodoApp({ user, access }) {
     );
   }
 
-  function openReminder(todo) {
-    setSettingTimeFor(todo.id);
-    setDraftTimeValue(todo.notifyAt ? todo.notifyAt.slice(11, 16) : "");
-  }
-
-  // One row: either the inline reminder-time editor or the task card. Swipe is
-  // mobile-only — on desktop the same two actions are explicit row buttons.
-  function renderTodoRow(todo, colCategories, colSorted, idx) {
-    const overdue = isOverdue(todo.due, todo.done);
-    const category = colCategories.find((c) => c.id === todo.categoryId);
-    const slotStyle = { animation: `rowIn .4s ${EASE_OUT} ${Math.min(idx, 12) * 0.035}s both` };
-    // Whole list goes flat together — a mix of blurred and solid cards would
-    // read as two different surfaces sitting side by side.
-    const flat = colSorted.length > BLUR_LIST_LIMIT;
-
-    if (settingTimeFor === todo.id) {
-      return (
-        <div
-          key={todo.id}
-          style={{ ...(flat ? glass.cardFlat : glass.card), ...slotStyle, borderRadius: 22, padding: "12px 13px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}
-        >
-          <Clock size={16} color={theme.goldDot} style={{ flexShrink: 0 }} />
-          <span style={{ fontSize: 13.5, color: theme.textPrimary, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {todo.text}
-          </span>
-          <input
-            type="time"
-            autoFocus
-            value={draftTimeValue}
-            onChange={(e) => setDraftTimeValue(e.target.value)}
-            style={{ ...fieldStyle(), width: "auto", fontFamily: MONO }}
-          />
-          <button
-            onClick={() => setTimeSensitive(todo, draftTimeValue)}
-            disabled={!draftTimeValue}
-            style={{ ...accentButtonStyle(!!draftTimeValue), padding: "8px 15px", borderRadius: 12, fontSize: 12.5, fontWeight: 600 }}
-          >
-            Set
-          </button>
-          {todo.timeSensitive && (
-            <button
-              onClick={() => clearTimeSensitive(todo)}
-              style={{ color: theme.accentRed, fontSize: 12, fontWeight: 600, padding: "6px 8px", border: "none", background: "transparent", cursor: "pointer" }}
-            >
-              Remove
-            </button>
-          )}
-          <button
-            onClick={() => { setSettingTimeFor(null); setDraftTimeValue(""); }}
-            style={{ color: theme.textFainter, padding: 4, border: "none", background: "transparent", cursor: "pointer", display: "flex" }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-      );
-    }
-
-    const card = (
-      <TaskCard
-        highlighted={overdue}
-        flat={flat}
-        done={todo.done}
-        text={todo.text}
-        due={todo.due}
-        categoryId={todo.categoryId || null}
-        categories={colCategories}
-        todoId={todo.id}
-        showHandle={!isDesktop}
-        onReorderPointerDown={(e) => startTodoReorderDrag(e, todo, colSorted)}
-        isDragging={todoDragState?.id === todo.id}
-        dragDeltaY={todoDragState?.id === todo.id ? todoDragState.deltaY : 0}
-        isDropTarget={!!todoDragState && todoDragState.overId === todo.id && todoDragState.id !== todo.id}
-        showRowButtons={showRowButtons}
-        remindActive={!!todo.timeSensitive}
-        onRemind={() => openReminder(todo)}
-        onToggle={() => toggleDone(todo)}
-        onRemove={() => removeTodo(todo.id)}
-        onEdit={(text, due, categoryId) => editTodo(todo.id, text, due, categoryId)}
-        badge={<TaskBadges todo={todo} overdue={overdue} category={category} />}
-      />
-    );
-
-    return (
-      <div key={todo.id} style={slotStyle}>
-        {isDesktop ? card : (
-          <SwipeToDelete
-            reordering={todoDragState?.id === todo.id}
-            onDelete={() => removeTodo(todo.id)}
-            onSwipeRight={() => openReminder(todo)}
-          >
-            {card}
-          </SwipeToDelete>
-        )}
-      </div>
-    );
-  }
 
   if (page === "budget") {
     const budgetDocRef = (access?.role === "guardian" || access?.role === "assistant")
@@ -1556,412 +886,97 @@ if (page === "nightly") {
     return <Nightly uid={uid} onBack={() => setPage("main")} />;
   }
 
-  const openThoughts = thoughts.filter((t) => !t.done).length;
-  const pageTitle = isThoughts ? "Clear your head" : isWorkbench ? "Projects" : "Today's focus";
-  const pageSub = isThoughts
-    ? `${openThoughts} thing${openThoughts === 1 ? "" : "s"} still on your mind`
-    : isWorkbench && !isDesktop
-      ? "Milestones, deadlines and what's next"
-      : isDesktop
-        ? "Click a column to focus it — that's where + adds"
-        : `${activeCount} ${activeCount === 1 ? "task" : "tasks"} left in ${listMeta[activeList].label.toLowerCase()}`;
-  const showHideFuture = isDesktop || (!isThoughts && !isWorkbench);
-  const showFab = isDesktop
-    ? focusedColumn !== "workbench" && !showThoughtsPanel
-    : activeList === "work" || activeList === "personal";
-  const addAccent = listMeta[addTarget] ? listMeta[addTarget].label : "Work";
+  const isThoughts = section === "thoughts";
+  const sections = [
+    { id: "work", label: "Work" },
+    { id: "personal", label: "Personal" },
+    { id: "thoughts", label: "Thoughts" },
+  ];
+  const iconBtn = {
+    width: 36, height: 36, borderRadius: 12, flexShrink: 0, display: "grid", placeItems: "center",
+    border: "none", cursor: "pointer", background: D.surface, color: D.text,
+  };
 
   return (
-    <div
-      className="orbit-shell"
-      style={{
-        position: "relative", overflow: "hidden", display: "flex", flexDirection: "column",
-        color: theme.textPrimary, fontFamily: "'Geist', system-ui, sans-serif",
-      }}
-    >
-      <GlassBackdrop />
-
-      <div style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 0, display: "flex", justifyContent: "center" }}>
-        <div style={{
-          width: "100%", maxWidth: isDesktop ? 1400 : twoCol ? 900 : 720,
-          display: "flex", flexDirection: "column", minHeight: 0,
-          animation: `screenIn .45s ${EASE_OUT}`,
+    <div className="orbit-shell" style={{
+      position: "relative", overflow: "hidden", display: "flex", flexDirection: "column",
+      background: pageBackground, color: D.text, fontFamily: FONT_BODY,
+    }}>
+      <div style={{ flex: 1, minHeight: 0, width: "100%", maxWidth: 640, margin: "0 auto", display: "flex", flexDirection: "column" }}>
+        <header style={{
+          flexShrink: 0, display: "flex", alignItems: "center", gap: 8,
+          padding: "12px 16px 10px", paddingTop: "calc(12px + env(safe-area-inset-top))",
         }}>
+          <OrbitMark size={26} />
+          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 20, marginRight: "auto" }}>Orbit</span>
+          <button style={iconBtn} title="Budget" aria-label="Budget" onClick={() => setPage("budget")}><Wallet size={17} /></button>
+          <button style={iconBtn} title="Nightly routine" aria-label="Nightly routine" onClick={() => setPage("nightly")}><Moon size={17} /></button>
+          {access?.role === "guardian" && access?.budgetShared === true && (
+            <button style={iconBtn} title="Shared budget" aria-label="Shared budget" onClick={() => setPage("sharedBudget")}><Users size={17} /></button>
+          )}
+          {(access?.role === "owner" || access?.role === "household") && (
+            <button style={iconBtn} title="Access" aria-label="Access" onClick={() => setPage("access")}><Settings size={17} /></button>
+          )}
+          <UserMenu user={user} access={access} isDesktop={false}
+            pendingBudgetRequest={pendingBudgetRequest} onRequestBudgetAccess={handleRequestBudgetAccess} />
+        </header>
 
-          {/* Top bar — logo and wordmark left, destinations and account right.
-              The glass background bleeds up into the status-bar / notch area via
-              safe-area-inset-top, while the row itself stays padded below it so
-              the buttons are never covered. */}
-          <div style={{
-            ...glass.bar,
-            position: "relative", zIndex: 30, flexShrink: 0,
-            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-            padding: isDesktop ? "16px 28px" : "14px 18px",
-            paddingTop: isDesktop ? 16 : "calc(14px + env(safe-area-inset-top))",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
-              <OrbitMark size={26} />
-              <span style={display(17)}>Orbit</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
-              <ChromeButton title="Budget" onClick={() => setPage("budget")}>
-                <Wallet size={16} />
-              </ChromeButton>
-              <ChromeButton title="Nightly Routine" onClick={() => setPage("nightly")}>
-                <Moon size={16} />
-              </ChromeButton>
-              {access?.role === "guardian" && access?.budgetShared === true && (
-                <ChromeButton title="Shared Budget" onClick={() => setPage("sharedBudget")}>
-                  <Users size={16} />
-                </ChromeButton>
-              )}
-              {(access?.role === "owner" || access?.role === "household") && (
-                <ChromeButton title="Access" onClick={() => setPage("access")}>
-                  <Settings size={16} />
-                </ChromeButton>
-              )}
-              <UserMenu
-                user={user}
-                access={access}
-                isDesktop={isDesktop}
-                pendingBudgetRequest={pendingBudgetRequest}
-                onRequestBudgetAccess={handleRequestBudgetAccess}
-              />
-            </div>
-          </div>
-
-          <div style={{
-            flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
-            padding: isDesktop ? "26px 28px 0" : "22px 18px 0",
-          }}>
-
-            {/* Page title + live subtitle + the All dates / Today only pill */}
-            <div style={{ flexShrink: 0, display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
-              <div style={{ minWidth: 0 }}>
-                <h1 style={{ margin: 0, fontFamily: DISPLAY, fontSize: "clamp(30px,6vw,42px)", fontWeight: 600, letterSpacing: "-.035em", lineHeight: 1.02 }}>
-                  {pageTitle}
-                </h1>
-                <p style={{ margin: "7px 0 0", fontSize: 14, color: theme.textMuted, lineHeight: 1.4 }}>{pageSub}</p>
-              </div>
-              {showHideFuture && (
-                <button
-                  onClick={toggleHideFutureTodos}
-                  title={hideFutureTodos ? "Showing today & overdue only — tap to show all dates" : "Showing all dates — tap to hide future todos"}
-                  style={{ ...pillStyle(hideFutureTodos), padding: "8px 14px" }}
-                >
-                  {hideFutureTodos ? <EyeOff size={13} /> : <Eye size={13} />}
-                  {hideFutureTodos ? "Today only" : "All dates"}
-                </button>
-              )}
-            </div>
-
-            {/* Ask Star */}
-            <div style={{ flexShrink: 0, marginBottom: 18 }}>
-              <BrainDumpButton
-                knownPeopleNames={people.map((p) => p.name)}
-                onResult={handleBrainDumpResult}
-              />
-            </div>
-
-            {isDesktop ? (
-              <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 16, alignItems: "stretch", paddingBottom: 20 }}>
-                {renderTodoColumn("work")}
-                {renderTodoColumn("personal")}
-                <div
-                  onClick={() => setFocusedColumn("workbench")}
-                  style={{
-                    ...glass.panel, flex: "1 1 0", minWidth: 0, padding: 16, borderRadius: 26,
-                    display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden",
-                    border: `1px solid ${focusedColumn === "workbench" ? PALETTE.orange.dot : theme.glassBorder}`,
-                    boxShadow: focusedColumn === "workbench"
-                      ? `inset 0 1px 0 ${theme.glassSpec}, 0 0 0 3px ${mix(PALETTE.orange.dot, 22)}, 0 18px 44px -26px ${theme.glassShadow}`
-                      : `inset 0 1px 0 ${theme.glassSpec}, 0 18px 44px -26px ${theme.glassShadow}`,
-                    transition: "border-color .3s ease, box-shadow .3s ease",
-                  }}
-                >
-                  <Workbench uid={uid} categories={ownCategories} todos={ownTodos} sharedUid={sharingWork ? ownerUid : null} sharedCategoryId={access?.sharedWorkCategoryId} sharedCategories={sharedCategories} />
-                </div>
-              </div>
-            ) : (
-              <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-                {(activeList === "work" || activeList === "personal") && (
-                  twoCol ? (
-                    // Mid-width: Work and Personal share the row as equal columns,
-                    // clearing the floating tab bar at the bottom.
-                    <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 16, alignItems: "stretch", paddingBottom: LIST_TAIL }}>
-                      {renderTodoColumn("work")}
-                      {renderTodoColumn("personal")}
-                    </div>
-                  ) : renderTodoColumn(activeList)
-                )}
-                {isThoughts && renderThoughts(LIST_TAIL)}
-                {isWorkbench && (
-                  <Workbench uid={uid} categories={ownCategories} todos={ownTodos} sharedUid={sharingWork ? ownerUid : null} sharedCategoryId={access?.sharedWorkCategoryId} sharedCategories={sharedCategories} listTail={LIST_TAIL} />
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Floating glass tab bar — the four lists, mobile only */}
-      {!isDesktop && (
-        <div style={{
-          position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 40,
-          display: "flex", justifyContent: "center", pointerEvents: "none",
-          padding: "0 14px 18px", paddingBottom: "calc(18px + env(safe-area-inset-bottom))",
-        }}>
-          <div style={{ ...glass.raised, display: "flex", alignItems: "center", gap: 3, padding: 6, borderRadius: 26, pointerEvents: "auto" }}>
-            {Object.entries(listMeta).map(([key, meta]) => {
-              const Icon = meta.icon;
-              const on = activeList === key;
+        <nav aria-label="Sections" style={{ flexShrink: 0, padding: "0 16px 6px" }}>
+          <div style={{ display: "flex", gap: 4, padding: 4, borderRadius: 999, background: D.surface }}>
+            {sections.map((s) => {
+              const on = section === s.id;
               return (
-                <button
-                  key={key}
-                  onClick={() => setActiveList(key)}
-                  style={{
-                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
-                    minWidth: 74, padding: "9px 8px 8px", borderRadius: 20, border: "none", cursor: "pointer",
-                    color: on ? theme.accentInk : theme.textMuted,
-                    background: on ? `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})` : "transparent",
-                    boxShadow: on ? `0 8px 20px -8px ${theme.accentPlum}` : "none",
-                    transition: `all .38s ${SPRING}`,
-                  }}
-                >
-                  <Icon size={18} />
-                  <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: ".01em" }}>{meta.label}</span>
-                </button>
+                <button key={s.id} onClick={() => setSection(s.id)} aria-pressed={on} style={{
+                  flex: 1, border: "none", cursor: "pointer", borderRadius: 999, padding: "9px 0",
+                  fontFamily: FONT_BODY, fontSize: 14, fontWeight: 700,
+                  background: on ? D.text : "transparent", color: on ? D.bgBottom : D.muted,
+                  transition: "background .25s ease, color .25s ease",
+                }}>{s.label}</button>
               );
             })}
           </div>
-        </div>
-      )}
+        </nav>
 
-      {/* Desktop-only Thoughts drawer toggle */}
-      {isDesktop && (
-        <button
-          onClick={() => setShowThoughtsPanel((v) => !v)}
-          title="Thoughts"
-          style={{
-            position: "fixed", right: 30, bottom: 100, width: 52, height: 52, borderRadius: 20, zIndex: 45,
-            display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${theme.glassBorder}`,
-            cursor: "pointer",
-            color: showThoughtsPanel ? theme.accentInk : theme.textSecondary,
-            background: showThoughtsPanel
-              ? `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})`
-              : `linear-gradient(157deg, ${theme.glassHigh}, ${theme.glassFill})`,
-            backdropFilter: "blur(22px) saturate(180%)", WebkitBackdropFilter: "blur(22px) saturate(180%)",
-            boxShadow: showThoughtsPanel
-              ? `0 12px 30px -10px ${theme.accentPlum}`
-              : `inset 0 1px 0 ${theme.glassSpec}, 0 12px 32px -18px ${theme.glassShadow}`,
-            transition: `all .38s ${SPRING}`,
-          }}
-        >
-          <MessageCircleMore size={21} />
-        </button>
-      )}
-
-      {/* + FAB — adds to the active tab (mobile) or the focused column */}
-      {showFab && (
-        <button
-          onClick={() => { setAddTarget(isDesktop ? focusedColumn : activeList); setShowAddPanel(true); }}
-          title="Add a task"
-          style={{
-            position: "fixed", right: isDesktop ? 30 : 20, bottom: isDesktop ? 30 : 100,
-            width: 58, height: 58, borderRadius: 22, zIndex: 45, border: "none", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
-            color: theme.accentInk,
-            background: `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})`,
-            boxShadow: `0 14px 34px -10px ${theme.accentPlum}, inset 0 1px 0 rgba(255,255,255,.4)`,
-            transition: `transform .4s ${SPRING}`,
-          }}
-        >
-          <span style={{ position: "absolute", inset: 0, borderRadius: "inherit", background: "linear-gradient(150deg,rgba(255,255,255,.4),transparent 55%)", pointerEvents: "none" }} />
-          <Plus size={25} />
-        </button>
-      )}
-
-      {/* Add-task sheet: shared between the mobile FAB and the desktop
-          focused-column FAB. Writes to whichever list `addTarget` names. */}
-      {showAddPanel && (
-        <div
-          onClick={closeAddPanel}
-          style={{
-            position: "fixed", inset: 0, zIndex: 80, background: theme.scrim,
-            backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
-            animation: "fadeIn .22s ease", display: "flex", justifyContent: "center",
-            // Mobile docks the panel to the top so the keyboard opens beneath it;
-            // desktop keeps the bottom sheet, where there's no keyboard to dodge.
-            alignItems: isDesktop ? "flex-end" : "flex-start",
-            overflowY: "auto",
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              ...(isDesktop ? glass.sheet : glass.raised),
-              width: "100%", maxWidth: 640, padding: 20, borderRadius: 30,
-              margin: isDesktop ? "0 10px 10px" : "calc(10px + env(safe-area-inset-top)) 10px 10px",
-              animation: isDesktop ? `sheetIn .42s ${EASE_OUT}` : `sheetInTop .42s ${EASE_OUT}`,
-              paddingBottom: isDesktop ? "calc(20px + env(safe-area-inset-bottom))" : 20,
-            }}
-          >
-            {isDesktop && <div style={{ width: 38, height: 4, borderRadius: 99, background: theme.glassBorder, margin: "-6px auto 16px" }} />}
-
-            {/* Named header with an explicit way out — the scrim also closes,
-                but that isn't discoverable enough to be the only escape. */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-              <span style={{ ...display(15), color: theme.textSecondary, flex: 1, minWidth: 0 }}>
-                New task in {addAccent}
-              </span>
-              <button
-                onClick={closeAddPanel}
-                title="Cancel (Esc)"
-                aria-label="Cancel new task"
-                style={{
-                  display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
-                  padding: "6px 12px", borderRadius: 999, cursor: "pointer",
-                  fontSize: 12.5, fontWeight: 500, color: theme.textMuted,
-                  background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
-                  transition: `all .25s ${SPRING}`,
-                }}
-              >
-                <X size={13} />
-                Cancel
-              </button>
-            </div>
-
-            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              <input
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") addTodo(); if (e.key === "Escape") closeAddPanel(); }}
-                placeholder={`Add to ${addAccent}…`}
-                autoFocus
-                style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", fontSize: 17, fontWeight: 500, color: theme.textPrimary, padding: "4px 2px" }}
-              />
-              <button
-                onClick={addTodo}
-                disabled={!draft.trim()}
-                style={{
-                  ...accentButtonStyle(!!draft.trim()),
-                  width: 40, height: 40, borderRadius: 14, flexShrink: 0,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}
-              >
-                <Plus size={19} />
-              </button>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, paddingTop: 13, borderTop: `1px solid ${theme.glassBorder2}`, flexWrap: "wrap" }}>
-              <span
-                onClick={() => draftDueRef.current?.showPicker?.()}
-                style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 13px", borderRadius: 999, fontSize: 12.5, color: theme.textMuted, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`, cursor: "pointer" }}
-              >
-                <Calendar size={13} />
-                <input
-                  ref={draftDueRef}
-                  type="date"
-                  value={draftDue}
-                  onChange={(e) => setDraftDue(e.target.value)}
-                  style={{ border: "none", background: "transparent", fontFamily: MONO, fontSize: 12.5, color: theme.textSecondary, padding: 0 }}
-                />
-              </span>
-              <Repeat size={14} color={theme.textFainter} style={{ marginLeft: 4 }} />
-              {["none", "daily", "weekly", "monthly", "custom"].map((opt) => {
-                const on = opt === "none" ? !draftRecurrence : draftRecurrence?.type === opt;
-                return (
-                  <button
-                    key={opt}
-                    onClick={() => setDraftRecurrence(
-                      opt === "none"
-                        ? null
-                        : opt === "custom"
-                          ? { type: "custom", intervalDays: draftRecurrence?.intervalDays || 2 }
-                          : { type: opt }
-                    )}
-                    style={{ ...pillStyle(on), padding: "6px 13px", fontSize: 12 }}
-                  >
-                    {opt === "none" ? "No repeat" : opt.charAt(0).toUpperCase() + opt.slice(1)}
-                  </button>
-                );
-              })}
-              {draftRecurrence?.type === "custom" && (
-                <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: theme.textMuted }}>
-                  every
-                  <input
-                    type="number"
-                    min="1"
-                    value={draftRecurrence.intervalDays ?? ""}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      setDraftRecurrence({ type: "custom", intervalDays: raw === "" ? "" : parseInt(raw, 10) });
-                    }}
-                    style={{ ...fieldStyle(), width: 54, padding: "6px 9px", fontFamily: MONO, fontSize: 12 }}
-                  />
-                  days
-                </span>
-              )}
-            </div>
-
-            <div style={{ marginTop: 14, paddingTop: 13, borderTop: `1px solid ${theme.glassBorder2}` }}>
-              <CategoryPicker
-                categories={categoriesForList(addTarget)}
-                recent={recentCategoriesForList(addTarget, 4)}
-                selectedId={draftCategoryId}
-                onSelect={setDraftCategoryId}
-                showMore={showMoreCats}
-                setShowMore={setShowMoreCats}
-                showNewCat={showNewCat}
-                setShowNewCat={setShowNewCat}
-                newCatName={newCatName}
-                setNewCatName={setNewCatName}
-                onCreateCategory={addCategoryAndSelect}
-              />
-            </div>
-
-            {!isDesktop && <div style={{ width: 38, height: 4, borderRadius: 99, background: theme.glassBorder, margin: "16px auto -6px" }} />}
+        {isThoughts ? (
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: "12px 16px 0" }}>
+            {renderThoughts(LIST_TAIL)}
           </div>
-        </div>
+        ) : (
+          <TodoSection
+            key={section}
+            todos={todosForList(section)}
+            assigneeOf={assigneeOf}
+            sharedFromOf={sharedFromOf}
+            onToggle={toggleDone}
+            onOpen={(todo) => setSheet({ todo })}
+            listTail={LIST_TAIL}
+          />
+        )}
+      </div>
+
+      {!isThoughts && (
+        <button onClick={() => setSheet({ todo: null })} aria-label={`Add to ${section}`} style={{
+          position: "fixed", right: 20, bottom: "calc(22px + env(safe-area-inset-bottom))", zIndex: 50,
+          width: 60, height: 60, borderRadius: "50%", border: "none", cursor: "pointer",
+          background: D.amber, color: D.onAmber, display: "grid", placeItems: "center",
+          boxShadow: `0 12px 30px -8px ${D.amber}`,
+        }}>
+          <Plus size={30} strokeWidth={2.6} />
+        </button>
       )}
 
-      {desktopManageCatsFor && (
-        <ManageCategoriesModal
-          categories={categoriesForList(desktopManageCatsFor)}
-          onClose={() => setDesktopManageCatsFor(null)}
-          onDelete={(catId) => deleteCategoryFromList(desktopManageCatsFor, catId)}
+      {sheet && (
+        <QuickAdd
+          todo={sheet.todo}
+          defaultList={section === "personal" ? "personal" : "work"}
+          people={assignable}
+          canAssign={isOwner}
+          assigneeOf={assigneeOf}
+          onSave={saveTodo}
+          onDelete={sheet.todo && !sheet.todo.isShared ? deleteTodo : null}
+          onClose={() => setSheet(null)}
         />
       )}
-
-      {isDesktop && showThoughtsPanel && (
-        <div
-          onClick={() => setShowThoughtsPanel(false)}
-          style={{ position: "fixed", inset: 0, background: theme.scrim, zIndex: 59, animation: "fadeIn .2s ease" }}
-        >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                position: "fixed", top: 0, right: 0, bottom: 0, width: 460, maxWidth: "92vw",
-                zIndex: 60, padding: "26px 22px 0", overflow: "hidden",
-                display: "flex", flexDirection: "column",
-                background: `linear-gradient(200deg, ${theme.glassHigh}, ${theme.glassFill})`,
-                backdropFilter: "blur(34px) saturate(200%)", WebkitBackdropFilter: "blur(34px) saturate(200%)",
-                borderLeft: `1px solid ${theme.glassBorder}`,
-                boxShadow: `-24px 0 70px -30px ${theme.glassShadow}`,
-                animation: `screenIn .4s ${EASE_OUT}`,
-              }}
-            >
-              <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                <h2 style={{ ...display(24, "-.03em"), margin: 0 }}>Clear your head</h2>
-                <button onClick={() => setShowThoughtsPanel(false)} style={{ border: "none", background: "transparent", color: theme.textFainter, cursor: "pointer", padding: 4, display: "flex" }}>
-                  <X size={20} />
-                </button>
-              </div>
-
-              {renderThoughts(40)}
-            </div>
-          </div>
-        )}
     </div>
   );
 }
@@ -2487,26 +1502,6 @@ function TaskCard({
   );
 }
 
-// The badge row under a task: due date, reminder time, repeat, category.
-function TaskBadges({ todo, overdue, category }) {
-  return (
-    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-      {todo.due && (
-        <Badge tone={overdue ? "red" : "neutral"} icon={Calendar}>
-          {overdue ? `Overdue · ${fmtDate(todo.due)}` : fmtDate(todo.due)}
-        </Badge>
-      )}
-      {todo.timeSensitive && todo.notifyAt && (
-        <Badge tone="gold" icon={Clock}>{fmtReminder(todo)}</Badge>
-      )}
-      {todo.recurrence && (
-        <Badge icon={Repeat} capitalize>{todo.recurrence.type}</Badge>
-      )}
-      {category && <CategoryBadge category={category} />}
-    </div>
-  );
-}
-
 function CategoryBadge({ category }) {
   const p = PALETTE[category.color] || PALETTE.blue;
   return (
@@ -2539,77 +1534,6 @@ function CategoryChip({ label, color, selected, onClick }) {
   );
 }
 
-function CategoryPicker({ categories, recent, selectedId, onSelect, showMore, setShowMore, showNewCat, setShowNewCat, newCatName, setNewCatName, onCreateCategory }) {
-  const [filter, setFilter] = useState("");
-  const selected = categories.find((c) => c.id === selectedId);
-  const alphabetical = [...categories].sort((a, b) => a.name.localeCompare(b.name));
-  const filtered = alphabetical.filter((c) => c.name.toLowerCase().includes(filter.toLowerCase()));
-
-  return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-        <Tag size={13} color={theme.textFainter} style={{ marginRight: 2 }} />
-        <CategoryChip label="None" selected={!selectedId} onClick={() => onSelect(null)} />
-        {recent.map((c) => (
-          <CategoryChip key={c.id} label={c.name} color={PALETTE[c.color]} selected={selectedId === c.id} onClick={() => onSelect(c.id)} />
-        ))}
-        {selected && !recent.some((c) => c.id === selected.id) && (
-          <CategoryChip label={selected.name} color={PALETTE[selected.color]} selected onClick={() => onSelect(selected.id)} />
-        )}
-        <button
-          onClick={() => setShowMore((v) => !v)}
-          style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 500, padding: "6px 12px", borderRadius: 999, border: `1px solid ${theme.glassBorder2}`, background: theme.inputBg, color: theme.textMuted, cursor: "pointer" }}
-        >
-          More <ChevronDown size={12} style={{ transform: showMore ? "rotate(180deg)" : "none", transition: `transform .3s ${SPRING}` }} />
-        </button>
-      </div>
-
-      {showMore && (
-        <div style={{ marginTop: 10, padding: 12, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`, borderRadius: 18, animation: `popIn .25s ${SPRING}` }}>
-          {categories.length > 5 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, padding: "8px 12px", background: theme.glassFill, border: `1px solid ${theme.glassBorder2}`, borderRadius: 12 }}>
-              <Search size={13} color={theme.textFainter} />
-              <input
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                placeholder="Search categories…"
-                style={{ flex: 1, border: "none", fontSize: 13, background: "transparent", color: theme.textPrimary }}
-              />
-            </div>
-          )}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {filtered.length === 0 && (
-              <span style={{ fontSize: 12, color: theme.textFainter }}>No categories match.</span>
-            )}
-            {filtered.map((c) => (
-              <CategoryChip key={c.id} label={c.name} color={PALETTE[c.color]} selected={selectedId === c.id} onClick={() => onSelect(c.id)} />
-            ))}
-          </div>
-          <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${theme.glassBorder2}` }}>
-            {showNewCat ? (
-              <InlineCreate
-                value={newCatName}
-                onChange={setNewCatName}
-                onConfirm={onCreateCategory}
-                onCancel={() => { setShowNewCat(false); setNewCatName(""); }}
-                placeholder="Category name"
-                small
-              />
-            ) : (
-              <button
-                onClick={() => setShowNewCat(true)}
-                style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 500, padding: "6px 12px", borderRadius: 999, border: `1px dashed ${theme.glassBorder2}`, background: "transparent", color: theme.textMuted, cursor: "pointer" }}
-              >
-                <Plus size={12} /> New category
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function ManagePeopleModal({ people, onClose, onDelete }) {
   const alphabetical = [...people].sort((a, b) => a.name.localeCompare(b.name));
   return (
@@ -2635,41 +1559,6 @@ function ManagePeopleModal({ people, onClose, onDelete }) {
                 {p.name}
               </span>
               <button onClick={() => onDelete(p.id)} style={{ border: "none", background: "transparent", color: theme.textFainter, cursor: "pointer", padding: 4 }}>
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ManageCategoriesModal({ categories, onClose, onDelete }) {
-  const alphabetical = [...categories].sort((a, b) => a.name.localeCompare(b.name));
-  return (
-    <div
-      onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: theme.scrim, backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 100, animation: "fadeIn .2s ease" }}
-    >
-      <div onClick={(e) => e.stopPropagation()} style={{ ...glass.raised, borderRadius: 28, padding: 20, width: "100%", maxWidth: 380, maxHeight: "70vh", overflowY: "auto", animation: `popIn .3s ${SPRING}` }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <h2 style={{ ...display(20), color: theme.textPrimary, margin: 0 }}>Manage categories</h2>
-          <button onClick={onClose} style={{ border: "none", background: "transparent", color: theme.textFainter, cursor: "pointer", padding: 4, display: "flex" }}>
-            <X size={18} />
-          </button>
-        </div>
-        {alphabetical.length === 0 && (
-          <p style={{ fontSize: 13, color: theme.textMuted, lineHeight: 1.5 }}>No categories yet — create one from the "More" menu when adding a task.</p>
-        )}
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {alphabetical.map((c) => (
-            <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 13px", borderRadius: 14, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}` }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 500, color: PALETTE[c.color].text }}>
-                <span style={{ width: 8, height: 8, borderRadius: 99, background: PALETTE[c.color].dot, boxShadow: `0 0 10px -1px ${PALETTE[c.color].dot}` }} />
-                {c.name}
-              </span>
-              <button onClick={() => onDelete(c.id)} style={{ border: "none", background: "transparent", color: theme.textFainter, cursor: "pointer", padding: 4 }}>
                 <Trash2 size={14} />
               </button>
             </div>

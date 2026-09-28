@@ -31,22 +31,11 @@ Setup, the staging workflow and how to ship the redesign are all in
 [STAGING.md](STAGING.md). Why CI uses REST calls instead of `firebase deploy`
 is explained in [deploy/README.md](deploy/README.md).
 
-## Brain Dump voice capture (Thoughts tab)
+## Star (removed)
 
-Tap "Brain dump," speak naturally — e.g. *"Remind me to ask Amon about the trailer maintenance next Tuesday"* — and it pre-fills the thought text, due date, and person automatically. You still tap **Capture** to confirm before it's saved.
-
-**Setup (free, no credit card):**
-1. Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey) → sign in with the same Google account → **Create API key** → choose your `orbit-cbd4e` project (or create a new one — either works, it's unrelated to Blaze/billing).
-2. Copy `.env.example` to `.env` in the project root and paste your key in:
-   ```
-   VITE_GEMINI_API_KEY=your-key-here
-   ```
-3. `.env` is already in `.gitignore` so it won't get committed or deployed publicly by accident. Vite bakes the key into the built JS at `npm run build` time.
-4. **Restrict the key** (recommended): in the [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials → click your key → under "Application restrictions" choose **Websites** and add your Firebase Hosting domain (`orbit-cbd4e.web.app`) plus `localhost` for local testing. This stops anyone else from using your key even if they find it in the page source.
-
-**Browser support:** voice recording uses the browser's built-in Speech Recognition, which currently works in Chrome and Edge only (not Firefox or Safari). If you open the app in an unsupported browser, the Brain Dump button is replaced with a note saying so — typing still works everywhere.
-
-**Data note:** the transcribed text is sent to Google's Gemini API for parsing. Google's free tier may use free-tier prompts to improve their models — keep that in mind for anything especially sensitive.
+The in-app AI assistant (Brain Dump / Ask Star) was removed in the redesign.
+The Gemini key stays configured, both in GitHub (`VITE_GEMINI_API_KEY`) and in
+the Apps Script digest, which still uses Gemini for the morning summary.
 
 ## Telegram notifications (Apps Script)
 
