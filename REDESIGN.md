@@ -32,9 +32,9 @@ asks for the ship PR (`redesign` → `main`); see CLAUDE.md and STAGING.md.
 | 3 | Budget on one screen, staging-only import from backup | done (#23) |
 | 4 | Nightly A (set up tomorrow) and B (streaks) | done (#26) |
 | 5 | Nightly D: shared household items (new rules, nudge script) | done (#27) |
-| 6 | Nightly C: tick items off from the Telegram nudge (Worker) | in review; see workers/telegram-webhook/README.md |
-| 7 | **Desktop layout** | to do, in scope |
-| 8 | Restyle the remaining old-theme screens: sign-in, account menu and Telegram setup, Access, Logins/vault, Nightly's add controls | to do |
+| 6 | Nightly C: tick items off from the Telegram nudge (Worker) | done (#29), tested on staging |
+| 7 | **Desktop layout** | to do, in scope (owner: last before ship) |
+| 8 | Restyle the remaining old-theme screens: sign-in, account menu and Telegram setup, Access, Logins/vault | in review (Nightly keeps its own night look) |
 | 9 | Staging reminder job and keyless Apps Script | to do (optional before ship) |
 | 10 | Rehearse on staging with a copy of live data, then ship | to do |
 

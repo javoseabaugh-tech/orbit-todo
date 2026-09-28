@@ -8,14 +8,16 @@
 // from the same values instead of each re-deriving them.
 // ---------------------------------------------------------------------------
 import { useState } from "react";
-import { theme, SPRING, prefersDark, mixColor as mix } from "./theme";
+import { theme, SPRING, mixColor as mix } from "./theme";
+import { pageBackground } from "./dial/tokens";
 
-export const DISPLAY = "'Bricolage Grotesque', system-ui, sans-serif";
+// The redesign's display face (Syne), so older screens' titles match.
+export const DISPLAY = "'Syne', 'Figtree', system-ui, sans-serif";
 export const MONO = "'Geist Mono', ui-monospace, monospace";
 
 // Titles: Bricolage 600 with the tight tracking from the design tokens.
 export function display(size, letterSpacing = "-.02em") {
-  return { fontFamily: DISPLAY, fontSize: size, fontWeight: 600, letterSpacing };
+  return { fontFamily: DISPLAY, fontSize: size, fontWeight: 800, letterSpacing };
 }
 
 // Every accent tint in the design is a percentage of a theme colour over
@@ -33,7 +35,6 @@ export function pillStyle(on) {
     color: on ? theme.accentPlum : theme.textMuted,
     background: on ? theme.accentSoft : theme.inputBg,
     border: `1px solid ${on ? theme.accentPlum : theme.glassBorder2}`,
-    backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
     transition: `all .25s ${SPRING}`,
   };
 }
@@ -89,37 +90,14 @@ export function IconAction({ onClick, title, children, hoverColor, active, activ
 
 // The drifting colour field every glass surface is frosted over. Fixed and
 // pointer-transparent, so it never participates in layout or hit testing.
+// The page background behind older screens: the Orbit Dial sky. Fixed and
+// pointer-transparent, so it never participates in layout or hit testing.
 export function GlassBackdrop() {
-  const blobs = [
-    { style: { top: "-18vh", left: "-12vw", width: "62vw", height: "62vw" }, color: theme.blobs[0], blur: 90, anim: "drift1 26s", opacity: theme.blobOpacity },
-    { style: { top: "20vh", right: "-16vw", width: "56vw", height: "56vw" }, color: theme.blobs[1], blur: 100, anim: "drift2 32s", opacity: theme.blobOpacity },
-    { style: { bottom: "-22vh", left: "22vw", width: "52vw", height: "52vw" }, color: theme.blobs[2], blur: 96, anim: "drift3 38s", opacity: Math.max(0, theme.blobOpacity - 0.13) },
-  ];
   return (
     <div
       aria-hidden="true"
-      style={{
-        position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", overflow: "hidden",
-        background: `radial-gradient(140% 90% at 50% 0%, ${theme.gradA}, ${theme.gradB} 70%)`,
-      }}
-    >
-      {blobs.map((b, i) => (
-        <div
-          key={i}
-          style={{
-            position: "absolute", borderRadius: "50%", ...b.style,
-            background: b.color, filter: `blur(${b.blur}px)`, opacity: b.opacity,
-            animation: `${b.anim} ease-in-out infinite`,
-          }}
-        />
-      ))}
-      <div style={{
-        position: "absolute", inset: 0, opacity: prefersDark ? 0.035 : 0.02, mixBlendMode: "overlay",
-        backgroundImage:
-          "repeating-linear-gradient(0deg,rgba(255,255,255,.5) 0 1px,transparent 1px 3px)," +
-          "repeating-linear-gradient(90deg,rgba(0,0,0,.5) 0 1px,transparent 1px 3px)",
-      }} />
-    </div>
+      style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", background: pageBackground }}
+    />
   );
 }
 
