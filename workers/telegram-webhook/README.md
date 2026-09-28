@@ -82,6 +82,11 @@ gcloud iam workload-identity-pools providers create-oidc worker \
 gcloud iam service-accounts create orbit-telegram-webhook \
   --display-name="Orbit Telegram webhook"
 
+# A brand-new service account takes a few seconds to become visible to the
+# project policy; granting it a role straight away fails with "does not
+# exist". Wait until it's there.
+until gcloud iam service-accounts describe orbit-telegram-webhook@$PROJECT.iam.gserviceaccount.com >/dev/null 2>&1; do sleep 3; done; sleep 10
+
 gcloud projects add-iam-policy-binding $PROJECT \
   --member="serviceAccount:orbit-telegram-webhook@$PROJECT.iam.gserviceaccount.com" \
   --role="roles/datastore.user" --condition=None
@@ -92,7 +97,9 @@ gcloud iam service-accounts add-iam-policy-binding \
   --member="principal://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/orbit-telegram/subject/orbit-telegram-webhook"
 ```
 
-The last command must print `Updated IAM policy`. No `--key-file` appears
+Both `add-iam-policy-binding` commands must print `Updated IAM policy`. If the
+first one says the account "does not exist", run it again on its own after a
+minute. No `--key-file` appears
 anywhere, and no key is created.
 
 ## Turning the buttons on
