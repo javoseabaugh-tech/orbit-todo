@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, where } from "firebase/firestore";
+import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { X, Trash2, UserPlus, Shield } from "lucide-react";
 import { theme, glass, EASE_OUT, SPRING } from "./theme";
 import { display, mix, fieldStyle, accentButtonStyle, IconAction, GlassBackdrop } from "./ui";
@@ -7,7 +7,7 @@ import { display, mix, fieldStyle, accentButtonStyle, IconAction, GlassBackdrop 
 function emailToDocId(email) {
   return email.toLowerCase();
 }
-function useOwnerWorkCategories(db) {
+function useOwnerWorkCategories(db, refreshKey) {
   const [categories, setCategories] = useState([]);
   useEffect(() => {
     let cancelled = false;
@@ -25,7 +25,7 @@ function useOwnerWorkCategories(db) {
       }
     })();
     return () => { cancelled = true; };
-  }, [db]);
+  }, [db, refreshKey]);
   return categories;
 }
 
@@ -50,7 +50,8 @@ export default function AccessScreen({ db, currentRole, onClose }) {
   const [error, setError] = useState("");
 
   const isOwner = currentRole === "owner";
-  const ownerCategories = useOwnerWorkCategories(db);
+  const [categoriesVersion, setCategoriesVersion] = useState(0);
+  const ownerCategories = useOwnerWorkCategories(db, categoriesVersion);
   const canManageAccess = currentRole === "owner" || currentRole === "household";
   const canManageBudget = currentRole === "owner" || currentRole === "household";
 
@@ -101,7 +102,29 @@ export default function AccessScreen({ db, currentRole, onClose }) {
     }
   }
 
+  // "Assign to" in the new Orbit files a todo under the person's shared
+  // category, so each person needs one. This makes it in one tap, named after
+  // them (the name is what shows on the assign chips).
+  async function handleCreateListFor(person) {
+    try {
+      const ownerSnap = await getDocs(query(collection(db, "access"), where("role", "==", "owner")));
+      const ownerUid = ownerSnap.docs[0]?.data()?.uid;
+      if (!ownerUid) throw new Error("owner uid not found");
+      const local = (person.email || person.id).split("@")[0].split(/[._-]/)[0];
+      const name = local.charAt(0).toUpperCase() + local.slice(1);
+      const ref = await addDoc(collection(db, "users", ownerUid, "categories"), {
+        list: "work", name, color: "orange", createdAt: serverTimestamp(),
+      });
+      await setDoc(doc(db, "access", person.id), { sharedWorkCategoryId: ref.id }, { merge: true });
+      setCategoriesVersion((v) => v + 1);
+    } catch (err) {
+      console.error("create shared list error", err);
+      setError("Couldn't set up assigning for that person.");
+    }
+  }
+
   async function handleSetSharedWorkCategory(person, categoryId) {
+    if (categoryId === "__new__") return handleCreateListFor(person);
     try {
       await setDoc(doc(db, "access", person.id), { sharedWorkCategoryId: categoryId }, { merge: true });
     } catch (err) {
@@ -283,7 +306,7 @@ export default function AccessScreen({ db, currentRole, onClose }) {
               {isOwner && person.role === "assistant" && (
                 <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginTop: 10 }}>
                   <button onClick={() => handleToggleSharedWork(person)} style={rolePill(person.sharedWorkAccess)}>
-                    Shared Work + Projects: {person.sharedWorkAccess ? "On" : "Off"}
+                    Shared Work: {person.sharedWorkAccess ? "On" : "Off"}
                   </button>
                   {person.sharedWorkAccess && (
                     <select
@@ -294,10 +317,11 @@ export default function AccessScreen({ db, currentRole, onClose }) {
                         color: theme.textMuted, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
                       }}
                     >
-                      <option value="">All Work + Projects items</option>
+                      <option value="">Choose what they see…</option>
                       {ownerCategories.map((c) => (
-                        <option key={c.id} value={c.id}>Only "{c.name}"</option>
+                        <option key={c.id} value={c.id}>Todos assigned to "{c.name}"</option>
                       ))}
+                      <option value="__new__">+ Set up assigning to this person</option>
                     </select>
                   )}
                 </div>
