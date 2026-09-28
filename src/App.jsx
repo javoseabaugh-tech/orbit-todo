@@ -528,6 +528,7 @@ function TodoApp({ user, access }) {
           plan={plan}
           household={access?.role === "owner" || access?.role === "household"}
           myName={(user.displayName || user.email || "").split(/[ @]/)[0]}
+          email={user.email}
         />
         {sheet && (
           <QuickAdd
@@ -813,7 +814,7 @@ function UserMenu({ user, access, isDesktop, pendingBudgetRequest, onRequestBudg
                 />
                 <button
                   onClick={async () => {
-                    const webhookUrl = `https://orbit-telegram-webhook.javoseabaugh.workers.dev/${botToken.trim()}`;
+                    const webhookUrl = `${import.meta.env.VITE_TELEGRAM_WEBHOOK_URL}/${botToken.trim()}`;
                     try {
                       await fetch(`https://api.telegram.org/bot${botToken.trim()}/setWebhook?url=${encodeURIComponent(webhookUrl)}`);
                     } catch (e) {}

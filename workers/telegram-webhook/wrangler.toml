@@ -1,0 +1,32 @@
+# Orbit's Telegram webhook Worker. Deployed by GitHub Actions only
+# (.github/workflows/deploy-telegram-worker.yml): merges to main deploy the
+# live Worker, merges to redesign deploy the staging one.
+#
+# None of these values are secrets. The only secret is OIDC_KEY, the key the
+# Worker signs its own assertions with, which the workflow creates on first
+# deploy. There is no Google service account key anywhere: see README.md.
+name = "orbit-telegram-webhook"
+main = "src/index.js"
+compatibility_date = "2026-07-27"
+workers_dev = true
+
+[vars]
+FIREBASE_PROJECT_ID = "orbit-cbd4e"
+HOUSEHOLD_ID = "seabaugh"
+# Must match the identity pool provider's issuer URI exactly (no trailing slash).
+OIDC_ISSUER = "https://orbit-telegram-webhook.javoseabaugh.workers.dev"
+# 944702899935 is orbit-cbd4e's project number.
+WIF_AUDIENCE = "//iam.googleapis.com/projects/944702899935/locations/global/workloadIdentityPools/orbit-telegram/providers/worker"
+SERVICE_ACCOUNT = "orbit-telegram-webhook@orbit-cbd4e.iam.gserviceaccount.com"
+
+[env.staging]
+name = "orbit-telegram-webhook-staging"
+workers_dev = true
+
+[env.staging.vars]
+FIREBASE_PROJECT_ID = "orbit-staging-49988"
+HOUSEHOLD_ID = "seabaugh"
+OIDC_ISSUER = "https://orbit-telegram-webhook-staging.javoseabaugh.workers.dev"
+# 2531876823 is orbit-staging-49988's project number.
+WIF_AUDIENCE = "//iam.googleapis.com/projects/2531876823/locations/global/workloadIdentityPools/orbit-telegram/providers/worker"
+SERVICE_ACCOUNT = "orbit-telegram-webhook@orbit-staging-49988.iam.gserviceaccount.com"
