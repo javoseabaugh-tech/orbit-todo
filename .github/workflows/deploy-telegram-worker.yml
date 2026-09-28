@@ -1,0 +1,156 @@
+name: Deploy Telegram webhook Worker
+
+# The Telegram webhook Worker (workers/telegram-webhook/) ships through a
+# merge, never from a laptop, like the app:
+#   merge to redesign -> orbit-telegram-webhook-staging (staging project)
+#   merge to main     -> orbit-telegram-webhook         (live project)
+# It only runs when something in the Worker changes, or by hand from the
+# Actions tab.
+#
+# Needs two repository secrets:
+#   CLOUDFLARE_API_TOKEN   a token with Account -> Workers Scripts: Edit
+#   CLOUDFLARE_ACCOUNT_ID  the account that owns javoseabaugh.workers.dev
+# Neither is a Google credential. Google trusts the Worker through its own
+# identity pool; see workers/telegram-webhook/README.md.
+on:
+  push:
+    branches: [main, redesign]
+    paths:
+      - workers/telegram-webhook/**
+      - .github/workflows/deploy-telegram-worker.yml
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Which Worker to deploy
+        type: choice
+        options: [staging, live]
+        default: staging
+      rotate_key:
+        description: Replace OIDC_KEY with a freshly generated one
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: telegram-worker-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Pick the target
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TARGET="${{ inputs.target }}"
+          elif [ "${{ github.ref_name }}" = "main" ]; then
+            TARGET=live
+          else
+            TARGET=staging
+          fi
+          # A hand-run live deploy must come from main, so live always runs
+          # code that has been through the ship PR.
+          if [ "$TARGET" = "live" ] && [ "${{ github.ref_name }}" != "main" ]; then
+            echo "::error::Live deploys run from main only."
+            exit 1
+          fi
+          if [ "$TARGET" = "live" ]; then
+            echo "WORKER_NAME=orbit-telegram-webhook" >> "$GITHUB_ENV"
+            echo "ENV_FLAG=" >> "$GITHUB_ENV"
+          else
+            echo "WORKER_NAME=orbit-telegram-webhook-staging" >> "$GITHUB_ENV"
+            echo "ENV_FLAG=--env staging" >> "$GITHUB_ENV"
+          fi
+          echo "Deploying ${TARGET}."
+
+      # A pasted secret easily picks up a newline, a space or quotes, and
+      # GitHub masks secrets in the log, so a bad one is invisible. Strip what
+      # is safe to strip, then say what is wrong with its shape (never its value).
+      - name: Check the Cloudflare secrets
+        env:
+          RAW_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RAW_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          clean() { printf '%s' "$1" | tr -d '[:space:]"'"'"; }
+          TOKEN=$(clean "$RAW_TOKEN")
+          ACCOUNT_ID=$(clean "$RAW_ACCOUNT_ID")
+          echo "::add-mask::$TOKEN"
+          echo "::add-mask::$ACCOUNT_ID"
+          if [ -z "$TOKEN" ] || [ -z "$ACCOUNT_ID" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID must both be set as repository secrets."
+            exit 1
+          fi
+          if ! [[ "$ACCOUNT_ID" =~ ^[0-9a-f]{32}$ ]]; then
+            echo "::error::CLOUDFLARE_ACCOUNT_ID is not an account ID (it should be 32 characters of 0-9 and a-f). Copy it from Cloudflare -> Workers & Pages -> Account ID."
+            exit 1
+          fi
+          {
+            echo "CLOUDFLARE_API_TOKEN=$TOKEN"
+            echo "CLOUDFLARE_ACCOUNT_ID=$ACCOUNT_ID"
+          } >> "$GITHUB_ENV"
+
+      # wrangler reads wrangler.toml, so [vars] there stay the one place the
+      # Worker's config lives. It takes the API token from the environment.
+      - name: Deploy the Worker
+        working-directory: workers/telegram-webhook
+        run: npx --yes wrangler@4 deploy $ENV_FLAG
+
+      # OIDC_KEY is generated on the runner and goes straight into the
+      # Worker's secret store, never printed or written to disk. It is set
+      # once and left alone; run this workflow by hand with rotate_key ticked
+      # to replace it.
+      - name: Set OIDC_KEY if it is missing
+        env:
+          ROTATE: ${{ inputs.rotate_key == true }}
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${WORKER_NAME}/secrets"
+          LIST=$(curl -sS "$API" -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}")
+          if [ "$(echo "$LIST" | jq -r '.success')" != "true" ]; then
+            echo "::error::Could not list the Worker's secrets"
+            echo "$LIST" | jq '.errors'
+            exit 1
+          fi
+          HAS_KEY=$(echo "$LIST" | jq -r '[.result[].name] | index("OIDC_KEY") != null')
+          if [ "$HAS_KEY" = "true" ] && [ "$ROTATE" != "true" ]; then
+            echo "OIDC_KEY already set; leaving it alone."
+            exit 0
+          fi
+          RESP=$(node workers/telegram-webhook/scripts/make-oidc-key.mjs \
+            | jq -Rs '{name: "OIDC_KEY", text: ., type: "secret_text"}' \
+            | curl -sS -X PUT "$API" \
+                -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+                -H "Content-Type: application/json" \
+                --data-binary @-)
+          if [ "$(echo "$RESP" | jq -r '.success')" != "true" ]; then
+            echo "::error::Setting OIDC_KEY failed"
+            echo "$RESP" | jq '.errors'
+            exit 1
+          fi
+          echo "OIDC_KEY set."
+
+      - name: Check it answers
+        run: |
+          set -euo pipefail
+          URL="https://${WORKER_NAME}.javoseabaugh.workers.dev"
+          for i in 1 2 3 4 5 6; do
+            HEALTH=$(curl -sS "${URL}/health" || true)
+            if [ "$(echo "$HEALTH" | jq -r '.ready // empty' 2>/dev/null)" = "true" ]; then
+              echo "Healthy: $HEALTH"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::${URL} is not answering /health with ready:true"
+          echo "health: $HEALTH"
+          exit 1

@@ -20,6 +20,10 @@
  *   USER_NAME               (optional)
  *   HOUSEHOLD_ID            (optional, default "seabaugh") — whose shared
  *                           routine lives at households/{id}/nightly
+ *   NIGHTLY_TAP_BUTTONS     (optional) "on" adds a ✓ button per item that
+ *                           ticks it off through the Telegram webhook Worker.
+ *                           Leave it off until the Worker's Google access is
+ *                           set up (workers/telegram-webhook/README.md).
  */
 
 const FIRESTORE_SCOPE = "https://www.googleapis.com/auth/datastore";
@@ -54,7 +58,7 @@ function sendNightlyNudge() {
   // everyone who shares it. If it can't be read, the personal nudges still go.
   let houseList = null;
   try {
-    houseList = tonightAt_(token, householdPath_(), today);
+    houseList = tonightAt_(token, householdPath_(), today, "h");
   } catch (e) {
     Logger.log("household routine — FAILED to read: %s", e.message);
   }
@@ -81,7 +85,7 @@ function sendNightlyNudge() {
       const list = tonightFor_(token, p.uid, today);
       if (houseList && HOUSEHOLD_ROLES[p.role]) {
         houseList.pending.forEach(function (h) {
-          list.pending.push({ text: h.text, carried: h.carried, house: true });
+          list.pending.push({ text: h.text, carried: h.carried, house: true, cb: h.cb });
         });
         list.doneCount += houseList.doneCount;
       }
@@ -90,7 +94,7 @@ function sendNightlyNudge() {
         return;
       }
 
-      sendViaTelegramCustom_(dest.token, dest.chatId, buildMessage_(list));
+      sendViaTelegramCustom_(dest.token, dest.chatId, buildMessage_(list), tapKeyboard_(list));
       Logger.log("%s — sent (%s pending)", p.email || p.uid, list.pending.length);
     } catch (e) {
       // One person's bad token must not stop everyone else's message.
@@ -200,11 +204,14 @@ function householdPath_() {
 }
 
 function tonightFor_(token, uid, today) {
-  return tonightAt_(token, "users/" + uid, today);
+  return tonightAt_(token, "users/" + uid, today, "u");
 }
 
 /** Tonight's pending items for any parent path (a user, or the household). */
-function tonightAt_(token, parentPath, today) {
+function tonightAt_(token, parentPath, today, scope) {
+  // Button data the Worker understands: n:<scope>:<itemId> for an item that
+  // exists, t:<scope>:<templateId>:<date> for one only a template knows about.
+  scope = scope || "h";
   const items = listCollectionAt_(token, parentPath, "nightly");
   const templates = listCollectionAt_(token, parentPath, "nightlyTemplates");
 
@@ -218,7 +225,7 @@ function tonightAt_(token, parentPath, today) {
     if ((it.forDate || today) !== today) return;
     if (it.skipped) return;
     if (it.done) { doneCount++; return; }
-    pending.push({ text: it.text, carried: !!it.rolledOver });
+    pending.push({ text: it.text, carried: !!it.rolledOver, cb: "n:" + scope + ":" + it.id });
   });
 
   // Templates firing tonight that haven't been materialised yet, because the
@@ -226,7 +233,7 @@ function tonightAt_(token, parentPath, today) {
   templates.forEach(function (tpl) {
     if (!templateMatches_(tpl, today)) return;
     if (seen[tpl.id + "_" + today]) return;   // exists already, or tombstoned
-    pending.push({ text: tpl.text, carried: false });
+    pending.push({ text: tpl.text, carried: false, cb: "t:" + scope + ":" + tpl.id + ":" + today });
   });
 
   return { pending: pending, doneCount: doneCount };
@@ -425,12 +432,31 @@ function fieldValue_(v) {
  * Telegram
  * ------------------------------------------------------------------ */
 
-function sendViaTelegramCustom_(botToken, chatId, message) {
+/**
+ * One ✓ button per pending item, when NIGHTLY_TAP_BUTTONS is "on". Tapping
+ * one goes to the person's bot webhook (the Telegram webhook Worker), which
+ * ticks that item off in Firestore and removes the button.
+ */
+function tapKeyboard_(list) {
+  if (props_().getProperty("NIGHTLY_TAP_BUTTONS") !== "on") return null;
+  const rows = list.pending
+    .filter(function (p) { return p.cb && p.cb.length <= 64; })
+    .slice(0, 20)
+    .map(function (p) {
+      const label = (p.house ? "🏠 " : "") + p.text;
+      return [{ text: "✓ " + (label.length > 32 ? label.slice(0, 31) + "…" : label), callback_data: p.cb }];
+    });
+  return rows.length ? { inline_keyboard: rows } : null;
+}
+
+function sendViaTelegramCustom_(botToken, chatId, message, replyMarkup) {
   const url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
+  const payload = { chat_id: chatId, text: message };
+  if (replyMarkup) payload.reply_markup = replyMarkup;
   const res = UrlFetchApp.fetch(url, {
     method: "post",
     contentType: "application/json",
-    payload: JSON.stringify({ chat_id: chatId, text: message }),
+    payload: JSON.stringify(payload),
     muteHttpExceptions: true
   });
   const body = JSON.parse(res.getContentText());

@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { ArrowRight, Check } from "lucide-react";
+import { getMyNotifyConfig } from "../notifyConfig";
 import { NIGHT } from "../Nightly";
 import { addDays, fmtHM, reminderHM } from "./dates";
 import { faceColor, initials } from "./tokens";
@@ -164,6 +166,63 @@ export function TomorrowPlan({ plan, highlight }) {
       ) : (
         <div style={{ fontSize: 13, color: NIGHT.textFaint, padding: "4px 0 12px" }}>A clear day so far.</div>
       )}
+    </div>
+  );
+}
+
+// ---------- staging test tool ----------
+// STAGING ONLY. Sends tonight's list to your own bot with the same ✓ buttons
+// the 6pm nudge uses, so tapping to tick off can be tried against the staging
+// Worker without the Apps Script (which only runs against live). Uses the bot
+// saved in your own Telegram settings; set that up with a test bot on staging.
+export function TestNudge({ email, tonight }) {
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function send() {
+    setBusy(true);
+    setMsg("");
+    try {
+      const cfg = await getMyNotifyConfig(email);
+      if (!cfg?.telegramBotToken || !cfg?.telegramChatId) {
+        setMsg("Set up Telegram first (account menu → Notifications), using a test bot.");
+        return;
+      }
+      const pending = tonight.filter((it) => !it.done);
+      const lines = ["🌙 Tonight (staging test)", "", ...pending.map((it) => `• ${it.scope === "house" ? "🏠 " : ""}${it.text}`)];
+      const rows = pending.map((it) => {
+        const label = (it.scope === "house" ? "🏠 " : "") + it.text;
+        return [{
+          text: "✓ " + (label.length > 32 ? label.slice(0, 31) + "…" : label),
+          callback_data: `n:${it.scope === "house" ? "h" : "u"}:${it.id}`,
+        }];
+      });
+      const res = await fetch(`https://api.telegram.org/bot${cfg.telegramBotToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: cfg.telegramChatId,
+          text: pending.length ? lines.join("\n") : "🌙 Nothing left for tonight (staging test).",
+          ...(rows.length ? { reply_markup: { inline_keyboard: rows } } : {}),
+        }),
+      });
+      const body = await res.json();
+      setMsg(body.ok ? "Sent. Tap a ✓ in Telegram, then check the list here." : `Telegram said: ${body.description}`);
+    } catch (e) {
+      setMsg("Couldn't send: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 26, padding: 14, borderRadius: 16, border: `1px dashed ${NIGHT.borderStrong}` }}>
+      <div style={{ fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: NIGHT.gold, marginBottom: 6 }}>Staging test tool</div>
+      <button onClick={send} disabled={busy} style={{
+        padding: "9px 14px", borderRadius: 12, border: `1px solid ${NIGHT.goldBorder}`, background: NIGHT.goldDim,
+        color: NIGHT.gold, fontFamily: "inherit", fontSize: 13.5, fontWeight: 600, cursor: "pointer",
+      }}>{busy ? "Sending…" : "Send me a test nudge"}</button>
+      {msg && <div style={{ fontSize: 12.5, color: NIGHT.textMuted, marginTop: 8 }}>{msg}</div>}
     </div>
   );
 }

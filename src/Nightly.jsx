@@ -5,7 +5,11 @@ import {
 } from "firebase/firestore";
 import { Plus, Trash2, Check, ChevronLeft, Calendar, X, Repeat, Home } from "lucide-react";
 import { db } from "./firebase";
-import { StreakStrip, TomorrowPlan } from "./dial/NightlyExtras";
+import { StreakStrip, TomorrowPlan, TestNudge } from "./dial/NightlyExtras";
+
+// Build-time constant: false in the live build, so the staging test tool is
+// dropped from the live bundle entirely.
+const STAGING = import.meta.env.VITE_APP_ENV === "staging";
 
 // This screen is intentionally dark regardless of the system theme — it's the
 // night screen. Kept as one exported object so the weekly moon tracker can
@@ -174,7 +178,7 @@ const REPEAT_OPTIONS = [
 // user. Items there can be ticked off by either person.
 const HOUSE = ["households", "seabaugh"];
 
-export default function Nightly({ uid, onBack, plan, household = false, myName = "" }) {
+export default function Nightly({ uid, onBack, plan, household = false, myName = "", email = "" }) {
   const [items, setItems] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [draft, setDraft] = useState("");
@@ -604,6 +608,8 @@ export default function Nightly({ uid, onBack, plan, household = false, myName =
         )}
 
         <TomorrowPlan plan={plan} highlight={allDone} />
+
+        {STAGING && <TestNudge email={email} tonight={tonight} />}
 
         {upcoming.length > 0 && (
           <div style={{ marginTop: 30 }}>
