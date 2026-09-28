@@ -5,10 +5,7 @@ import {
   Plus,
   Trash2,
   Check,
-  PiggyBank,
-  Wallet,
   AlertCircle,
-  PartyPopper,
   ArrowLeft,
   ExternalLink,
   Copy,
@@ -17,25 +14,21 @@ import {
   KeyRound,
   ShieldCheck,
   ScanFace,
-  Receipt,
   RotateCcw,
-  Landmark,
-  X,
 } from "lucide-react";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { db } from "./firebase";
+import { getDoc, setDoc } from "firebase/firestore";
 import { generateSaltB64, deriveKey, encryptText, decryptText, makeVerifier, checkVerifier } from "./vaultCrypto";
 import { platformAuthAvailable, hasFaceUnlock, registerFaceUnlock, tryFaceUnlock, removeFaceUnlock } from "./faceUnlock";
+import { D, FONT_DISPLAY, FONT_BODY, pageBackground } from "./dial/tokens";
+import { Overview, AccountTile, BillTile, BillSheet, AddBillSheet, AccountSheet } from "./dial/BudgetParts";
+import ImportFromBackup from "./dial/ImportFromBackup";
+
+// Build-time constant: false in the live build, so the staging-only import
+// tool below is dropped from the live bundle entirely.
+const STAGING = import.meta.env.VITE_APP_ENV === "staging";
 
 // Everything lives in one shared Firestore document so both of you see
 // the same data. Change this id if you ever want a second household.
-
-const STATUS_LABELS = {
-  unpaid: "Unpaid",
-  scheduled: "Scheduled",
-  skip: "No payment needed",
-  paid: "Payment complete",
-};
 
 const DEFAULT_STATE = {
   accounts: [
@@ -54,19 +47,6 @@ function uid() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
 
-function money(n) {
-  const v = Number.isFinite(n) ? n : 0;
-  return v.toLocaleString("en-US", { style: "currency", currency: "USD" });
-}
-
-function todayStamp() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
 function normalizeStatus(b) {
   if (b.status === "unpaid" || b.status === "scheduled" || b.status === "skip" || b.status === "paid") {
     return b.status;
@@ -82,10 +62,7 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
   const [period, setPeriod] = useState("15");
   const [loaded, setLoaded] = useState(false);
   const [saveError, setSaveError] = useState(false);
-  const [newBill, setNewBill] = useState({ name: "", amount: "", bankId: "a1", dueDate: "15" });
-  const [showAddBill, setShowAddBill] = useState(false);
-  const [editingAccountId, setEditingAccountId] = useState(null);
-  const [revealAll, setRevealAll] = useState(false); // session-only: not saved
+  const [sheet, setSheet] = useState(null); // null | { kind: 'add' | 'bill' | 'account', id? }
   const [view, setView] = useState("budget"); // 'budget' | 'logins'
   const [newLogin, setNewLogin] = useState({ name: "", url: "", username: "", password: "" });
   const [visiblePasswords, setVisiblePasswords] = useState({}); // { [loginId]: true }
@@ -170,15 +147,6 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
   const resolvedCount = paidThisPeriod.length + skippedThisPeriod.length;
   const allDone = billsThisPeriod.length > 0 && unresolved.length === 0 && resolvedCount > 0;
 
-  // What actually renders in the list: everything, unless a bill is paid/skip
-  // AND we haven't just exported (revealAll brings hidden rows back for review).
-  // Sorted alphabetically by bill name.
-  const visibleBills = (revealAll
-    ? billsThisPeriod
-    : billsThisPeriod.filter((b) => b.status !== "paid" && b.status !== "skip")
-  )
-    .slice()
-    .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }));
 
   const sortedLogins = (state.logins || [])
     .slice()
@@ -186,10 +154,6 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
   const sortedLoginNames = Array.from(new Set(sortedLogins.map((l) => l.name).filter(Boolean))).sort(
     (a, b) => a.localeCompare(b)
   );
-
-  function accountName(bankId) {
-    return state.accounts.find((a) => a.id === bankId)?.name || bankId;
-  }
 
   function billLoginUrl(billName) {
     const login = (state.logins || []).find((l) => l.name === billName);
@@ -223,19 +187,6 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
       accounts: s.accounts.map((a) => (a.id === accountId ? { ...a, name } : a)),
     }));
   }
-  function deleteAccount(accountId) {
-    setConfirmDelete(accountId);
-  }
-  function confirmDeleteAccount() {
-    const accountId = confirmDelete;
-    setConfirmDelete(null);
-    if (!accountId) return;
-    setState((s) => ({
-      ...s,
-      accounts: s.accounts.filter((a) => a.id !== accountId),
-      bills: s.bills.map((b) => (b.bankId === accountId ? { ...b, bankId: "" } : b)),
-    }));
-  }
   function addAccount() {
     setState((s) => {
       if (s.accounts.length >= 3) return s;
@@ -248,32 +199,7 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
       };
     });
   }
-  const [showAccounts, setShowAccounts] = useState(true);
-  const [confirmDelete, setConfirmDelete] = useState(null);
   const [confirmReset, setConfirmReset] = useState(false);
-
-  function addBill() {
-    const amount = parseFloat(newBill.amount);
-    if (!newBill.name.trim() || !Number.isFinite(amount)) return false;
-    const dueDate = newBill.dueDate === "30" ? "30" : "15";
-    setState((s) => ({
-      ...s,
-      bills: [
-        ...s.bills,
-        {
-          id: uid(),
-          name: newBill.name.trim(),
-          amount,
-          dueDate,
-          bankId: newBill.bankId,
-          status: "unpaid",
-          paidAt: null,
-        },
-      ],
-    }));
-    setNewBill({ name: "", amount: "", bankId: newBill.bankId, dueDate });
-    return true;
-  }
 
   function updateBill(id, patch) {
     setState((s) => ({
@@ -471,10 +397,6 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
     }
   }
 
-  function unhideAll() {
-    setRevealAll(true);
-  }
-
   function resetAllToUnpaid() {
     setConfirmReset(true);
   }
@@ -526,28 +448,6 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
     );
   }
 
-  const periodLabel = period === "15" ? "the 15th" : "the 30th";
-
-  // Segmented control: accent-filled when active, transparent when not.
-  const segStyle = (on) => ({
-    display: "flex", alignItems: "center", justifyContent: "center", gap: 6, flex: 1,
-    padding: "9px 16px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer",
-    border: "none",
-    color: on ? theme.accentInk : theme.textMuted,
-    background: on ? `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})` : "transparent",
-    boxShadow: on ? `0 8px 20px -10px ${theme.accentPlum}` : "none",
-    transition: `all .35s ${SPRING}`,
-  });
-
-  const fieldSm = {
-    padding: "7px 11px", borderRadius: 11, fontSize: 12.5,
-    color: theme.textSecondary, background: theme.inputBg,
-    border: `1px solid ${theme.glassBorder2}`, cursor: "pointer",
-  };
-  const moneyInput = {
-    padding: "7px 11px", borderRadius: 11, fontFamily: MONO, fontSize: 13, textAlign: "right",
-    color: theme.textPrimary, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
-  };
   const vaultInput = {
     width: "100%", padding: "11px 13px", borderRadius: 14, fontSize: 14,
     color: theme.textPrimary, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
@@ -558,370 +458,121 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
       className="orbit-shell"
       style={{
         position: "relative", overflow: "hidden", display: "flex", flexDirection: "column",
-        color: theme.textPrimary, fontFamily: "'Geist', system-ui, sans-serif",
+        background: pageBackground, color: D.text, fontFamily: FONT_BODY,
       }}
     >
-      <GlassBackdrop />
-
       <div style={{
-        position: "relative", zIndex: 1, width: "100%", maxWidth: 720, margin: "0 auto",
+        position: "relative", zIndex: 1, width: "100%", maxWidth: 640, margin: "0 auto",
         flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
-        padding: "24px 20px 0", animation: `screenIn .45s ${EASE_OUT}`,
+        padding: "0 16px", paddingTop: "calc(10px + env(safe-area-inset-top))",
       }}>
-        {onBack && (
-          <button
-            onClick={onBack}
-            style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 5, marginBottom: 20, fontSize: 13.5, color: theme.textMuted, background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
-          >
-            <ArrowLeft size={16} />
-            Back to Orbit
-          </button>
-        )}
-
-        <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
-          <span style={{
-            width: 40, height: 40, borderRadius: 14, flexShrink: 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: theme.accentInk,
-            background: `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})`,
-            boxShadow: `0 10px 26px -10px ${theme.accentPlum}`,
+        <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          {onBack && (
+            <button onClick={onBack} aria-label="Back to Orbit" style={{
+              width: 36, height: 36, borderRadius: 12, border: "none", cursor: "pointer",
+              background: D.surface, color: D.text, display: "grid", placeItems: "center", flexShrink: 0,
+            }}>
+              <ArrowLeft size={18} />
+            </button>
+          )}
+          <h1 style={{ margin: 0, flex: 1, minWidth: 0, fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 22, lineHeight: 1.15 }}>
+            {title}
+          </h1>
+          <button onClick={() => setView(view === "budget" ? "logins" : "budget")} style={{
+            border: "none", cursor: "pointer", borderRadius: 999, padding: "8px 13px", flexShrink: 0,
+            fontFamily: FONT_BODY, fontSize: 13, fontWeight: 700, background: D.surface, color: D.text,
+            display: "flex", alignItems: "center", gap: 6,
           }}>
-            <Wallet size={19} />
-          </span>
-          <div style={{ minWidth: 0 }}>
-            <h1 style={{ ...display(30, "-.03em"), margin: 0, lineHeight: 1 }}>{title}</h1>
-            <p style={{ margin: "5px 0 0", fontSize: 13.5, color: theme.textMuted }}>Biweekly budget</p>
-          </div>
-        </div>
-
-        <div style={{
-          ...glass.card, flexShrink: 0, display: "flex", gap: 4, padding: 5, borderRadius: 999, marginBottom: 16,
-        }}>
-          <button style={segStyle(view === "budget")} onClick={() => setView("budget")}>
-            <Receipt size={14} />
-            Budget
-          </button>
-          <button style={segStyle(view === "logins")} onClick={() => setView("logins")}>
-            <KeyRound size={14} />
-            Logins
+            <KeyRound size={14} />{view === "budget" ? "Logins" : "Bills"}
           </button>
         </div>
 
         {/* Everything below the Budget/Logins switch is the only scroller. */}
         <div className="orbit-scroll" style={{ flex: 1, minHeight: 0, paddingBottom: 90 }}>
 
-        {view === "budget" && (
-          <>
-            <div style={{ display: "flex", gap: 4, padding: 5, borderRadius: 999, marginBottom: 18, maxWidth: 280, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}` }}>
-              <button style={segStyle(period === "15")} onClick={() => setPeriod("15")}>15th</button>
-              <button style={segStyle(period === "30")} onClick={() => setPeriod("30")}>30th</button>
-            </div>
+        {view === "budget" && (() => {
+          const accountLeft = (acc) => {
+            const raw = acc.balances?.[period];
+            return (raw === "" || raw === undefined ? 0 : Number(raw)) - accountTotal(acc.id, period);
+          };
+          const sumOf = (status) => billsThisPeriod
+            .filter((b) => b.status === status)
+            .reduce((s, b) => s + (Number(b.amount) || 0), 0);
+          const totalLeft = state.accounts.reduce((s, a) => s + accountLeft(a), 0);
+          // Everything for the period stays on screen: open bills first (by
+          // name), then the handled ones, dimmed, so the whole picture is
+          // visible without toggling anything.
+          const rank = { unpaid: 0, scheduled: 1, paid: 2, skip: 3 };
+          const tiles = billsThisPeriod.slice().sort((a, b) =>
+            (rank[a.status] ?? 0) - (rank[b.status] ?? 0) ||
+            (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }));
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ display: "flex", gap: 4, padding: 4, borderRadius: 999, background: D.surface }}>
+                {[["15", "15th"], ["30", "30th"]].map(([id, lbl]) => (
+                  <button key={id} onClick={() => setPeriod(id)} aria-pressed={period === id} style={{
+                    flex: 1, border: "none", cursor: "pointer", borderRadius: 999, padding: "8px 0",
+                    fontFamily: FONT_BODY, fontSize: 14, fontWeight: 700,
+                    background: period === id ? D.text : "transparent", color: period === id ? D.bgBottom : D.muted,
+                  }}>{lbl}</button>
+                ))}
+              </div>
 
-            {showAccounts && (
-              <div style={{ display: "flex", gap: 11, flexWrap: "wrap", marginBottom: 20 }}>
+              <Overview paid={sumOf("paid")} scheduled={sumOf("scheduled")} unpaid={sumOf("unpaid")} left={totalLeft} allDone={allDone} />
+
+              <div style={{ display: "flex", gap: 8 }}>
                 {state.accounts.map((acc) => {
-                  // Only the currently-selected pay period is shown, so the 15th
-                  // and the 30th never appear side by side. The balances stay
-                  // fully separate underneath — switching the tab above swaps
-                  // which period's balance, assigned total, and "left" you see.
-                  const spent = accountTotal(acc.id, period);
-                  const balanceRaw = acc.balances?.[period];
-                  const balance = balanceRaw === "" || balanceRaw === undefined ? 0 : Number(balanceRaw);
-                  const remaining = balance - spent;
+                  const raw = acc.balances?.[period];
                   return (
-                    <div key={acc.id} style={{ ...glass.card, flex: "1 1 180px", minWidth: 0, padding: 15, borderRadius: 22 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 11 }}>
-                        <Landmark size={15} color={theme.accentPlum} style={{ flexShrink: 0 }} />
-                        <input
-                          type="text"
-                          value={acc.name}
-                          onChange={(e) => updateAccountName(acc.id, e.target.value)}
-                          onFocus={() => setEditingAccountId(acc.id)}
-                          onBlur={() => setEditingAccountId(null)}
-                          title="Tap to rename"
-                          style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: theme.textPrimary, background: "transparent", border: "none", padding: 0 }}
-                        />
-                        <IconAction onClick={() => deleteAccount(acc.id)} title="Delete account" hoverColor={theme.accentRed} size={3}>
-                          <Trash2 size={14} />
-                        </IconAction>
-                      </div>
-
-                      <label style={{ display: "block", fontSize: 11, color: theme.textFainter, marginBottom: 5 }}>
-                        Available {periodLabel}
-                      </label>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        value={balanceRaw === undefined ? "" : balanceRaw}
-                        onChange={(e) => updateAccountBalance(acc.id, e.target.value, period)}
-                        placeholder="0.00"
-                        style={{
-                          width: "100%", padding: "8px 11px", borderRadius: 12, marginBottom: 11,
-                          fontFamily: MONO, fontSize: 15, fontWeight: 600,
-                          color: theme.textPrimary, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
-                        }}
-                      />
-
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: theme.textMuted }}>
-                        <span>Assigned</span>
-                        <span style={{ fontFamily: MONO }}>{money(spent)}</span>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 7, paddingTop: 7, borderTop: `1px solid ${theme.glassBorder2}`, fontSize: 12, color: theme.textMuted }}>
-                        <span>Left</span>
-                        <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 600, color: remaining < 0 ? theme.accentRed : theme.greenDot }}>
-                          {money(remaining)}
-                        </span>
-                      </div>
-                    </div>
+                    <AccountTile key={acc.id} name={acc.name}
+                      balance={raw === "" || raw === undefined ? 0 : Number(raw)}
+                      assigned={accountTotal(acc.id, period)}
+                      onOpen={() => setSheet({ kind: "account", id: acc.id })} />
                   );
                 })}
                 {state.accounts.length < 3 && (
-                  <button
-                    onClick={addAccount}
-                    style={{
-                      flex: "1 1 180px", minWidth: 0, minHeight: 120, padding: 15, borderRadius: 22,
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-                      fontSize: 13, fontWeight: 500, cursor: "pointer",
-                      color: theme.textFainter, background: theme.inputBg,
-                      border: `1px dashed ${theme.glassBorder2}`,
-                    }}
-                  >
-                    <Plus size={15} />
-                    Add account
-                  </button>
+                  <button onClick={addAccount} aria-label="Add account" style={{
+                    width: 44, flexShrink: 0, border: `1.5px dashed ${D.line}`, borderRadius: 16, cursor: "pointer",
+                    background: "transparent", color: D.muted, display: "grid", placeItems: "center",
+                  }}><Plus size={18} /></button>
                 )}
               </div>
-            )}
 
-            {allDone && (
-              <div style={{
-                display: "flex", alignItems: "center", gap: 13, padding: 16, borderRadius: 22, marginBottom: 18,
-                background: `linear-gradient(140deg, ${theme.accentSoft}, ${theme.glassFill})`,
-                border: `1px solid ${theme.accentPlum}`,
-                boxShadow: `inset 0 1px 0 ${theme.glassSpec}`,
-                animation: `popIn .4s ${SPRING}`,
-              }}>
-                <PartyPopper size={22} color={theme.accentPlum} style={{ flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontSize: 14.5, fontWeight: 600 }}>Every bill for {periodLabel} is handled</div>
-                  <div style={{ fontFamily: MONO, fontSize: 12, color: theme.textMuted, marginTop: 3 }}>
-                    {paidThisPeriod.length} paid · {skippedThisPeriod.length} no payment needed · {money(paidThisPeriod.reduce((s, b) => s + (Number(b.amount) || 0), 0))} total paid
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 13 }}>
-              <h2 style={{ ...display(17), margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                <PiggyBank size={17} color={theme.accentPlum} />
-                Bills due {periodLabel}
-              </h2>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                <button
-                  onClick={resetAllToUnpaid}
-                  title="Reset every bill on both pay periods to Unpaid"
-                  style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 500, color: theme.textFainter, background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
-                >
-                  <RotateCcw size={12} />
-                  Reset all to unpaid
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+                <h2 style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 13, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: D.muted }}>
+                  Bills · {unresolved.length} open
+                </h2>
+                <button onClick={resetAllToUnpaid} style={{ border: "none", background: "transparent", color: D.faint, fontFamily: FONT_BODY, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                  <RotateCcw size={12} /> Reset all to unpaid
                 </button>
-                {!revealAll && resolvedCount > 0 && (
-                  <button
-                    onClick={unhideAll}
-                    style={{ fontSize: 12, fontWeight: 500, color: theme.accentPlum, background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
-                  >
-                    Unhide {resolvedCount} hidden
-                  </button>
-                )}
-                <span style={{ fontFamily: MONO, fontSize: 11.5, color: theme.textFainter }}>{unresolved.length} open</span>
               </div>
-            </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {visibleBills.length === 0 && (
-                <div style={{ padding: "30px 16px", borderRadius: 20, border: `1px dashed ${theme.glassBorder2}`, textAlign: "center", fontSize: 13, color: theme.textFainter }}>
-                  No bills here yet. Add one below to start allocating this pay period.
+              {tiles.length === 0 ? (
+                <div style={{ textAlign: "center", color: D.muted, fontSize: 14, padding: "14px 8px" }}>
+                  No bills for the {period === "15" ? "15th" : "30th"} yet. Tap + to add one.
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8 }}>
+                  {tiles.map((bill) => (
+                    <BillTile key={bill.id} bill={bill} onOpen={() => setSheet({ kind: "bill", id: bill.id })} />
+                  ))}
                 </div>
               )}
-              {visibleBills.map((bill, idx) => {
-                const scheduled = bill.status === "scheduled";
-                const resolved = bill.status === "paid" || bill.status === "skip";
-                const loginUrl = billLoginUrl(bill.name);
-                const statusTint =
-                  bill.status === "paid" ? theme.accentPlum : scheduled ? theme.goldDot : null;
-                return (
-                  <div
-                    key={bill.id}
-                    style={{
-                      padding: 14, borderRadius: 20, display: "flex", flexDirection: "column", gap: 11,
-                      background: scheduled
-                        ? `linear-gradient(157deg, ${theme.glassHigh}, ${mix(theme.goldDot, 12, theme.glassFill)})`
-                        : `linear-gradient(157deg, ${theme.glassHigh}, ${theme.glassFill})`,
-                      backdropFilter: "blur(20px) saturate(180%)",
-                      WebkitBackdropFilter: "blur(20px) saturate(180%)",
-                      border: `1px solid ${scheduled ? mix(theme.goldDot, 38, theme.glassBorder) : theme.glassBorder}`,
-                      boxShadow: `inset 0 1px 0 ${theme.glassSpec}, 0 10px 28px -22px ${theme.glassShadow}`,
-                      opacity: resolved ? 0.62 : 1,
-                      transition: "all .3s ease",
-                      animation: `rowIn .4s ${EASE_OUT} ${Math.min(idx, 12) * 0.035}s both`,
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                      <select
-                        value={bill.name}
-                        onChange={(e) => updateBill(bill.id, { name: e.target.value })}
-                        style={{
-                          flex: 1, minWidth: 0, padding: "8px 11px", borderRadius: 12,
-                          fontSize: 14, fontWeight: 600, cursor: "pointer",
-                          background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
-                          textDecoration: resolved ? "line-through" : "none",
-                          color: resolved ? theme.textFainter : theme.textPrimary,
-                        }}
-                      >
-                        {!sortedLoginNames.includes(bill.name) && bill.name && (
-                          <option value={bill.name}>{bill.name} (no login saved)</option>
-                        )}
-                        {sortedLoginNames.length === 0 && !bill.name && <option value="">Add a login first</option>}
-                        {sortedLoginNames.map((n) => (
-                          <option key={n} value={n}>{n}</option>
-                        ))}
-                      </select>
-                      {loginUrl && (
-                        <>
-                          <a
-                            href={loginUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title={`Open ${bill.name} in your default browser`}
-                            style={{ flexShrink: 0, padding: 5, borderRadius: 9, color: theme.textFainter, display: "flex" }}
-                          >
-                            <ExternalLink size={15} />
-                          </a>
-                          <IconAction
-                            onClick={() => copyToClipboard(loginUrl, `${bill.id}-link`)}
-                            title="Copy link"
-                            hoverColor={theme.accentPlum}
-                            active={copiedFlag === `${bill.id}-link`}
-                            activeColor={theme.accentPlum}
-                          >
-                            {copiedFlag === `${bill.id}-link` ? <Check size={14} /> : <Copy size={14} />}
-                          </IconAction>
-                        </>
-                      )}
-                      <IconAction onClick={() => deleteBill(bill.id)} title="Delete bill" hoverColor={theme.accentRed}>
-                        <Trash2 size={15} />
-                      </IconAction>
-                    </div>
 
-                    <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
-                      <select
-                        value={bill.status}
-                        onChange={(e) => setStatus(bill, e.target.value)}
-                        style={{
-                          padding: "7px 11px", borderRadius: 11, fontSize: 12, fontWeight: 600,
-                          cursor: "pointer", flexShrink: 0,
-                          color: statusTint || theme.textMuted,
-                          background: statusTint ? mix(statusTint, 14) : theme.inputBg,
-                          border: `1px solid ${statusTint ? mix(statusTint, 40) : theme.glassBorder2}`,
-                        }}
-                      >
-                        <option value="unpaid">Unpaid</option>
-                        <option value="scheduled">Scheduled</option>
-                        <option value="skip">No payment needed</option>
-                        <option value="paid">Payment complete</option>
-                      </select>
-
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        value={bill.amount}
-                        onChange={(e) => updateBill(bill.id, { amount: parseFloat(e.target.value) || 0 })}
-                        style={{ ...moneyInput, width: 104 }}
-                      />
-
-                      <select
-                        value={bill.bankId || ""}
-                        onChange={(e) => updateBill(bill.id, { bankId: e.target.value })}
-                        disabled={state.accounts.length === 0}
-                        style={{ ...fieldSm, marginLeft: "auto", fontSize: 12, ...(state.accounts.length === 0 ? { opacity: 0.5, cursor: "not-allowed" } : null) }}
-                      >
-                        {state.accounts.length === 0 ? (
-                          <option value="">No account</option>
-                        ) : (
-                          state.accounts.map((acc) => <option key={acc.id} value={acc.id}>{acc.name}</option>)
-                        )}
-                      </select>
-                    </div>
-                  </div>
-                );
-              })}
+              {STAGING && <ImportFromBackup budgetRef={budgetRef} onImported={() => setLoadAttempt((n) => n + 1)} />}
             </div>
+          );
+        })()}
 
-            <p style={{ margin: "18px 0 0", fontSize: 11.5, lineHeight: 1.55, textAlign: "center", color: theme.textFainter }}>
-              Bill status saves automatically. Mark a bill "no payment needed" or "payment complete" and it steps out of the way — unhide brings everything back for a check without changing anything.
-            </p>
-
-            {/* Floating "add bill" button — sits bottom-left so it never
-                overlaps the accounts bubble on the right. Tapping it opens the
-                form anchored to the top of the screen, so on a phone the fields
-                stay above the on-screen keyboard instead of hidden beneath it. */}
-            <button
-              onClick={() => { setNewBill((n) => ({ ...n, dueDate: period })); setShowAddBill(true); }}
-              title="Add a bill"
-              style={{
-                position: "fixed", left: 24, bottom: 24, width: 54, height: 54,
-                borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center",
-                zIndex: 45, border: "none", cursor: "pointer",
-                color: theme.accentInk,
-                background: `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})`,
-                boxShadow: `0 14px 34px -10px ${theme.accentPlum}, inset 0 1px 0 rgba(255,255,255,.4)`,
-                transition: `all .4s ${SPRING}`,
-              }}
-            >
-              <Plus size={22} />
-            </button>
-
-            {/* Floating bubble: minimises the account cards, and shows each
-                account's remaining balance while they're collapsed. */}
-            <button
-              onClick={() => setShowAccounts((v) => !v)}
-              title={showAccounts ? "Minimize accounts" : "Expand accounts"}
-              style={{
-                position: "fixed", right: 24, bottom: 24, minWidth: 54, height: 54, padding: "0 18px",
-                borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", gap: 14,
-                zIndex: 45, border: "none", cursor: "pointer",
-                color: theme.accentInk,
-                background: `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})`,
-                boxShadow: `0 14px 34px -10px ${theme.accentPlum}, inset 0 1px 0 rgba(255,255,255,.4)`,
-                transition: `all .4s ${SPRING}`,
-              }}
-            >
-              {showAccounts ? (
-                <Landmark size={20} />
-              ) : state.accounts.length > 0 ? (
-                state.accounts.map((acc, idx) => {
-                  const balanceRaw = acc.balances?.[period];
-                  const balance = balanceRaw === "" || balanceRaw === undefined ? 0 : Number(balanceRaw);
-                  const remaining = balance - accountTotal(acc.id);
-                  return (
-                    <span key={acc.id} style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                      {idx > 0 && <span style={{ width: 1, height: 26, background: "rgba(255,255,255,.28)" }} />}
-                      <span style={{ display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.15 }}>
-                        <span style={{ fontSize: 9.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".04em", opacity: 0.8, maxWidth: 62, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {acc.name}
-                        </span>
-                        <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}>
-                          {money(remaining)}
-                        </span>
-                      </span>
-                    </span>
-                  );
-                })
-              ) : (
-                <Landmark size={20} />
-              )}
-            </button>
-          </>
+        {view === "budget" && (
+          <button onClick={() => setSheet({ kind: "add" })} aria-label="Add a bill" style={{
+            position: "fixed", right: 20, bottom: "calc(22px + env(safe-area-inset-bottom))", zIndex: 50,
+            width: 58, height: 58, borderRadius: "50%", border: "none", cursor: "pointer",
+            background: D.amber, color: D.onAmber, display: "grid", placeItems: "center",
+            boxShadow: `0 12px 30px -8px ${D.amber}`,
+          }}>
+            <Plus size={28} strokeWidth={2.6} />
+          </button>
         )}
 
         {view === "logins" && !vaultKey && (
@@ -1257,18 +908,6 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
         </BudgetModal>
       )}
 
-      {confirmDelete && (
-        <BudgetModal onClose={() => setConfirmDelete(null)} icon={<Trash2 size={22} />} tone="red" title="Delete this account?">
-          <p style={{ margin: "0 0 16px", fontSize: 13.5, lineHeight: 1.55, color: theme.textMuted }}>
-            This can't be undone. Any bills assigned to it will be left without an account.
-          </p>
-          <button onClick={confirmDeleteAccount} style={dangerButtonStyle}>
-            <Trash2 size={16} />
-            Delete account
-          </button>
-          <button onClick={() => setConfirmDelete(null)} style={modalDismissStyle}>Cancel</button>
-        </BudgetModal>
-      )}
 
       {confirmReset && (
         <BudgetModal onClose={() => setConfirmReset(false)} icon={<AlertCircle size={22} />} tone="red" title="Reset all bills to Unpaid?">
@@ -1282,101 +921,54 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
 
       {/* Add-bill form, anchored to the very top of the screen so it opens
           above the keyboard on mobile rather than being pushed behind it. */}
-      {showAddBill && (
-        <div
-          onClick={() => setShowAddBill(false)}
-          style={{
-            position: "fixed", inset: 0, zIndex: 210, background: theme.scrim,
-            backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
-            display: "flex", justifyContent: "center", alignItems: "flex-start",
-            padding: 16, animation: "fadeIn .2s ease",
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              ...glass.raised, width: "100%", maxWidth: 460,
-              marginTop: "calc(env(safe-area-inset-top, 0px) + 8px)",
-              padding: 20, borderRadius: 24, animation: `popIn .3s ${SPRING}`,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 16 }}>
-              <span style={{
-                width: 36, height: 36, borderRadius: 12, flexShrink: 0,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                color: theme.accentInk,
-                background: `linear-gradient(140deg, ${theme.accentPlum}, ${theme.accent2})`,
-                boxShadow: `0 8px 20px -10px ${theme.accentPlum}`,
-              }}>
-                <Plus size={18} />
-              </span>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <h2 style={{ ...display(18), margin: 0, lineHeight: 1.1 }}>Add a bill</h2>
-                <p style={{ margin: "3px 0 0", fontSize: 12, color: theme.textMuted }}>Due the {newBill.dueDate === "30" ? "30th" : "15th"}</p>
-              </div>
-              <IconAction onClick={() => setShowAddBill(false)} title="Close" hoverColor={theme.accentRed}>
-                <X size={18} />
-              </IconAction>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {/* Which pay period this bill belongs to. It deducts only from the
-                  chosen account's balance for this exact period. */}
-              <div>
-                <label style={{ display: "block", fontSize: 11, color: theme.textFainter, marginBottom: 6 }}>Pay period</label>
-                <div style={{ display: "flex", gap: 4, padding: 5, borderRadius: 999, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}` }}>
-                  <button type="button" style={segStyle(newBill.dueDate !== "30")} onClick={() => setNewBill((n) => ({ ...n, dueDate: "15" }))}>15th</button>
-                  <button type="button" style={segStyle(newBill.dueDate === "30")} onClick={() => setNewBill((n) => ({ ...n, dueDate: "30" }))}>30th</button>
-                </div>
-              </div>
-              <select
-                value={newBill.name}
-                onChange={(e) => setNewBill((n) => ({ ...n, name: e.target.value }))}
-                autoFocus
-                style={{ ...fieldSm, width: "100%", padding: "11px 13px", borderRadius: 13, fontSize: 14, color: theme.textPrimary }}
-              >
-                <option value="">{sortedLoginNames.length === 0 ? "Add a login first" : "Select a bill…"}</option>
-                {sortedLoginNames.map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
-              <input
-                type="number"
-                inputMode="decimal"
-                placeholder="Amount"
-                value={newBill.amount}
-                onChange={(e) => setNewBill((n) => ({ ...n, amount: e.target.value }))}
-                onKeyDown={(e) => { if (e.key === "Enter" && addBill()) setShowAddBill(false); }}
-                style={{ ...moneyInput, width: "100%", textAlign: "left", padding: "11px 13px", borderRadius: 13, fontSize: 14 }}
-              />
-              <select
-                value={newBill.bankId}
-                onChange={(e) => setNewBill((n) => ({ ...n, bankId: e.target.value }))}
-                disabled={state.accounts.length === 0}
-                style={{ ...fieldSm, width: "100%", padding: "11px 13px", borderRadius: 13, fontSize: 14, color: theme.textPrimary, ...(state.accounts.length === 0 ? { opacity: 0.5, cursor: "not-allowed" } : null) }}
-              >
-                {state.accounts.length === 0 ? (
-                  <option value="">Add an account first</option>
-                ) : (
-                  state.accounts.map((acc) => <option key={acc.id} value={acc.id}>{acc.name}</option>)
-                )}
-              </select>
-              <button
-                onClick={() => { if (addBill()) setShowAddBill(false); }}
-                disabled={!newBill.name.trim() || newBill.amount === ""}
-                style={{
-                  ...accentButtonStyle(!!newBill.name.trim() && newBill.amount !== ""),
-                  width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                  padding: 13, borderRadius: 14, fontSize: 14, fontWeight: 600, marginTop: 2,
-                }}
-              >
-                <Plus size={16} />
-                Add bill
-              </button>
-            </div>
-          </div>
-        </div>
+      {sheet?.kind === "add" && (
+        <AddBillSheet period={period} accounts={state.accounts} loginNames={sortedLoginNames}
+          onClose={() => setSheet(null)}
+          onAdd={(b) => {
+            const amount = parseFloat(b.amount);
+            if (!b.name.trim() || !Number.isFinite(amount)) return;
+            setState((s) => ({
+              ...s,
+              bills: [...s.bills, {
+                id: uid(), name: b.name.trim(), amount, dueDate: b.dueDate === "30" ? "30" : "15",
+                bankId: b.bankId, status: "unpaid", paidAt: null,
+              }],
+            }));
+            if (b.dueDate !== period) setPeriod(b.dueDate);
+            setSheet(null);
+          }} />
       )}
+      {sheet?.kind === "bill" && (() => {
+        const bill = state.bills.find((x) => x.id === sheet.id);
+        if (!bill) return null;
+        return (
+          <BillSheet bill={bill} accounts={state.accounts} loginNames={sortedLoginNames}
+            loginUrl={billLoginUrl(bill.name)}
+            onStatus={(s) => setStatus(bill, s)}
+            onUpdate={(patch) => updateBill(bill.id, patch)}
+            onDelete={() => { deleteBill(bill.id); setSheet(null); }}
+            onClose={() => setSheet(null)} />
+        );
+      })()}
+      {sheet?.kind === "account" && (() => {
+        const acc = state.accounts.find((a) => a.id === sheet.id);
+        if (!acc) return null;
+        return (
+          <AccountSheet account={acc} period={period} assigned={accountTotal(acc.id, period)}
+            canDelete
+            onRename={(name) => updateAccountName(acc.id, name)}
+            onBalance={(v) => updateAccountBalance(acc.id, v, period)}
+            onDelete={() => {
+              setState((s) => ({
+                ...s,
+                accounts: s.accounts.filter((a) => a.id !== acc.id),
+                bills: s.bills.map((b) => (b.bankId === acc.id ? { ...b, bankId: "" } : b)),
+              }));
+              setSheet(null);
+            }}
+            onClose={() => setSheet(null)} />
+        );
+      })()}
     </div>
   );
 }
