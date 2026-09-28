@@ -5,6 +5,7 @@ import {
 } from "firebase/firestore";
 import { Plus, Trash2, Check, ChevronLeft, Calendar, X, Repeat } from "lucide-react";
 import { db } from "./firebase";
+import { StreakStrip, TomorrowPlan } from "./dial/NightlyExtras";
 
 // This screen is intentionally dark regardless of the system theme — it's the
 // night screen. Kept as one exported object so the weekly moon tracker can
@@ -168,7 +169,7 @@ const REPEAT_OPTIONS = [
   { key: "custom", label: "Every N days" },
 ];
 
-export default function Nightly({ uid, onBack }) {
+export default function Nightly({ uid, onBack, plan }) {
   const [items, setItems] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [draft, setDraft] = useState("");
@@ -490,7 +491,7 @@ export default function Nightly({ uid, onBack }) {
           <Moon progress={progress} id="tonight" />
         </div>
 
-        <div style={{ flexShrink: 0, textAlign: "center", marginBottom: 30 }}>
+        <div style={{ flexShrink: 0, textAlign: "center", marginBottom: 18 }}>
           <div style={{
             fontFamily: "'Bricolage Grotesque', system-ui, sans-serif",
             fontSize: 26, fontWeight: 600, letterSpacing: "-.03em",
@@ -512,6 +513,10 @@ export default function Nightly({ uid, onBack }) {
           )}
         </div>
 
+        <div style={{ flexShrink: 0 }}>
+          {loaded && <StreakStrip items={items} today={today} />}
+        </div>
+
         {/* Everything below the "Tonight's focus" header is the only scroller. */}
         <div className="orbit-scroll" style={{ flex: 1, minHeight: 0, paddingBottom: 60 }}>
 
@@ -530,6 +535,8 @@ export default function Nightly({ uid, onBack }) {
             {tonight.map((item) => <Item key={item.id} item={item} />)}
           </div>
         )}
+
+        <TomorrowPlan plan={plan} highlight={allDone} />
 
         {upcoming.length > 0 && (
           <div style={{ marginTop: 30 }}>

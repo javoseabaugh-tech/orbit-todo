@@ -459,6 +459,16 @@ function TodoApp({ user, access }) {
     }
   }
 
+  // Moves a todo to tomorrow, keeping its reminder time if it has one.
+  async function pushToTomorrow(todo) {
+    const tomorrow = addDays(dateStr(), 1);
+    const time = todo.timeSensitive && todo.notifyAt ? todo.notifyAt.slice(11, 16) : null;
+    await updateDoc(doc(db, "users", targetUidOf(todo), "todos", todo.id), {
+      due: tomorrow,
+      ...(time ? { notifyAt: `${tomorrow}T${time}:00`, notified: false } : {}),
+    });
+  }
+
   async function deleteTodo() {
     const todo = sheet?.todo;
     if (!todo) return;
@@ -495,8 +505,38 @@ function TodoApp({ user, access }) {
   if (page === "access") {
     return <AccessScreen db={db} currentRole={access?.role} onClose={() => setPage("main")} />;
   }
-if (page === "nightly") {
-    return <Nightly uid={uid} onBack={() => setPage("main")} />;
+  if (page === "nightly") {
+    // "Set up tomorrow": today's unfinished todos (and anything overdue) plus
+    // what's already due tomorrow, so the evening routine ends with tomorrow
+    // sorted. Edits open the same sheet as the main screen.
+    const today = dateStr();
+    const tomorrow = addDays(today, 1);
+    const allTodos = [...todosForList("work"), ...todosForList("personal")];
+    const plan = {
+      leftovers: allTodos.filter((t) => !t.done && t.due && t.due <= today),
+      tomorrow: allTodos.filter((t) => !t.done && t.due === tomorrow),
+      assigneeOf,
+      onPush: pushToTomorrow,
+      onDone: toggleDone,
+      onOpen: (todo) => setSheet({ todo }),
+    };
+    return (
+      <>
+        <Nightly uid={uid} onBack={() => setPage("main")} plan={plan} />
+        {sheet && (
+          <QuickAdd
+            todo={sheet.todo}
+            defaultList="work"
+            people={assignable}
+            canAssign={isOwner}
+            assigneeOf={assigneeOf}
+            onSave={saveTodo}
+            onDelete={sheet.todo && !sheet.todo.isShared ? deleteTodo : null}
+            onClose={() => setSheet(null)}
+          />
+        )}
+      </>
+    );
   }
 
   const isThoughts = section === "thoughts";
