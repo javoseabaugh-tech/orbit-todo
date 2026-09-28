@@ -21,6 +21,33 @@ Orbit has two environments. See [STAGING.md](STAGING.md) for the full setup.
   together). Nothing is deployed by hand, and there are no service account
   keys. Don't add `firebase deploy` to CI; deploy/README.md explains why.
 
+## Keeping live safe when the redesign ships
+
+Shipping merges `redesign` into `main`, which deploys the app, Firestore
+rules and indexes to live together. Three things do **not** redeploy with it
+and read live data directly: the Apps Script jobs (digest, reminders,
+nightly nudge, backup), the budget-access Cloudflare Worker, and phones still
+running the old version for a few minutes. So on the redesign:
+
+- **Data changes are additive only.** Add new fields or collections; never
+  rename or remove a field that exists in live data. Old app copies, Apps
+  Script and the Worker must keep working against both shapes.
+- **Rules may only get looser for existing data until ship day.** A rule that
+  newly blocks an existing read or write breaks old app copies and anything
+  that uses client auth. If a change truly needs stricter rules or reshaped
+  data, write a migration and put it in the ship checklist instead of doing
+  it silently.
+- **Say it in the PR.** Any change that touches `firestore.rules`,
+  `firestore.indexes.json`, `apps-script/`, the Worker, or the shape of stored
+  data gets a "Live impact at ship time" section in its PR description: what
+  changes, what outside part is affected, and what has to happen when it
+  ships. Update the Apps Script or Worker code in the same change when they
+  read that data.
+- **Rehearse before shipping.** Before a `redesign` → `main` PR, load a copy
+  of the latest live backup into staging, use the redesign against it, and
+  run any migration there first. Only then open the ship PR, with the
+  collected "Live impact" items as its checklist.
+
 ## Environment details
 
 - Firebase config per environment lives in `.env.production` (live),
