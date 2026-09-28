@@ -29,12 +29,16 @@
  *   SERVICE_ACCOUNT_EMAIL        from your service account JSON
  *   SERVICE_ACCOUNT_PRIVATE_KEY  from your service account JSON
  *   EXTRA_PATHS                  (optional) comma-separated extra
- *                                 top-level document paths to include,
- *                                 e.g. "households/seabaugh"
+ *                                 top-level document paths to include.
+ *                                 households/seabaugh and every
+ *                                 personalBudgets/* document are always
+ *                                 included without being listed here.
  * Then run setupBackupTrigger() once to schedule it every 4 hours.
  */
 
 const FIRESTORE_SCOPE = "https://www.googleapis.com/auth/datastore";
+// Shared documents every backup includes, whatever EXTRA_PATHS says.
+const ALWAYS_BACKED_UP_DOCS = ["households/seabaugh"];
 const BACKUP_FOLDER_NAME = "Orbit backups";
 const BACKUP_PREFIX = "orbit-backup-";
 
@@ -171,7 +175,13 @@ function getDoc_(token, docPath) {
     headers: { Authorization: "Bearer " + token },
     muteHttpExceptions: true,
   });
-  if (res.getResponseCode() !== 200) return null;
+  // Only "it doesn't exist" means null. Any other failure throws, so a shared
+  // document like the household budget can never drop out of a backup
+  // silently because one request hiccupped.
+  if (res.getResponseCode() === 404) return null;
+  if (res.getResponseCode() !== 200) {
+    throw new Error(`get ${docPath} failed (${res.getResponseCode()}): ` + res.getContentText());
+  }
   const doc = JSON.parse(res.getContentText());
   return docFieldsToObject_(doc.fields || {});
 }
@@ -207,11 +217,19 @@ function runBackup() {
     documentCount += docs.length;
   });
 
+  // Budgets live outside users/{uid}, so they are listed explicitly: the
+  // shared household budget always, plus any EXTRA_PATHS, plus every
+  // person's private budget. Restore writes each back to the same path.
   const extras = {};
   const extraPathsRaw = props_().getProperty("EXTRA_PATHS") || "";
-  extraPathsRaw.split(",").map((p) => p.trim()).filter(Boolean).forEach((path) => {
+  const extraPaths = [...new Set([...ALWAYS_BACKED_UP_DOCS,
+    ...extraPathsRaw.split(",").map((p) => p.trim()).filter(Boolean)])];
+  extraPaths.forEach((path) => {
     const data = getDoc_(token, path);
     if (data) extras[path] = data;
+  });
+  listAllDocs_(token, "personalBudgets").forEach((d) => {
+    extras[`personalBudgets/${d.id}`] = d.fields;
   });
 
   // An empty snapshot is never worth keeping. Before the helpers above checked
