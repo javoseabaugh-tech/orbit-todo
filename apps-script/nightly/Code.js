@@ -18,10 +18,14 @@
  *   TELEGRAM_BOT_TOKEN
  *   TELEGRAM_CHAT_ID
  *   USER_NAME               (optional)
+ *   HOUSEHOLD_ID            (optional, default "seabaugh") — whose shared
+ *                           routine lives at households/{id}/nightly
  */
 
 const FIRESTORE_SCOPE = "https://www.googleapis.com/auth/datastore";
 const SEND_WHEN_EMPTY = false;   // true = still message on empty nights
+// Roles that share the household routine (see firestore.rules).
+const HOUSEHOLD_ROLES = { owner: true, household: true };
 
 function props_() {
   return PropertiesService.getScriptProperties();
@@ -38,12 +42,21 @@ function sendNightlyNudge() {
 
   const people = listRootCollection_(token, "access")
     .filter(function (d) { return d.uid; })
-    .map(function (d) { return { uid: d.uid, email: d.email || d.id }; });
+    .map(function (d) { return { uid: d.uid, email: d.email || d.id, role: d.role || null }; });
 
   // The owner may not have an access doc of their own — make sure they're in
   // the list exactly once regardless.
   if (ownerUid && !people.some(function (p) { return p.uid === ownerUid; })) {
-    people.push({ uid: ownerUid, email: null });
+    people.push({ uid: ownerUid, email: null, role: "owner" });
+  }
+
+  // The shared household routine, read once and added to the list of
+  // everyone who shares it. If it can't be read, the personal nudges still go.
+  let houseList = null;
+  try {
+    houseList = tonightAt_(token, householdPath_(), today);
+  } catch (e) {
+    Logger.log("household routine — FAILED to read: %s", e.message);
   }
 
   // notifyConfig doc IDs come from the signed-in email as Firebase reports it,
@@ -66,6 +79,12 @@ function sendNightlyNudge() {
       }
 
       const list = tonightFor_(token, p.uid, today);
+      if (houseList && HOUSEHOLD_ROLES[p.role]) {
+        houseList.pending.forEach(function (h) {
+          list.pending.push({ text: h.text, carried: h.carried, house: true });
+        });
+        list.doneCount += houseList.doneCount;
+      }
       if (!list.pending.length && !SEND_WHEN_EMPTY) {
         Logger.log("%s — nothing pending, skipping", p.email || p.uid);
         return;
@@ -176,9 +195,18 @@ function resolveDestination_(person, ownerUid, configByEmail) {
  * Composing
  * ------------------------------------------------------------------ */
 
+function householdPath_() {
+  return "households/" + (props_().getProperty("HOUSEHOLD_ID") || "seabaugh");
+}
+
 function tonightFor_(token, uid, today) {
-  const items = listCollection_(token, uid, "nightly");
-  const templates = listCollection_(token, uid, "nightlyTemplates");
+  return tonightAt_(token, "users/" + uid, today);
+}
+
+/** Tonight's pending items for any parent path (a user, or the household). */
+function tonightAt_(token, parentPath, today) {
+  const items = listCollectionAt_(token, parentPath, "nightly");
+  const templates = listCollectionAt_(token, parentPath, "nightlyTemplates");
 
   const seen = {};
   items.forEach(function (it) { seen[it.id] = true; });
@@ -211,7 +239,7 @@ function buildMessage_(list) {
 
   const lines = ["🌙 Tonight", ""];
   list.pending.forEach(function (p) {
-    lines.push("• " + p.text + (p.carried ? "  (carried over)" : ""));
+    lines.push("• " + (p.house ? "🏠 " : "") + p.text + (p.carried ? "  (carried over)" : ""));
   });
 
   lines.push("");
@@ -309,11 +337,16 @@ function firestoreRootUrl_() {
 
 /** Lists a subcollection under an arbitrary user, with paging. */
 function listCollection_(token, uid, collectionId) {
+  return listCollectionAt_(token, "users/" + uid, collectionId);
+}
+
+/** Lists a subcollection under any document path, with paging. */
+function listCollectionAt_(token, parentPath, collectionId) {
   const out = [];
   let pageToken = "";
 
   do {
-    let url = firestoreRootUrl_() + "/users/" + uid + "/" + collectionId + "?pageSize=300";
+    let url = firestoreRootUrl_() + "/" + parentPath + "/" + collectionId + "?pageSize=300";
     if (pageToken) url += "&pageToken=" + encodeURIComponent(pageToken);
 
     const res = UrlFetchApp.fetch(url, {

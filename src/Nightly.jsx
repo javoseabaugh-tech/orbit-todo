@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import {
   addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query,
-  serverTimestamp, setDoc, updateDoc,
+  runTransaction, serverTimestamp, setDoc, updateDoc,
 } from "firebase/firestore";
-import { Plus, Trash2, Check, ChevronLeft, Calendar, X, Repeat } from "lucide-react";
+import { Plus, Trash2, Check, ChevronLeft, Calendar, X, Repeat, Home } from "lucide-react";
 import { db } from "./firebase";
 import { StreakStrip, TomorrowPlan } from "./dial/NightlyExtras";
 
@@ -169,7 +169,12 @@ const REPEAT_OPTIONS = [
   { key: "custom", label: "Every N days" },
 ];
 
-export default function Nightly({ uid, onBack, plan }) {
+// Shared household routine (owner + household role): the same two
+// collections as a person's own, under the household document instead of a
+// user. Items there can be ticked off by either person.
+const HOUSE = ["households", "seabaugh"];
+
+export default function Nightly({ uid, onBack, plan, household = false, myName = "" }) {
   const [items, setItems] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [draft, setDraft] = useState("");
@@ -179,8 +184,16 @@ export default function Nightly({ uid, onBack, plan }) {
   const [showRepeat, setShowRepeat] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [today, setToday] = useState(localDateString());
-  const [loaded, setLoaded] = useState(false);
-  const [templatesLoaded, setTemplatesLoaded] = useState(false);
+  const [mineLoaded, setMineLoaded] = useState(false);
+  const [mineTemplatesLoaded, setMineTemplatesLoaded] = useState(false);
+  const [houseItems, setHouseItems] = useState([]);
+  const [houseTemplates, setHouseTemplates] = useState([]);
+  const [houseLoaded, setHouseLoaded] = useState(!household);
+  const [houseTemplatesLoaded, setHouseTemplatesLoaded] = useState(!household);
+  const [scope, setScope] = useState("mine"); // where new items go: 'mine' | 'house'
+  const loaded = mineLoaded && houseLoaded;
+  const templatesLoaded = mineTemplatesLoaded && houseTemplatesLoaded;
+  const base = (sc) => (sc === "house" ? HOUSE : ["users", uid]);
   const taRef = useRef(null);
   const genRef = useRef(false);
   const rollRef = useRef(false);
@@ -200,18 +213,39 @@ export default function Nightly({ uid, onBack, plan }) {
   useEffect(() => {
     const q = query(collection(db, "users", uid, "nightly"), orderBy("createdAt", "asc"));
     return onSnapshot(q, (snap) => {
-      setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      setLoaded(true);
+      setItems(snap.docs.map((d) => ({ id: d.id, ...d.data(), scope: "mine" })));
+      setMineLoaded(true);
     });
   }, [uid]);
 
   useEffect(() => {
     const q = query(collection(db, "users", uid, "nightlyTemplates"), orderBy("createdAt", "asc"));
     return onSnapshot(q, (snap) => {
-      setTemplates(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      setTemplatesLoaded(true);
+      setTemplates(snap.docs.map((d) => ({ id: d.id, ...d.data(), scope: "mine" })));
+      setMineTemplatesLoaded(true);
     });
   }, [uid]);
+
+  // The shared routine. A read error (say, rules not deployed yet) just
+  // leaves it empty rather than blocking the personal list.
+  useEffect(() => {
+    if (!household) return;
+    const q = query(collection(db, ...HOUSE, "nightly"), orderBy("createdAt", "asc"));
+    return onSnapshot(q,
+      (snap) => { setHouseItems(snap.docs.map((d) => ({ id: d.id, ...d.data(), scope: "house" }))); setHouseLoaded(true); },
+      (err) => { console.error("household nightly", err); setHouseLoaded(true); });
+  }, [household]);
+
+  useEffect(() => {
+    if (!household) return;
+    const q = query(collection(db, ...HOUSE, "nightlyTemplates"), orderBy("createdAt", "asc"));
+    return onSnapshot(q,
+      (snap) => { setHouseTemplates(snap.docs.map((d) => ({ id: d.id, ...d.data(), scope: "house" }))); setHouseTemplatesLoaded(true); },
+      (err) => { console.error("household nightly templates", err); setHouseTemplatesLoaded(true); });
+  }, [household]);
+
+  const allItems = household ? [...items, ...houseItems] : items;
+  const allTemplates = household ? [...templates, ...houseTemplates] : templates;
 
   // Auto-grow the add field as you type, up to a cap. Reset to "auto" first or
   // scrollHeight only ever reports the already-grown height and never shrinks.
@@ -229,8 +263,9 @@ export default function Nightly({ uid, onBack, plan }) {
   // stops it from immediately reappearing.
   useEffect(() => {
     if (!loaded || !templatesLoaded || genRef.current) return;
-    const missing = templates.filter(
-      (t) => templateMatches(t, today) && !items.some((it) => it.id === `${t.id}_${today}`)
+    const missing = allTemplates.filter(
+      (t) => templateMatches(t, today) &&
+        !allItems.some((it) => it.scope === t.scope && it.id === `${t.id}_${today}`)
     );
     if (!missing.length) return;
 
@@ -238,7 +273,8 @@ export default function Nightly({ uid, onBack, plan }) {
     (async () => {
       try {
         for (const tpl of missing) {
-          await setDoc(doc(db, "users", uid, "nightly", `${tpl.id}_${today}`), {
+          const ref = doc(db, ...base(tpl.scope), "nightly", `${tpl.id}_${today}`);
+          const fresh = {
             text: tpl.text,
             done: false,
             forDate: today,
@@ -246,7 +282,18 @@ export default function Nightly({ uid, onBack, plan }) {
             skipped: false,
             templateId: tpl.id,
             createdAt: serverTimestamp(),
-          });
+          };
+          if (tpl.scope === "house") {
+            // Two people's phones can both generate tonight's shared item.
+            // Create it only if it doesn't exist, so a late generator can
+            // never reset one the other person already ticked off.
+            await runTransaction(db, async (tx) => {
+              const snap = await tx.get(ref);
+              if (!snap.exists()) tx.set(ref, fresh);
+            });
+          } else {
+            await setDoc(ref, fresh);
+          }
         }
       } catch (e) {
         console.error("Nightly: template generation failed", e);
@@ -254,7 +301,7 @@ export default function Nightly({ uid, onBack, plan }) {
         genRef.current = false;
       }
     })();
-  }, [loaded, templatesLoaded, templates, items, today, uid]);
+  }, [loaded, templatesLoaded, allTemplates.length, allItems.length, templates, items, houseTemplates, houseItems, today, uid]);
 
   // Rollover. Unfinished ONE-OFFS from earlier nights move to tonight and get
   // flagged so the row can pulse. Recurring items are deliberately excluded —
@@ -263,7 +310,7 @@ export default function Nightly({ uid, onBack, plan }) {
   // Also excluded: anything already done, and skipped tombstones.
   useEffect(() => {
     if (!loaded || rollRef.current) return;
-    const stale = items.filter(
+    const stale = allItems.filter(
       (it) =>
         !it.done &&
         !it.skipped &&
@@ -276,7 +323,7 @@ export default function Nightly({ uid, onBack, plan }) {
     (async () => {
       try {
         for (const it of stale) {
-          await updateDoc(doc(db, "users", uid, "nightly", it.id), {
+          await updateDoc(doc(db, ...base(it.scope), "nightly", it.id), {
             forDate: today,
             rolledOver: true,
             // Kept so a later moon tracker can still tell which night this was
@@ -290,11 +337,11 @@ export default function Nightly({ uid, onBack, plan }) {
         rollRef.current = false;
       }
     })();
-  }, [loaded, items, today, uid]);
+  }, [loaded, items, houseItems, today, uid]);
 
   // One snapshot, split in memory. No composite indexes, and the queue below
   // costs nothing extra.
-  const visible = items.filter((it) => !it.skipped);
+  const visible = allItems.filter((it) => !it.skipped);
   const tonight = visible.filter((it) => (it.forDate || today) === today);
   const upcoming = visible
     .filter((it) => (it.forDate || today) > today)
@@ -324,7 +371,7 @@ export default function Nightly({ uid, onBack, plan }) {
         ? { type: "custom", intervalDays: Number(intervalDays) || 1 }
         : { type: repeat };
 
-      await addDoc(collection(db, "users", uid, "nightlyTemplates"), {
+      await addDoc(collection(db, ...base(scope), "nightlyTemplates"), {
         text,
         recurrence,
         startDate,
@@ -335,7 +382,7 @@ export default function Nightly({ uid, onBack, plan }) {
       return;
     }
 
-    await addDoc(collection(db, "users", uid, "nightly"), {
+    await addDoc(collection(db, ...base(scope), "nightly"), {
       text,
       done: false,
       forDate: startDate,
@@ -347,7 +394,15 @@ export default function Nightly({ uid, onBack, plan }) {
   }
 
   async function toggleDone(item) {
-    await updateDoc(doc(db, "users", uid, "nightly", item.id), { done: !item.done });
+    const ref = doc(db, ...base(item.scope), "nightly", item.id);
+    if (item.scope === "house") {
+      // Shared items remember who ticked them, so the other person can see.
+      await updateDoc(ref, item.done
+        ? { done: false, doneBy: null, doneAt: null }
+        : { done: true, doneBy: myName || null, doneAt: serverTimestamp() });
+      return;
+    }
+    await updateDoc(ref, { done: !item.done });
   }
 
   // A generated item can't just be deleted — the template would recreate it on
@@ -355,16 +410,16 @@ export default function Nightly({ uid, onBack, plan }) {
   // it comes back tomorrow as normal.
   async function removeItem(item) {
     if (item.templateId) {
-      await updateDoc(doc(db, "users", uid, "nightly", item.id), { skipped: true, done: false });
+      await updateDoc(doc(db, ...base(item.scope), "nightly", item.id), { skipped: true, done: false });
       return;
     }
-    await deleteDoc(doc(db, "users", uid, "nightly", item.id));
+    await deleteDoc(doc(db, ...base(item.scope), "nightly", item.id));
   }
 
   // Deleting a template stops future nights only. Anything already generated
   // stays put — it's a real item for a real night at that point.
-  async function removeTemplate(id) {
-    await deleteDoc(doc(db, "users", uid, "nightlyTemplates", id));
+  async function removeTemplate(tpl) {
+    await deleteDoc(doc(db, ...base(tpl.scope), "nightlyTemplates", tpl.id));
   }
 
   // alignItems flex-start so a wrapped multi-line entry keeps its checkbox and
@@ -412,6 +467,18 @@ export default function Nightly({ uid, onBack, plan }) {
           textDecoration: item.done ? "line-through" : "none",
         }}>
           {item.text}
+          {item.scope === "house" && (
+            <Home
+              size={12}
+              aria-label="Household"
+              style={{ display: "inline", verticalAlign: "middle", marginLeft: 7, color: item.done ? NIGHT.textFaint : NIGHT.gold }}
+            />
+          )}
+          {item.scope === "house" && item.done && item.doneBy && item.doneBy !== myName && (
+            <span style={{ display: "block", fontSize: 11.5, color: NIGHT.textFaint, textDecoration: "none", marginTop: 2 }}>
+              Done by {item.doneBy}
+            </span>
+          )}
           {item.templateId && (
             <Repeat
               size={12}
@@ -514,7 +581,7 @@ export default function Nightly({ uid, onBack, plan }) {
         </div>
 
         <div style={{ flexShrink: 0 }}>
-          {loaded && <StreakStrip items={items} today={today} />}
+          {loaded && <StreakStrip items={allItems} today={today} />}
         </div>
 
         {/* Everything below the "Tonight's focus" header is the only scroller. */}
@@ -532,7 +599,7 @@ export default function Nightly({ uid, onBack, plan }) {
 
         {tonight.length > 0 && (
           <div style={{ borderTop: `1px solid ${NIGHT.border}` }}>
-            {tonight.map((item) => <Item key={item.id} item={item} />)}
+            {tonight.map((item) => <Item key={item.scope + item.id} item={item} />)}
           </div>
         )}
 
@@ -547,7 +614,7 @@ export default function Nightly({ uid, onBack, plan }) {
               Coming up
             </div>
             <div style={{ borderTop: `1px solid ${NIGHT.border}` }}>
-              {upcoming.map((item) => <Item key={item.id} item={item} muted />)}
+              {upcoming.map((item) => <Item key={item.scope + item.id} item={item} muted />)}
             </div>
           </div>
         )}
@@ -566,7 +633,9 @@ export default function Nightly({ uid, onBack, plan }) {
                 addItem();
               }
             }}
-            placeholder={repeat ? "What repeats each night?" : "What matters tonight?"}
+            placeholder={scope === "house"
+              ? (repeat ? "What does the house need each night?" : "What does the house need tonight?")
+              : (repeat ? "What repeats each night?" : "What matters tonight?")}
             style={{
               flex: 1,
               minWidth: 0,
@@ -641,6 +710,17 @@ export default function Nightly({ uid, onBack, plan }) {
             {repeat === "custom" ? ` (${Number(intervalDays) || 1})` : ""}
           </button>
 
+          {household && (
+            <button
+              onClick={() => setScope((sc) => (sc === "house" ? "mine" : "house"))}
+              title="Who this is for"
+              style={pill(scope === "house")}
+            >
+              <Home size={14} />
+              {scope === "house" ? "Household" : "Just me"}
+            </button>
+          )}
+
           {draftDate && (
             <button
               onClick={() => setDraftDate("")}
@@ -702,7 +782,7 @@ export default function Nightly({ uid, onBack, plan }) {
           </div>
         )}
 
-        {templates.length > 0 && (
+        {allTemplates.length > 0 && (
           <div style={{ marginTop: 30 }}>
             <button
               onClick={() => setShowTemplates((v) => !v)}
@@ -714,24 +794,24 @@ export default function Nightly({ uid, onBack, plan }) {
               }}
             >
               <Repeat size={12} />
-              Repeating · {templates.length}
+              Repeating · {allTemplates.length}
             </button>
 
             {showTemplates && (
               <div style={{ marginTop: 8, borderTop: `1px solid ${NIGHT.border}` }}>
-                {templates.map((tpl) => (
-                  <div key={tpl.id} style={row}>
+                {allTemplates.map((tpl) => (
+                  <div key={tpl.scope + tpl.id} style={row}>
                     <span style={{
                       flex: 1, minWidth: 0, fontSize: 14, lineHeight: 1.45,
                       whiteSpace: "pre-wrap", overflowWrap: "anywhere", color: NIGHT.textMuted,
                     }}>
                       {tpl.text}
                       <span style={{ display: "block", fontSize: 11.5, color: NIGHT.textFaint, marginTop: 2 }}>
-                        {repeatLabel(tpl)}
+                        {repeatLabel(tpl)}{tpl.scope === "house" ? " · Household" : ""}
                       </span>
                     </span>
                     <button
-                      onClick={() => removeTemplate(tpl.id)}
+                      onClick={() => removeTemplate(tpl)}
                       title="Stop repeating"
                       style={{
                         color: "rgba(233,227,242,.3)", cursor: "pointer", display: "flex",

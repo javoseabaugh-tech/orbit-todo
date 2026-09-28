@@ -522,7 +522,13 @@ function TodoApp({ user, access }) {
     };
     return (
       <>
-        <Nightly uid={uid} onBack={() => setPage("main")} plan={plan} />
+        <Nightly
+          uid={uid}
+          onBack={() => setPage("main")}
+          plan={plan}
+          household={access?.role === "owner" || access?.role === "household"}
+          myName={(user.displayName || user.email || "").split(/[ @]/)[0]}
+        />
         {sheet && (
           <QuickAdd
             todo={sheet.todo}
