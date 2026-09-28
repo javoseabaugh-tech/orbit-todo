@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X, Trash2, Clock, Calendar, Repeat } from "lucide-react";
 import { D, FONT_DISPLAY, FONT_BODY, faceColor, initials } from "./tokens";
+import useKeyboardInset from "./useKeyboardInset";
 import { dateStr, addDays, dayLabel, fmtHM, reminderHM, nowHM } from "./dates";
 
 // The add/edit sheet. One text field, then rows of chips:
@@ -12,23 +13,6 @@ import { dateStr, addDays, dayLabel, fmtHM, reminderHM, nowHM } from "./dates";
 //
 // It sits on the bottom edge and rides up with the on-screen keyboard, so the
 // field you're typing in is never hidden behind it.
-
-function useKeyboardInset() {
-  const [inset, setInset] = useState(0);
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const update = () => setInset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
-    update();
-    vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
-    return () => {
-      vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
-    };
-  }, []);
-  return inset;
-}
 
 const REPEATS = [
   { id: "none", label: "Once" },
