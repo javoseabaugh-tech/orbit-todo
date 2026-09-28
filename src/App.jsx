@@ -1,4 +1,3 @@
-import PaletteMenu from "./PaletteMenu";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { onAuthStateChanged, signInWithRedirect, signOut } from "firebase/auth";
@@ -30,6 +29,9 @@ const LIST_TAIL = "calc(120px + env(safe-area-inset-bottom))";
 
 const GLOBAL_CSS = `
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* Dialogs portalled to <body> inherit from here, so they match the app. */
+  body { font-family: 'Figtree', system-ui, -apple-system, sans-serif; }
+  button, input, select, textarea { font-family: inherit; }
   /* The app is a fixed-height shell: chrome stays put, only the lists scroll.
      dvh so mobile browser chrome collapsing doesn't clip the tab bar. */
   .orbit-shell { height: 100vh; height: 100dvh; }
@@ -737,7 +739,6 @@ function UserMenu({ user, access, isDesktop, pendingBudgetRequest, onRequestBudg
               <div style={{ fontSize: 11.5, color: theme.textFainter, marginTop: 2, textTransform: "capitalize" }}>{access.role}</div>
             )}
           </div>
-          <PaletteMenu />
           <MenuRow onClick={() => { setShowNotify(true); setOpen(false); }} icon={MessageCircleMore}>
             Notifications
           </MenuRow>

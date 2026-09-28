@@ -35,6 +35,8 @@
 //     out of the blur (handoff perf mitigation 2).
 // ---------------------------------------------------------------------------
 
+import { D, pageBackground } from "./dial/tokens";
+
 const THEMES = {
   aurora:   { label: "Aurora",   h: 195, n: 230, bh: [195, 245, 285] },
   nocturne: { label: "Nocturne", h: 272, n: 265, bh: [272, 225, 310] },
@@ -304,6 +306,35 @@ const active = THEMES[paletteId] || THEMES.aurora;
 export const PALETTE = buildPalette(active, prefersDark);
 export const theme = buildTheme(active, prefersDark);
 
+// ---------------------------------------------------------------------------
+// Redesign: the old theme now speaks Orbit Dial.
+//
+// Screens not yet rebuilt on src/dial/ (sign-in, the account menu and
+// Telegram setup, Access, the Budget vault) still style themselves through
+// `theme` and `glass`. Rather than restyle each by hand, every token they use
+// is pointed at the Orbit Dial palette here, and the glass recipes below go
+// flat. One place, so those screens can't drift from the rest of the app.
+// ---------------------------------------------------------------------------
+Object.assign(theme, {
+  gradA: D.bgTop, gradB: D.bgBottom, gradC: D.bgBottom,
+  textPrimary: D.text, textSecondary: D.text,
+  textMuted: D.muted, textFaint: D.faint, textFainter: D.faint,
+  accentPlum: D.accent, accent2: D.accent2, accentSoft: D.surfaceStrong, accentInk: "#ffffff",
+  accentRed: D.red, goldDot: D.amber, greenDot: D.green,
+  blobOpacity: 0,
+  cardBg: D.surface, inputBg: D.surface, softBg: D.surface, softBg2: D.surfaceStrong,
+  softBg3: D.surface, softBg4: D.surface,
+  dividerSoft: D.line, borderSoft: D.line, border: D.line, borderSoft2: D.line,
+  borderStrong: D.line, borderGreen: D.line,
+  textGray: D.muted,
+  oldOrangeText: D.red, oldGreenText: D.green, oldGreenBg: D.surfaceStrong, oldPlumBg: D.surfaceStrong,
+  oldYellowText: D.amber, goldAccent: D.amber, goldLight: D.amber, goldDark: D.amber, goldText: D.amber,
+  budgetBorder: D.line, budgetMuted: D.muted,
+  glassFill: D.surface, glassHigh: D.surfaceStrong, glassSpec: "transparent",
+  glassFillSolid: D.surface, glassHighSolid: D.surfaceStrong,
+  glassBorder: D.line, glassBorder2: D.line, glassShadow: "rgba(0,0,0,0.35)", scrim: D.scrim,
+});
+
 export const PALETTE_OPTIONS = Object.keys(THEMES).map((id) => ({
   id,
   label: THEMES[id].label,
@@ -332,16 +363,13 @@ if (typeof window !== "undefined" && window.matchMedia) {
 //
 // `blur` is the expensive part — see the perf note in the handoff README.
 // ---------------------------------------------------------------------------
+// Flat in the redesign: a quiet fill and a hairline, no blur or sheen.
+// The arguments are kept so every existing call site stays valid.
+// eslint-disable-next-line no-unused-vars
 const surface = (blur, radiusShadow, flat = false) => ({
-  background: flat
-    ? `linear-gradient(157deg, ${theme.glassHighSolid}, ${theme.glassFillSolid})`
-    : `linear-gradient(157deg, ${theme.glassHigh}, ${theme.glassFill})`,
-  ...(flat ? {} : {
-    backdropFilter: `blur(${blur}px) saturate(180%)`,
-    WebkitBackdropFilter: `blur(${blur}px) saturate(180%)`,
-  }),
+  background: theme.glassFill,
   border: `1px solid ${theme.glassBorder}`,
-  boxShadow: `inset 0 1px 0 ${theme.glassSpec}, ${radiusShadow} ${theme.glassShadow}`,
+  boxShadow: "none",
 });
 
 // Past this many rows, a list drops its own cards to `cardFlat`. Each blurred
@@ -356,8 +384,9 @@ export const glass = {
   // Visually the card the blur would have averaged to, minus the compositing.
   cardFlat: surface(22, "0 10px 28px -20px", true),
   panel:  surface(22, "0 18px 44px -26px"),
-  raised: surface(28, "0 24px 60px -24px"),
-  sheet:  surface(34, "0 -20px 60px -24px"),
+  // Floating things (menus, dialogs) are opaque so the page can't show through.
+  raised: { background: D.panel, border: `1px solid ${theme.glassBorder}`, boxShadow: "0 24px 60px -20px rgba(0,0,0,0.45)" },
+  sheet:  { background: D.panel, border: `1px solid ${theme.glassBorder}`, boxShadow: "0 -20px 60px -20px rgba(0,0,0,0.45)" },
   bar: {
     // The fade-to-transparent tail only works because the blur behind it keeps
     // the scrolling content unreadable. With no blur it would just show rows

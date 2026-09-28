@@ -22,6 +22,8 @@ const DARK = {
   bgBottom: "#0A0D1F",
   surface: "rgba(255,255,255,0.055)",
   surfaceStrong: "rgba(255,255,255,0.10)",
+  // Opaque, for things that float over the page (menus, dialogs).
+  panel: "#161B3A",
   line: "rgba(255,255,255,0.10)",
   text: "#EEF0FF",
   muted: "#AEB4E0",
@@ -48,6 +50,7 @@ const LIGHT = {
   bgBottom: "#E6E9FA",
   surface: "rgba(10,13,31,0.05)",
   surfaceStrong: "rgba(10,13,31,0.09)",
+  panel: "#FFFFFF",
   line: "rgba(10,13,31,0.10)",
   text: "#0A0D1F",
   muted: "#4B5290",
