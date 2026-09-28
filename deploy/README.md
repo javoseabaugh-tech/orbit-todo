@@ -17,9 +17,25 @@ This is the same approach the Pulse app uses.
 
 ## Hosting config lives in two places
 
-The REST API never reads `firebase.json`. Serving config (the SPA rewrite) is
-sent in the version payload from `deploy/hosting-config.json` instead. If you
-change the `hosting` block of `firebase.json`, change this file too.
+The REST API never reads `firebase.json`. Serving config (the SPA rewrite and
+cache headers) is sent in the version payload from `deploy/hosting-config.json`
+instead. If you change the `hosting` block of `firebase.json`, change this file
+too.
+
+## Cache headers
+
+Everything is served `no-cache` (the browser must check for a newer copy),
+except the content-hashed files under `/assets/`, which are `immutable` for a
+year. Before this, Hosting's default `max-age=3600` let an installed app keep
+serving an old `index.html` for up to an hour after a deploy.
+
+Header globs match the path the browser **requested**, and the last matching
+rule wins, so the broad `**` rule comes first and the `/assets/**` rule after
+it. A new rule goes after `**` or it will be overridden.
+
+The app also checks `/version.json` (written by `vite.config.js` on every
+build) when it comes back to the foreground, and reloads itself if a newer
+version is live. See `src/updateCheck.js`.
 
 ## Indexes
 
