@@ -111,8 +111,18 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
     platformAuthAvailable().then(setFaceIdAvailable);
   }, []);
 
+  // Saving rewrites the whole budget document, so it must only ever run after
+  // a load that actually succeeded. If the load fails (no signal and nothing
+  // cached), the screen would otherwise show an empty budget, and the next
+  // tap would save that emptiness over the real bills, accounts and vault.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+
   useEffect(() => {
     (async () => {
+      setLoaded(false);
+      setLoadFailed(false);
+      skipNextSave.current = true;
       try {
         const snap = await getDoc(budgetRef);
         if (snap.exists()) {
@@ -128,13 +138,13 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
             vaultMeta: parsed.vaultMeta || null,
           });
         }
+        setLoaded(true);
       } catch (e) {
         console.error("Failed to load household data:", e);
-      } finally {
-        setLoaded(true);
+        setLoadFailed(true);
       }
     })();
-  }, []);
+  }, [loadAttempt]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -474,6 +484,31 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
       ...s,
       bills: s.bills.map((b) => ({ ...b, status: "unpaid", paidAt: null })),
     }));
+  }
+
+  if (loadFailed) {
+    return (
+      <div style={{ position: "relative", minHeight: "100vh", fontFamily: "'Geist', system-ui, sans-serif" }}>
+        <GlassBackdrop />
+        <div style={{
+          position: "relative", zIndex: 1, minHeight: "100vh", display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center", gap: 14, padding: 24, textAlign: "center",
+        }}>
+          <AlertCircle size={26} color={theme.accentRed} />
+          <p style={{ margin: 0, fontSize: 15, color: theme.textPrimary, maxWidth: 320, lineHeight: 1.5 }}>
+            Couldn't load the budget. Nothing was changed. Check your connection and try again.
+          </p>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => setLoadAttempt((n) => n + 1)} style={{ ...accentButtonStyle(true), padding: "10px 18px", borderRadius: 12, fontSize: 14, fontWeight: 600 }}>
+              Try again
+            </button>
+            <button onClick={onBack} style={{ padding: "10px 18px", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer", border: `1px solid ${theme.glassBorder}`, background: "transparent", color: theme.textSecondary }}>
+              Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!loaded) {
