@@ -453,6 +453,23 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
     color: theme.textPrimary, background: theme.inputBg, border: `1px solid ${theme.glassBorder2}`,
   };
 
+  // Derived numbers for the budget view (the pinned top and the bill list).
+  const accountLeft = (acc) => {
+    const raw = acc.balances?.[period];
+    return (raw === "" || raw === undefined ? 0 : Number(raw)) - accountTotal(acc.id, period);
+  };
+  const sumOf = (status) => billsThisPeriod
+    .filter((b) => b.status === status)
+    .reduce((s, b) => s + (Number(b.amount) || 0), 0);
+  const totalLeft = state.accounts.reduce((s, a) => s + accountLeft(a), 0);
+  // Everything for the period stays on screen: open bills first (by name),
+  // then the handled ones, dimmed, so the whole picture is visible without
+  // toggling anything.
+  const rank = { unpaid: 0, scheduled: 1, paid: 2, skip: 3 };
+  const tiles = billsThisPeriod.slice().sort((a, b) =>
+    (rank[a.status] ?? 0) - (rank[b.status] ?? 0) ||
+    (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }));
+
   return (
     <div
       className="orbit-shell"
@@ -487,27 +504,10 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
           </button>
         </div>
 
-        {/* Everything below the Budget/Logins switch is the only scroller. */}
-        <div className="orbit-scroll" style={{ flex: 1, minHeight: 0, paddingBottom: 90 }}>
-
-        {view === "budget" && (() => {
-          const accountLeft = (acc) => {
-            const raw = acc.balances?.[period];
-            return (raw === "" || raw === undefined ? 0 : Number(raw)) - accountTotal(acc.id, period);
-          };
-          const sumOf = (status) => billsThisPeriod
-            .filter((b) => b.status === status)
-            .reduce((s, b) => s + (Number(b.amount) || 0), 0);
-          const totalLeft = state.accounts.reduce((s, a) => s + accountLeft(a), 0);
-          // Everything for the period stays on screen: open bills first (by
-          // name), then the handled ones, dimmed, so the whole picture is
-          // visible without toggling anything.
-          const rank = { unpaid: 0, scheduled: 1, paid: 2, skip: 3 };
-          const tiles = billsThisPeriod.slice().sort((a, b) =>
-            (rank[a.status] ?? 0) - (rank[b.status] ?? 0) ||
-            (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }));
-          return (
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* The top of the budget stays put: pay period, the ring, the
+            accounts and the bills heading. Only the bill tiles scroll. */}
+        {view === "budget" && (
+          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 14, paddingBottom: 10 }}>
               <div style={{ display: "flex", gap: 4, padding: 4, borderRadius: 999, background: D.surface }}>
                 {[["15", "15th"], ["30", "30th"]].map(([id, lbl]) => (
                   <button key={id} onClick={() => setPeriod(id)} aria-pressed={period === id} style={{
@@ -547,6 +547,16 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
                 </button>
               </div>
 
+          </div>
+        )}
+
+        {/* The only scroller. It runs to the screen edge (the negative margin
+            cancels the page gutter) so its scroll bar sits in the gutter
+            instead of on top of the tiles. */}
+        <div className="orbit-scroll" style={{ flex: 1, minHeight: 0, margin: "0 -16px", padding: "0 16px 90px" }}>
+
+        {view === "budget" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {tiles.length === 0 ? (
                 <div style={{ textAlign: "center", color: D.muted, fontSize: 14, padding: "14px 8px" }}>
                   No bills for the {period === "15" ? "15th" : "30th"} yet. Tap + to add one.
@@ -560,9 +570,8 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
               )}
 
               {STAGING && <ImportFromBackup budgetRef={budgetRef} onImported={() => setLoadAttempt((n) => n + 1)} />}
-            </div>
-          );
-        })()}
+          </div>
+        )}
 
         {view === "budget" && (
           <button onClick={() => setSheet({ kind: "add" })} aria-label="Add a bill" style={{
