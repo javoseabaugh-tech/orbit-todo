@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
 import "./index.css";
 import { theme } from "./theme";
+import { startUpdateCheck } from "./updateCheck";
 
 // A staging build gets a fixed badge and a tab-title prefix so it can never
 // be mistaken for live Orbit, on a laptop or installed to a Home Screen.
@@ -18,6 +19,8 @@ if (import.meta.env.VITE_APP_ENV === "staging") {
   });
   document.body.appendChild(badge);
 }
+
+startUpdateCheck();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
