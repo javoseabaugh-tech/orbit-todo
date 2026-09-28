@@ -231,6 +231,15 @@ function runBackup() {
   listAllDocs_(token, "personalBudgets").forEach((d) => {
     extras[`personalBudgets/${d.id}`] = d.fields;
   });
+  // Shared subcollections under each always-backed-up document (the
+  // household nightly routine lives at households/seabaugh/nightly…).
+  ALWAYS_BACKED_UP_DOCS.forEach((path) => {
+    listCollectionIds_(token, path).forEach((cid) => {
+      listAllDocs_(token, `${path}/${cid}`).forEach((d) => {
+        extras[`${path}/${cid}/${d.id}`] = d.fields;
+      });
+    });
+  });
 
   // An empty snapshot is never worth keeping. Before the helpers above checked
   // their response codes, an expired key or a wrong uid produced exactly this:

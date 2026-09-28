@@ -109,6 +109,22 @@ service cloud.firestore {
       );
     }
 
+    // Shared household nightly routine: tonight's items and the repeating
+    // templates that generate them, tickable by either the owner or anyone
+    // with the "household" role. New in the redesign; nothing else lives
+    // under households/{id} as a subcollection, so this opens nothing that
+    // was previously closed.
+    match /households/{householdId}/nightly/{itemId} {
+      allow read, write: if request.auth != null && (
+        myAccess().role == "owner" || myAccess().role == "household"
+      );
+    }
+    match /households/{householdId}/nightlyTemplates/{templateId} {
+      allow read, write: if request.auth != null && (
+        myAccess().role == "owner" || myAccess().role == "household"
+      );
+    }
+
     // Access list — who's allowed into the app and what they're permitted.
     // Anyone signed in can read their own record. Only the owner can add,
     // remove, or change someone's role. The "household" role (Amon) can

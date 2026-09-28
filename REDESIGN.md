@@ -30,8 +30,8 @@ asks for the ship PR (`redesign` → `main`); see CLAUDE.md and STAGING.md.
 | 1 | Shell, Work/Personal with the dial, quick add, assigning | done (#19) |
 | 2 | Thoughts inbox | done (#20) |
 | 3 | Budget on one screen, staging-only import from backup | done (#23) |
-| 4 | Nightly A (set up tomorrow) and B (streaks) | #26 |
-| 5 | Nightly D: shared household items (new rules, nudge script) | to do |
+| 4 | Nightly A (set up tomorrow) and B (streaks) | done (#26) |
+| 5 | Nightly D: shared household items (new rules, nudge script) | in review |
 | 6 | Nightly C: tick items off from the Telegram nudge (Worker) | to do |
 | 7 | **Desktop layout** | to do, in scope |
 | 8 | Restyle the remaining old-theme screens: sign-in, account menu and Telegram setup, Access, Logins/vault, Nightly's add controls | to do |
