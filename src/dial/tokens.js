@@ -14,11 +14,10 @@
 // so nothing here needs to be reactive.
 //
 // Themes: "space" is the Orbit Dial look below. "water" swaps in its own
-// colours and the forest photo, and src/themes/water/ redraws the dial and
-// the Nightly scene. The choice is cached on the device under THEME_KEY and
-// synced to the person's account.
-import waterDay from "../themes/water/moss-day.jpg";
-import waterNight from "../themes/water/moss-night.jpg";
+// colours and a background of soft light patterns, and src/themes/water/
+// redraws the dial and the Nightly scene. The choice is cached on the device
+// under THEME_KEY and synced to the person's account.
+import { causticBackground } from "../themes/water/caustics";
 
 export const THEME_KEY = "orbit-theme";
 export const THEME_IDS = ["space", "water"];
@@ -93,62 +92,59 @@ const LIGHT = {
   scrim: "rgba(10,13,31,0.35)",
 };
 
-// Water: light text on the forest photo's dark moss, day and night alike (the
-// moss is dark in both). Day is a warmer moss green, night a moonlit teal.
-// Surfaces are more opaque than Space's because a photo, not a flat
-// gradient, sits behind them.
+// Water: a pale teal wash with light patterns by day (dark text), deep blue
+// by night (light text). Surfaces are a little more opaque than Space's
+// because the pattern sits behind them.
 const WATER_NIGHT = {
-  bgTop: "#0D1810",
-  bgBottom: "#060C09",
-  surface: "rgba(6,16,14,0.62)",
-  surfaceStrong: "rgba(14,30,28,0.82)",
-  panel: "#0C1A17",
-  line: "rgba(255,255,255,0.10)",
-  text: "#E8F2EF",
-  muted: "#A9C2BC",
-  faint: "#86A39D",
+  bgTop: "#0C1A20",
+  bgBottom: "#07101A",
+  surface: "rgba(255,255,255,0.06)",
+  surfaceStrong: "rgba(255,255,255,0.10)",
+  panel: "#0E1D24",
+  line: "rgba(255,255,255,0.09)",
+  text: "#E3EEF0",
+  muted: "#9BB3B8",
+  faint: "#7F989D",
   accent: "#4CC9C9",
   accent2: "#7FD8B0",
   amber: "#FFB86B",
   onAmber: "#0A1414",
   green: "#5FD39A",
   red: "#FF8A7A",
-  sheet: "#E8F2EF",
-  sheetText: "#081414",
-  sheetMuted: "#3E5E58",
-  chip: "#D2E5E0",
-  chipText: "#1D3B36",
-  chipOn: "#081414",
-  chipOnText: "#E8F2EF",
-  scrim: "rgba(2,8,9,0.6)",
-  textShadow: "0 1px 2px rgba(0,0,0,0.55), 0 0 12px rgba(0,0,0,0.35)",
+  sheet: "#E3EEF0",
+  sheetText: "#081418",
+  sheetMuted: "#3E5A5E",
+  chip: "#D0E2E4",
+  chipText: "#1B3A3E",
+  chipOn: "#081418",
+  chipOnText: "#E3EEF0",
+  scrim: "rgba(2,8,10,0.6)",
 };
 
 const WATER_DAY = {
-  bgTop: "#2C3B17",
-  bgBottom: "#162010",
-  surface: "rgba(16,26,10,0.5)",
-  surfaceStrong: "rgba(26,40,18,0.78)",
-  panel: "#1A2612",
-  line: "rgba(240,248,228,0.14)",
-  text: "#F3F6EC",
-  muted: "#C9D4BA",
-  faint: "#A3B292",
-  accent: "#74D3C6",
-  accent2: "#AEDD8E",
-  amber: "#FFC271",
-  onAmber: "#141A0C",
-  green: "#86DE9C",
-  red: "#FF9C88",
-  sheet: "#F1F4EA",
-  sheetText: "#12190C",
-  sheetMuted: "#4B5A3E",
-  chip: "#DCE4D0",
-  chipText: "#233019",
-  chipOn: "#12190C",
-  chipOnText: "#F1F4EA",
-  scrim: "rgba(6,10,4,0.5)",
-  textShadow: "0 1px 2px rgba(0,0,0,0.6), 0 0 12px rgba(0,0,0,0.35)",
+  bgTop: "#E3F1EE",
+  bgBottom: "#D5E9E6",
+  surface: "rgba(255,255,255,0.55)",
+  surfaceStrong: "rgba(255,255,255,0.8)",
+  panel: "#FFFFFF",
+  line: "rgba(15,33,36,0.10)",
+  text: "#0F2124",
+  muted: "#4A6266",
+  faint: "#627A7E",
+  accent: "#1B8A8C",
+  accent2: "#2E8F5E",
+  amber: "#D9861F",
+  onAmber: "#0F2124",
+  green: "#16895E",
+  red: "#C8453A",
+  sheet: "#0F2A2E",
+  sheetText: "#E3EEF0",
+  sheetMuted: "#A2BCC0",
+  chip: "#1D3C40",
+  chipText: "#CFE4E6",
+  chipOn: "#E3EEF0",
+  chipOnText: "#0F2124",
+  scrim: "rgba(8,24,28,0.35)",
 };
 
 const PALETTES = {
@@ -161,12 +157,9 @@ export const D = PALETTES[THEME_ID][prefersDarkDial ? "dark" : "light"];
 export const FONT_DISPLAY = "'Syne', 'Figtree', system-ui, sans-serif";
 export const FONT_BODY = "'Figtree', system-ui, -apple-system, sans-serif";
 
-// Water: the moss carpet from below the well, as a seamless tile (the photo's
-// bottom strip plus its mirror, moss-day.jpg / moss-night.jpg) shown at the
-// same scale as on the home screen, so it stays sharp on every screen (the home
-// screen draws the whole photo, with the well, over this).
+// Water: the light patterns, still (the home screen lets them drift).
 export const pageBackground = THEME_ID === "water"
-  ? `url(${prefersDarkDial ? waterNight : waterDay}) center top / auto 66vh repeat, ${prefersDarkDial ? "#060C09" : "#243212"}`
+  ? causticBackground(prefersDarkDial)
   : `radial-gradient(120% 70% at 50% 0%, ${D.bgTop} 0%, ${D.bgBottom} 62%)`;
 
 // A small palette for people's faces. Index by a stable hash of their email so
