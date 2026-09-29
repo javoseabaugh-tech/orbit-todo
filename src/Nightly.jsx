@@ -10,12 +10,15 @@ import { THEME_ID, FONT_DISPLAY } from "./dial/tokens";
 
 // Each theme puts a living photo behind this screen: Water's forest pool (its
 // own moon stands in for the moon badge) and Space's Milky Way over an
-// observatory. Only the chosen theme's backdrop is downloaded.
+// observatory, Fire's campfire in the pines. Only the chosen theme's backdrop
+// is downloaded.
 const WATER = THEME_ID === "water";
-const LIVE = WATER || THEME_ID === "space";
+const LIVE = WATER || THEME_ID === "space" || THEME_ID === "fire";
 const Backdrop = WATER
   ? lazy(() => import("./themes/water/NightlyWater"))
-  : lazy(() => import("./themes/space/NightlySpace"));
+  : THEME_ID === "fire"
+    ? lazy(() => import("./themes/fire/NightlyFire"))
+    : lazy(() => import("./themes/space/NightlySpace"));
 
 // Build-time constant: false in the live build, so the staging test tool is
 // dropped from the live bundle entirely.

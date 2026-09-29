@@ -7,8 +7,9 @@ import { D, FONT_DISPLAY, THEME_ID, faceColor, initials } from "./tokens";
 // the chosen theme's dial is downloaded.
 const WaterDial = lazy(() => import("../themes/water/WaterDial"));
 const SpaceDial = lazy(() => import("../themes/space/SpaceDial"));
-const LiveDial = THEME_ID === "water" ? WaterDial : SpaceDial;
-const WATER = THEME_ID === "water" || THEME_ID === "space"; // themes with a live, pinned dial
+const FireDial = lazy(() => import("../themes/fire/FireDial"));
+const LiveDial = THEME_ID === "water" ? WaterDial : THEME_ID === "fire" ? FireDial : SpaceDial;
+const WATER = ["water", "space", "fire"].includes(THEME_ID); // themes with a live, pinned dial
 import { dateStr, addDays, dayLabel, fmtHM, reminderHM } from "./dates";
 
 // One list (Work or Personal): today's dial on top, then the todos grouped by
