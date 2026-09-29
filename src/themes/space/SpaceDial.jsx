@@ -30,7 +30,20 @@ const angleOf = (min) => ((min % 720) / 720) * Math.PI * 2; // 0 at 12, clockwis
 
 export default function SpaceDial({ todayTodos, isAssigned, onOpen }) {
   const canvasRef = useRef(null);
+  const boxRef = useRef(null);
   const [noGL, setNoGL] = useState(false);
+  // Where the near world's edge crosses: just below the dial, where the list
+  // begins.
+  const [horizonY, setHorizonY] = useState(null);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const measure = () => setHorizonY(el.getBoundingClientRect().bottom - 4);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(document.documentElement);
+    return () => ro.disconnect();
+  }, [noGL]);
   const total = todayTodos.length;
   const done = todayTodos.filter((t) => t.done).length;
   const open = total - done;
@@ -107,8 +120,8 @@ export default function SpaceDial({ todayTodos, isAssigned, onOpen }) {
   const textShadow = "0 1px 3px rgba(4,6,20,.7), 0 0 14px rgba(4,6,20,.5)";
   return (
     <>
-      <SpaceSky />
-      <div style={{ position: "relative", height: HEIGHT, flexShrink: 0, margin: "4px 0 6px" }}>
+      <SpaceSky horizonY={horizonY} />
+      <div ref={boxRef} style={{ position: "relative", height: HEIGHT, flexShrink: 0, margin: "4px 0 6px" }}>
         <canvas ref={canvasRef} aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }} />
 
         <MoonButtons moons={moons} onOpen={onOpen} />
