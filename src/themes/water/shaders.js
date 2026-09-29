@@ -21,7 +21,7 @@ uniform vec2 C; uniform float RAD; uniform float T; uniform float LV; uniform fl
 uniform vec3 RIP[8]; uniform vec4 MK[6];
 #define PI 3.14159265
 #define RR 1.17
-#define BW 1.07
+#define BW 1.1
 float RW; vec2 E; vec3 Ld; vec3 H;
 
 float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
@@ -42,6 +42,21 @@ float wh(vec2 q){
  for(int i=0;i<8;i++){vec3 k=RIP[i];float a=T-k.z;if(a>0.&&a<5.){float x=length(q-k.xy)-a*.45;h+=.024*sin(x*48.)*exp(-x*x*80.)*exp(-a*.9);}}
  for(int i=0;i<6;i++){vec4 m=MK[i];if(m.y>.01){float r2=length(q-padPos(m));h+=.003*m.y*sin(r2*70.-T*3.)*exp(-r2*9.);}}
  return h;}
+
+// Carved limestone: warm, softly clouded, with small round pores. p in
+// basin radii.
+float pores(vec2 p,float dens){vec2 n=floor(p),f=fract(p);float v=0.;
+ for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec2 g=vec2(float(i),float(j));
+  float h=hash(n+g);if(h>dens){vec2 o=vec2(hash(n+g+19.7),hash(n+g+7.3));float r=.12+.22*hash(n+g+3.1);
+   v=max(v,smoothstep(r,r*.35,length(g+o-f))*(.5+.5*hash(n+g+5.9)));}}
+ return v;}
+vec3 limestone(vec2 p){
+ float f=fbm3(p*3.)*.6+fbm3(p*9.+3.)*.4;
+ vec3 c=mix(vec3(.8,.77,.7),vec3(.93,.91,.86),smoothstep(.25,.75,f));
+ c*=1.-.03*(noise(p*90.)-.5);
+ float pr=pores(p*30.,.55)*.7+pores(p*13.+4.,.8);
+ c*=1.-.22*pr;
+ return mix(c,c*vec3(.42,.48,.58),NT);}
 
 // Paints c with coverage k over what's there (premultiplied).
 void over(inout vec4 o,vec3 c,float k){o=vec4(c*k,k)+o*(1.-k);}
@@ -78,17 +93,17 @@ void main(){
  // the background
  float lit=dot(normalize(q+1e-4),normalize(Ld.xy));
  if(d<BW+aa){
-  vec3 wc0=mix(vec3(.95,.98,.97),vec3(.14,.23,.29),NT)*(1.+mix(.06,.12,NT)*lit);
+  vec3 wc0=limestone(q)*(1.+mix(.08,.14,NT)*lit);
   wc0+=lc*exp(-pow((BW-.012-d)/.012,2.))*max(lit,0.)*mix(.25,.18,NT);
   wc0*=1.-mix(.1,.2,NT)*exp(-pow((BW-.012-d)/.014,2.))*max(-lit,0.);
   over(o,wc0,smoothstep(BW+aa,BW-aa,d));
  }
- over(o,mix(vec3(.3,.5,.52),vec3(.02,.05,.07),NT),exp(-pow((d-BW)/(.006+aa),2.))*mix(.45,.6,NT));
+ over(o,mix(vec3(.42,.39,.33),vec3(.03,.05,.07),NT),exp(-pow((d-BW)/(.006+aa),2.))*mix(.45,.6,NT));
 
  if(d<1.+aa){
   // the empty basin: a floor a shade deeper than the page, with faint light
   // on it, shaded by the wall on the side the light comes from
-  vec3 fl=mix(vec3(.72,.85,.83),vec3(.05,.12,.17),NT);
+  vec3 fl=limestone(q*1.3+5.)*mix(.86,.6,NT);
   fl*=1.-mix(.3,.4,NT)*smoothstep(.6,1.,d)*max(lit,0.);
   fl+=mix(.12,.03,NT)*caustic(q*.7,T*.25);
   vec3 col=fl;
@@ -107,6 +122,8 @@ void main(){
    vec3 w3=mix(vec3(.106,.416,.463),vec3(.031,.114,.165),NT);
    vec3 wc=mix(mix(w1,w2,smoothstep(0.,.55,gg)),w3,smoothstep(.55,1.,gg));
    wc*=mix(1.12,.9,dep);
+   // the limestone floor showing through, most where it's shallow
+   wc*=mix(1.,.78+.4*dot(limestone(fq*1.3+5.),vec3(.33)),mix(.45,.25,NT)*(1.-dep*.8));
    // light patterns through it, strongest where it's shallow
    float cs=caustic(fq*.75+(vec2(noise(fq*3.),noise(fq*3.+9.))-.5)*.2,T*.32);
    wc+=lc*cs*mix(.32,.07,NT)*mix(1.,.55,dep);
