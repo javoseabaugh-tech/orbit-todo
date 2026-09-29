@@ -12,6 +12,9 @@
 // Units: q is measured in planet radii from its centre, y up.
 
 export const PLANET = `
+#ifdef GL_OES_standard_derivatives
+#extension GL_OES_standard_derivatives : enable
+#endif
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
 #else
@@ -95,7 +98,17 @@ void main(){
   // axial tilt for the surface, then a slow turn
   float tl=-.32;vec3 m=vec3(cos(tl)*n.x-sin(tl)*n.y,sin(tl)*n.x+cos(tl)*n.y,n.z);
   float lon=atan(m.x,m.z)+T*.03;float lat=asin(clamp(m.y,-1.,1.));
-  vec3 alb=TX>.5?texture2D(MAP,vec2(fract(lon/(2.*PI)),.5-lat/PI)).rgb:bands(lon,lat);
+  // Where the map's edges meet, u jumps from 1 back to 0 and the GPU would
+  // read its blurriest copy there, leaving a stitch. Pick whichever of two
+  // coordinates has no jump in this pixel's neighbourhood (both read the
+  // same texels, since the map repeats).
+  float u1=fract(lon/(2.*PI)),u2=fract(lon/(2.*PI)+.5)-.5;
+#ifdef GL_OES_standard_derivatives
+  float u=fwidth(u1)<=fwidth(u2)+1e-5?u1:u2;
+#else
+  float u=u1;
+#endif
+  vec3 alb=TX>.5?texture2D(MAP,vec2(u,.5-lat/PI)).rgb:bands(lon,lat);
   float nl=dot(n,L);
   float dif=smoothstep(-.12,.4,nl);
   vec3 col=alb*(mix(.26,.03,NT)+dif*mix(.9,1.08,NT));

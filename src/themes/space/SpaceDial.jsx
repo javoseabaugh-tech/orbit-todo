@@ -21,8 +21,8 @@ const RF = 0.3; // planet radius as a share of the box's shorter side (orbit at 
 const RR = 1.42;
 const MAX_MOONS = 6;
 
-// The planet's surface: a Gemini map, edges blended so it wraps without a
-// seam. Until it loads the shader draws a stand-in surface.
+// The planet's surface: a Gemini map whose left and right edges meet, so it
+// wraps without a seam. Until it loads the shader draws a stand-in surface.
 const PLANET_MAP = planetMap;
 
 const toMinutes = (hm) => { const [h, m] = hm.split(":").map(Number); return h * 60 + m; };
@@ -89,7 +89,7 @@ export default function SpaceDial({ todayTodos, isAssigned, onOpen }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     const scene = createScene(canvas, PLANET,
-      ["C", "RAD", "T", "LV", "NT", "SURGE", "NOW", "TX", "MK", "MAP"], { alpha: true });
+      ["C", "RAD", "T", "LV", "NT", "SURGE", "NOW", "TX", "MK", "MAP"], { alpha: true, extensions: ["OES_standard_derivatives"] });
     if (!scene) { setNoGL(true); return; }
     const { gl, U } = scene;
     gl.uniform1f(U.NT, prefersDarkDial ? 1 : 0);
