@@ -36,7 +36,7 @@ export default function SpaceSky({ horizonY }) {
       gl.uniform2f(U.RES, canvas.width, canvas.height);
       gl.uniform1f(U.T, T);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-    }, { scale: 0.45, interval: 0.2 });
+    }, { scale: 0.8, interval: 0.25 });
     return () => loop.stop();
   }, []);
 
@@ -73,7 +73,7 @@ export default function SpaceSky({ horizonY }) {
 }
 
 // The near world's curved edge, its atmosphere and (by night) aurora, drawn
-// over the stars at full frame rate but reduced resolution.
+// over the stars at near full resolution; it skips the empty sky above.
 function Horizon({ horizonY, night }) {
   const canvasRef = useRef(null);
   const hy = useRef(horizonY);
@@ -93,7 +93,7 @@ function Horizon({ horizonY, night }) {
       gl.uniform1f(U.HY, hy.current);
       gl.uniform1f(U.PX, canvas.width / Math.max(1, canvas.clientWidth));
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-    }, { scale: 0.7 });
+    }, { scale: 0.95, interval: 1 / 40 });
     return () => loop.stop();
   }, []);
   return <canvas ref={canvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }} />;

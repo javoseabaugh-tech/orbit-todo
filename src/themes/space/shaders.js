@@ -201,7 +201,7 @@ void main(){
 // SKY is the Space home screen's backdrop: deep space with a living nebula.
 // Domain-warped clouds in violet, magenta and teal, a Milky-Way-like band
 // across the screen with dark dust lanes, all drifting very slowly. Soft, so
-// it's drawn at reduced resolution and a few times a second; the crisp stars
+// it's redrawn only a few times a second; the crisp stars
 // sit on top in CSS. By day it's the pale sky with faint lavender wisps.
 export const SKY = `
 precision mediump float;
@@ -238,7 +238,6 @@ void main(){
   vec3 base=mix(vec3(.9,.91,.98),vec3(1.,1.,1.),smoothstep(.2,1.,s.y));
   col=base-vec3(.16,.14,.02)*smoothstep(.45,.95,f)*.5-vec3(.05,.12,.02)*smoothstep(.6,1.,r.x)*.35*(.4+band);
  }
- col+=(hash(gl_FragCoord.xy+fract(T))-.5)/255.;
  gl_FragColor=vec4(col,1.);
 }`;
 
@@ -265,6 +264,7 @@ void main(){
  vec2 cen=vec2(W*.5,HY+Rw);
  float d=length(vec2(x,y)-cen)-Rw; // < 0 inside the world
  // where along the horizon: -1 left edge .. 1 right edge
+ if(d>(NT>.5?130.:70.)){gl_FragColor=vec4(0.);return;} // empty sky above
  float hx=(x-W*.5)/(W*.5);
  vec4 o=vec4(0.);
  float sun=exp(-pow((hx-.95)/.35,2.));
@@ -277,9 +277,11 @@ void main(){
   if(NT>.5){
    c=mix(vec3(.012,.016,.035),vec3(.03,.038,.07),smoothstep(.35,.7,land));
    // city lights: small warm clusters on the land, twinkling a little
-   vec2 g=floor(vec2(x,y)/1.6);
-   float lit=step(.993,hash(g))*smoothstep(.52,.64,land)*smoothstep(.5,.75,noise(vec2(x,y)*.03));
-   c+=vec3(1.,.72,.38)*lit*(.6+.4*sin(T*2.+hash(g+3.)*6.28))*.7*smoothstep(0.,30.,depth)*exp(-depth/260.);
+   vec2 cell=floor(vec2(x,y)/7.);
+   vec2 at=(cell+.2+.6*vec2(hash(cell+1.7),hash(cell+8.3)))*7.;
+   float pt=exp(-dot(vec2(x,y)-at,vec2(x,y)-at)/.9);
+   float lit=step(.8,hash(cell))*smoothstep(.52,.64,land)*smoothstep(.5,.75,noise(at*.03));
+   c+=vec3(1.,.72,.38)*pt*lit*(.6+.4*sin(T*2.+hash(cell+3.)*6.28))*.8*smoothstep(0.,30.,depth)*exp(-depth/260.);
    // airglow and aurora light spilling onto the ground near the edge
    c+=vec3(.1,.35,.3)*exp(-depth/28.)*.35;
    c+=vec3(1.,.55,.3)*sun*exp(-depth/40.)*.35;
