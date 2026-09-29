@@ -3,11 +3,12 @@ import { FONT_DISPLAY, prefersDarkDial } from "../../dial/tokens";
 import { reminderHM, nowHM } from "../../dial/dates";
 import Dial from "../../dial/Dial";
 import { DISC } from "./shaders";
-import { createScene, runScene, reducedMotion } from "./gl";
+import { createScene, loadTexture, runScene, reducedMotion } from "./gl";
+import limestoneUrl from "./limestone.jpg";
 import { causticLayers, causticWash } from "./caustics";
 
-// The Water theme's version of the dial: a round basin of live water floating
-// over the page's light patterns. Same job as Dial.jsx: the middle says how
+// The Water theme's version of the dial: a limestone basin of live water
+// floating over the page's light patterns. Same job as Dial.jsx: the middle says how
 // many of today's todos are open, the ring fills around the clock as they get
 // done, each timed reminder is a lily pad at its hour (tap it to open the
 // todo), and a chip on the ring marks the current time. The water also rises
@@ -106,10 +107,13 @@ export default function WaterDial({ todayTodos, isAssigned, onOpen }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     const scene = createScene(canvas, DISC,
-      ["C", "RAD", "T", "LV", "NT", "SURGE", "NOW", "RIP", "MK"], { alpha: true });
+      ["C", "RAD", "T", "LV", "NT", "SURGE", "NOW", "RIP", "MK", "LIME", "TX"], { alpha: true });
     if (!scene) { setNoGL(true); return; }
     const { gl, U } = scene;
     gl.uniform1f(U.NT, prefersDarkDial ? 1 : 0);
+    gl.uniform1i(U.LIME, 0);
+    let stone = false;
+    loadTexture(gl, 0, limestoneUrl, { repeat: true }, () => { stone = true; });
 
     const s = sim.current;
     const mk = new Float32Array(MAX_PADS * 4);
@@ -134,6 +138,7 @@ export default function WaterDial({ todayTodos, isAssigned, onOpen }) {
       gl.uniform3fv(U.RIP, s.rip);
       gl.uniform4fv(U.MK, mk);
       gl.uniform1f(U.NOW, angleOf(toMinutes(nowHM())));
+      gl.uniform1f(U.TX, stone ? 1 : 0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     });
     s.time = loop.time;

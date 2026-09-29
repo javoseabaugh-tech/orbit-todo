@@ -19,6 +19,7 @@ precision mediump float;
 #endif
 uniform vec2 C; uniform float RAD; uniform float T; uniform float LV; uniform float NT; uniform float SURGE; uniform float NOW;
 uniform vec3 RIP[8]; uniform vec4 MK[6];
+uniform sampler2D LIME; uniform float TX;
 #define PI 3.14159265
 #define RR 1.17
 #define BW 1.1
@@ -43,19 +44,12 @@ float wh(vec2 q){
  for(int i=0;i<6;i++){vec4 m=MK[i];if(m.y>.01){float r2=length(q-padPos(m));h+=.003*m.y*sin(r2*70.-T*3.)*exp(-r2*9.);}}
  return h;}
 
-// Carved limestone: warm, softly clouded, with small round pores. p in
-// basin radii.
-float pores(vec2 p,float dens){vec2 n=floor(p),f=fract(p);float v=0.;
- for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec2 g=vec2(float(i),float(j));
-  float h=hash(n+g);if(h>dens){vec2 o=vec2(hash(n+g+19.7),hash(n+g+7.3));float r=.12+.22*hash(n+g+3.1);
-   v=max(v,smoothstep(r,r*.35,length(g+o-f))*(.5+.5*hash(n+g+5.9)));}}
- return v;}
+// Carved limestone, from a painted tile (limestone.jpg, a Gemini
+// illustration: soft clouding, round pores, a few tiny fossils), with its
+// gentle contrast lifted a little. p in basin radii; one tile spans two.
 vec3 limestone(vec2 p){
- float f=fbm3(p*3.)*.6+fbm3(p*9.+3.)*.4;
- vec3 c=mix(vec3(.8,.77,.7),vec3(.93,.91,.86),smoothstep(.25,.75,f));
- c*=1.-.03*(noise(p*90.)-.5);
- float pr=pores(p*30.,.55)*.7+pores(p*13.+4.,.8);
- c*=1.-.22*pr;
+ vec3 t=TX>.5?texture2D(LIME,p*.5+.5).rgb:vec3(.92,.9,.84);
+ vec3 c=(t-vec3(.93,.9,.84))*2.2+vec3(.86,.83,.76);
  return mix(c,c*vec3(.42,.48,.58),NT);}
 
 // Paints c with coverage k over what's there (premultiplied).
