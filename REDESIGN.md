@@ -34,14 +34,36 @@ asks for the ship PR (`redesign` → `main`); see CLAUDE.md and STAGING.md.
 | 5 | Nightly D: shared household items (new rules, nudge script) | done (#27) |
 | 6 | Nightly C: tick items off from the Telegram nudge (Worker) | done (#29), tested on staging |
 | 7 | **Desktop layout** | to do, in scope (owner: last before ship) |
-| 8 | Restyle the remaining old-theme screens: sign-in, account menu and Telegram setup, Access, Logins/vault | in review (Nightly keeps its own night look) |
+| 8 | Restyle the remaining old-theme screens: sign-in, account menu and Telegram setup, Access, Logins/vault | done (#32) |
 | 9 | Staging reminder job and keyless Apps Script | to do (optional before ship) |
+| 11 | Themes: picker, per-person sync, Water | Water in review; Earth, Fire, Air and a refreshed Space to follow |
 | 10 | Rehearse on staging with a copy of live data, then ship | to do |
 
 ## Nightly C
 
 Built: see `workers/telegram-webhook/README.md` for how it works, the one-time
 Google setup per project, and how the buttons get turned on.
+
+## Themes
+
+Each person picks a theme from the account menu. The choice is saved to
+`users/{uid}/settings/ui` (`{ theme }`) and cached on the device; picking one
+reloads the app, the same way a system light/dark change does. Day and night
+follow the phone within every theme.
+
+A theme is more than colours: it can redraw the dial and the Nightly
+backdrop. Water (`src/themes/water/`) draws a live rock pool from above with
+WebGL, built on four Gemini images (rock, rim, pebbles, the Nightly scene):
+the pool rises as the day gets done, reminders are lily pads, the rim channel
+is the progress arc, and Nightly's photo moves. It is loaded only for people
+using Water, pauses off screen and in the background, lowers its resolution
+on slow phones, slows for reduced motion, and falls back to the plain dial
+where WebGL isn't available.
+
+Adding the next theme: its palettes in `src/dial/tokens.js`, an entry in
+`src/themes/themeChoice.js`, and optionally its own dial and Nightly backdrop
+under `src/themes/<name>/`. Gemini assets are flat, evenly lit materials for
+anything the code lights, and a finished scene only for Nightly.
 
 ## Desktop layout (in scope, not started)
 

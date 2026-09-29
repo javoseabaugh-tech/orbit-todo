@@ -4,7 +4,7 @@ import { onAuthStateChanged, signInWithRedirect, signOut } from "firebase/auth";
 import {
   addDoc, collection, deleteDoc, doc, documentId, getDocs, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
 } from "firebase/firestore";
-import { Plus, X, MessageCircleMore, LogOut, Settings, Moon, Wallet, Users } from "lucide-react";
+import { Plus, X, MessageCircleMore, LogOut, Settings, Moon, Wallet, Users, Palette, Check } from "lucide-react";
 import { auth, googleProvider, db } from "./firebase";
 import Budget from "./Budget";
 import AccessScreen from "./AccessScreen";
@@ -15,7 +15,8 @@ import Nightly from "./Nightly";
 import TodoSection from "./dial/TodoSection";
 import QuickAdd from "./dial/QuickAdd";
 import Thoughts from "./dial/Thoughts";
-import { D, FONT_DISPLAY, FONT_BODY, pageBackground } from "./dial/tokens";
+import { D, FONT_DISPLAY, FONT_BODY, pageBackground, THEME_ID } from "./dial/tokens";
+import { THEME_OPTIONS, chooseTheme, syncThemeFromAccount } from "./themes/themeChoice";
 import { dateStr, addDays, nowHM } from "./dial/dates";
 
 // The liquid-glass theme still styles the screens not yet redesigned (sign-in,
@@ -342,6 +343,9 @@ function TodoApp({ user, access }) {
   }
   const [page, setPage] = useState("main"); // 'main' | 'budget' | 'sharedBudget' | 'access' | 'nightly'
 
+  // A theme picked on another device follows you here.
+  useEffect(() => { syncThemeFromAccount(uid); }, [uid]);
+
   // Every screen is a fixed-height shell with its own internal scrolling, so
   // the document must never scroll behind one.
   useEffect(() => {
@@ -643,6 +647,62 @@ function TodoApp({ user, access }) {
 
 // ---------- Shared subcomponents ----------
 
+// Pick a theme. Saved to your account, so your other devices follow; the app
+// reloads to apply it.
+function ThemePicker({ uid, onClose }) {
+  const [saving, setSaving] = useState(null);
+  function pick(id) {
+    if (id === THEME_ID) { onClose(); return; }
+    setSaving(id);
+    chooseTheme(uid, id);
+  }
+  return (
+    <div onClick={saving ? undefined : onClose} style={{
+      position: "fixed", inset: 0, background: theme.scrim, zIndex: 90,
+      backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+      display: "flex", justifyContent: "center", alignItems: "flex-start", overflowY: "auto", padding: 20,
+      animation: "fadeIn .2s ease",
+    }}>
+      <div onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Theme" style={{
+        ...glass.raised, borderRadius: 28, padding: 20, width: 380, maxWidth: "92vw", margin: "auto 0",
+        animation: `popIn .3s ${SPRING}`,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
+          <h3 style={{ ...display(20), margin: 0, flex: 1, color: theme.textPrimary }}>Theme</h3>
+          <button onClick={onClose} aria-label="Close" style={{ border: "none", background: "transparent", color: theme.textFainter, cursor: "pointer", padding: 5, display: "flex" }}>
+            <X size={18} />
+          </button>
+        </div>
+        <p style={{ margin: "0 0 14px", fontSize: 12.5, color: theme.textMuted, lineHeight: 1.5 }}>
+          Saved to your account, so your other devices switch too. Day and night follow your phone.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {THEME_OPTIONS.map((t) => {
+            const on = t.id === THEME_ID;
+            return (
+              <button key={t.id} onClick={() => pick(t.id)} disabled={!!saving} aria-pressed={on} style={{
+                display: "flex", alignItems: "center", gap: 12, padding: 10, borderRadius: 18, textAlign: "left",
+                cursor: saving ? "default" : "pointer", color: theme.textPrimary,
+                background: on ? theme.softBg2 : theme.inputBg,
+                border: `1.5px solid ${on ? D.accent : "transparent"}`,
+              }}>
+                <span style={{ width: 46, height: 46, borderRadius: 14, flexShrink: 0, background: t.swatch }} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 14.5, fontWeight: 700 }}>{t.label}</span>
+                  <span style={{ display: "block", fontSize: 12, color: theme.textMuted, marginTop: 2, lineHeight: 1.4 }}>
+                    {saving === t.id ? "Switching…" : t.blurb}
+                  </span>
+                </span>
+                {on && <Check size={18} color={D.accent} />}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // One row of the raised-glass user menu.
 function MenuRow({ onClick, icon: Icon, color, children }) {
   const [hover, setHover] = useState(false);
@@ -669,6 +729,7 @@ function MenuRow({ onClick, icon: Icon, color, children }) {
 function UserMenu({ user, access, isDesktop, pendingBudgetRequest, onRequestBudgetAccess }) {
   const [open, setOpen] = useState(false);
   const [showNotify, setShowNotify] = useState(false);
+  const [showTheme, setShowTheme] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
   const [botToken, setBotToken] = useState("");
   const [chatId, setChatId] = useState("");
@@ -739,6 +800,9 @@ function UserMenu({ user, access, isDesktop, pendingBudgetRequest, onRequestBudg
               <div style={{ fontSize: 11.5, color: theme.textFainter, marginTop: 2, textTransform: "capitalize" }}>{access.role}</div>
             )}
           </div>
+          <MenuRow onClick={() => { setShowTheme(true); setOpen(false); }} icon={Palette}>
+            Theme · {THEME_OPTIONS.find((t) => t.id === THEME_ID)?.label}
+          </MenuRow>
           <MenuRow onClick={() => { setShowNotify(true); setOpen(false); }} icon={MessageCircleMore}>
             Notifications
           </MenuRow>
@@ -756,6 +820,7 @@ function UserMenu({ user, access, isDesktop, pendingBudgetRequest, onRequestBudg
           </MenuRow>
         </div>
       )}
+      {showTheme && createPortal(<ThemePicker uid={user.uid} onClose={() => setShowTheme(false)} />, document.body)}
       {/* Portalled to <body>: this menu lives inside the top bar, whose
           backdrop-filter makes it the containing block for fixed children (so
           `inset: 0` would resolve to the bar, not the viewport) and traps the
