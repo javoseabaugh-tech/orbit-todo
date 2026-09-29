@@ -9,6 +9,7 @@ import { THEME_ID, THEME_IDS, THEME_KEY } from "../dial/tokens";
 
 export const THEME_OPTIONS = [
   { id: "space", label: "Space", blurb: "A living planet among the stars. Its sunlit side grows as your day gets done; reminders are moons.", swatch: "linear-gradient(140deg, #1A2150, #6B7CFF 60%, #9A6BFF)" },
+  { id: "fire", label: "Fire", blurb: "A fire pit that burns brighter as your day gets done. Reminders are glowing coals.", swatch: "linear-gradient(140deg, #1A0E08, #C2410C 55%, #FFB057)" },
   { id: "water", label: "Water", blurb: "A pool of light and water that fills as your day gets done. Lily pads for reminders.", swatch: "linear-gradient(140deg, #0F2A2C, #1E6B6A 55%, #7FD8B0)" },
 ];
 

@@ -87,6 +87,17 @@ finishing the day brings a sunrise flare. Its surface is a Gemini map
 Gemini Milky Way over an observatory, alive: twinkling stars, a breathing
 dome light, a shooting star now and then and one on every tick.
 
+Fire (`src/themes/fire/`) is a hearth at night. The dial is a fire pit seen
+from above: a Gemini coal bed (`embers.jpg`, a seamless tile) under three
+charred logs, flames that grow as the day gets done, a ring of stones lit
+from inside; the progress ring is a line of embers, reminders are glowing
+coals that flare and go up in sparks when ticked, and finishing the day makes
+the fire roar. Above, night air with smoke and rising sparks; below, where
+the list starts, a dark bed of breathing coals. Light mode is a sunset
+hybrid with light text. Nightly shows a Gemini campfire (`nightly.jpg`) with
+flicker, heat shimmer, twinkling stars and a flurry of sparks on each tick.
+Display font: Unbounded.
+
 Adding the next theme: its palettes in `src/dial/tokens.js`, an entry in
 `src/themes/themeChoice.js`, and optionally its own dial and Nightly backdrop
 under `src/themes/<name>/`. Keep it feeling like an app: we tried a

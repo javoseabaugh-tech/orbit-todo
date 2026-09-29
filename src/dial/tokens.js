@@ -19,9 +19,10 @@
 // under THEME_KEY and synced to the person's account.
 import { causticBackground } from "../themes/water/caustics";
 import { skyBackground } from "../themes/space/starfield";
+import fireEmbers from "../themes/fire/embers.jpg";
 
 export const THEME_KEY = "orbit-theme";
-export const THEME_IDS = ["space", "water"];
+export const THEME_IDS = ["space", "water", "fire"];
 
 function readThemeId() {
   try {
@@ -171,9 +172,48 @@ const SPACE_DUSK = {
   scrim: "rgba(8,10,30,0.5)",
 };
 
+// Fire: a hearth at night, warm charcoal with ember accents. In light mode it's
+// a hybrid like Space: sunset rather than a pale page, still with light text.
+const FIRE_NIGHT = {
+  ...DARK,
+  bgTop: "#2A1510",
+  bgBottom: "#0E0806",
+  surface: "rgba(255,235,220,0.06)",
+  surfaceStrong: "rgba(255,235,220,0.12)",
+  panel: "#221410",
+  line: "rgba(255,225,200,0.12)",
+  text: "#FFF1E6",
+  muted: "#E2C3AE",
+  faint: "#BD9A85",
+  accent: "#FF8A3D",
+  accent2: "#FFB057",
+  amber: "#FFC857",
+  onAmber: "#1A0E08",
+  green: "#8FD694",
+  red: "#FF6B5E",
+  sheet: "#FFF1E6",
+  sheetText: "#1A0E08",
+  sheetMuted: "#6E4B3A",
+  chip: "#F4DCCB",
+  chipText: "#4A2A1C",
+  chipOn: "#1A0E08",
+  chipOnText: "#FFF1E6",
+  scrim: "rgba(10,5,3,0.6)",
+};
+const FIRE_DUSK = {
+  ...FIRE_NIGHT,
+  bgTop: "#5A2A2E",
+  bgBottom: "#241214",
+  panel: "#3A1D1F",
+  surface: "rgba(255,235,220,0.09)",
+  surfaceStrong: "rgba(255,235,220,0.16)",
+  line: "rgba(255,225,200,0.16)",
+};
+
 const PALETTES = {
   space: { dark: DARK, light: SPACE_DUSK },
   water: { dark: WATER_NIGHT, light: WATER_DAY },
+  fire: { dark: FIRE_NIGHT, light: FIRE_DUSK },
 };
 
 export const D = PALETTES[THEME_ID][prefersDarkDial ? "dark" : "light"];
@@ -182,14 +222,18 @@ export const D = PALETTES[THEME_ID][prefersDarkDial ? "dark" : "light"];
 // soft, rounded ones for Water. Body text stays Figtree everywhere.
 export const FONT_DISPLAY = THEME_ID === "water"
   ? "'Quicksand', 'Figtree', system-ui, sans-serif"
-  : "'Syne', 'Figtree', system-ui, sans-serif";
+  : THEME_ID === "fire"
+    ? "'Unbounded', 'Figtree', system-ui, sans-serif"
+    : "'Syne', 'Figtree', system-ui, sans-serif";
 export const FONT_BODY = "'Figtree', system-ui, -apple-system, sans-serif";
 
 // Water: the light patterns; Space: the starfield. Both still here (the home
 // screen lets them drift).
 export const pageBackground = THEME_ID === "water"
   ? causticBackground(prefersDarkDial)
-  : skyBackground(prefersDarkDial);
+  : THEME_ID === "fire"
+    ? `linear-gradient(${prefersDarkDial ? "rgba(14,8,6,.88), rgba(10,6,4,.8)" : "rgba(58,26,30,.84), rgba(30,14,14,.8)"}), url(${fireEmbers}) center / 420px repeat, ${D.bgBottom}`
+    : skyBackground(prefersDarkDial);
 
 // A small palette for people's faces. Index by a stable hash of their email so
 // the same person always gets the same colour on every device.
