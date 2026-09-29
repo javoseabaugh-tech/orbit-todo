@@ -6,7 +6,7 @@ import {
 import { Plus, Trash2, Check, ChevronLeft, Calendar, X, Repeat, Home } from "lucide-react";
 import { db } from "./firebase";
 import { StreakStrip, TomorrowPlan, TestNudge } from "./dial/NightlyExtras";
-import { THEME_ID } from "./dial/tokens";
+import { THEME_ID, FONT_DISPLAY } from "./dial/tokens";
 
 // The Water theme puts a living photo behind this screen (and the photo's own
 // moon stands in for the moon badge). Loaded only for people using Water.
@@ -582,7 +582,7 @@ export default function Nightly({ uid, onBack, plan, household = false, myName =
 
         <div style={{ flexShrink: 0, textAlign: "center", marginBottom: 18 }}>
           <div style={{
-            fontFamily: "'Bricolage Grotesque', system-ui, sans-serif",
+            fontFamily: WATER ? FONT_DISPLAY : "'Bricolage Grotesque', system-ui, sans-serif",
             fontSize: 26, fontWeight: 600, letterSpacing: "-.03em",
             color: NIGHT.textBright,
           }}>

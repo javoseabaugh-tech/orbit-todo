@@ -154,7 +154,11 @@ const PALETTES = {
 
 export const D = PALETTES[THEME_ID][prefersDarkDial ? "dark" : "light"];
 
-export const FONT_DISPLAY = "'Syne', 'Figtree', system-ui, sans-serif";
+// Display face per theme: Syne's wide, spacey letters for Space; Quicksand's
+// soft, rounded ones for Water. Body text stays Figtree everywhere.
+export const FONT_DISPLAY = THEME_ID === "water"
+  ? "'Quicksand', 'Figtree', system-ui, sans-serif"
+  : "'Syne', 'Figtree', system-ui, sans-serif";
 export const FONT_BODY = "'Figtree', system-ui, -apple-system, sans-serif";
 
 // Water: the light patterns, still (the home screen lets them drift).

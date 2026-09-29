@@ -9,10 +9,10 @@
 // ---------------------------------------------------------------------------
 import { useState } from "react";
 import { theme, SPRING, mixColor as mix } from "./theme";
-import { pageBackground } from "./dial/tokens";
+import { pageBackground, FONT_DISPLAY } from "./dial/tokens";
 
-// The redesign's display face (Syne), so older screens' titles match.
-export const DISPLAY = "'Syne', 'Figtree', system-ui, sans-serif";
+// The theme's display face, so older screens' titles match.
+export const DISPLAY = FONT_DISPLAY;
 export const MONO = "'Geist Mono', ui-monospace, monospace";
 
 // Titles: Bricolage 600 with the tight tracking from the design tokens.
