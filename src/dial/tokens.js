@@ -119,6 +119,7 @@ const WATER_NIGHT = {
   chipOn: "#081414",
   chipOnText: "#E8F2EF",
   scrim: "rgba(2,8,9,0.6)",
+  textShadow: "0 1px 2px rgba(0,0,0,0.55), 0 0 12px rgba(0,0,0,0.35)",
 };
 
 const WATER_DAY = {
@@ -145,6 +146,7 @@ const WATER_DAY = {
   chipOn: "#E8F2EF",
   chipOnText: "#0B1F1D",
   scrim: "rgba(8,20,20,0.35)",
+  textShadow: "0 0 10px rgba(234,241,238,0.9)",
 };
 
 const PALETTES = {

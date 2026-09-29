@@ -620,7 +620,13 @@ export default function Nightly({ uid, onBack, plan, household = false, myName =
         )}
 
         {tonight.length > 0 && (
-          <div style={{ borderTop: `1px solid ${NIGHT.border}` }}>
+          <div style={WATER ? {
+            // Over the photo: the same framed panel as "Set up tomorrow", with
+            // enough shade behind it that tonight's items read clearly.
+            padding: "4px 16px", borderRadius: 20, border: `1px solid ${NIGHT.border}`,
+            background: "rgba(3,9,11,.62)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+            textShadow: "0 1px 2px rgba(0,0,0,.6)",
+          } : { borderTop: `1px solid ${NIGHT.border}` }}>
             {tonight.map((item) => <Item key={item.scope + item.id} item={item} />)}
           </div>
         )}
