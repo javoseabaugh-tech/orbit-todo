@@ -198,3 +198,68 @@ void main(){
   vec2 d=(uv-p)*vec2(1.,1./IA);c+=vec3(.8,1.,.5)*exp(-dot(d,d)*90000.)*bl;}
  gl_FragColor=vec4(c,1.);
 }`;
+
+// SHORE is the Water home screen's backdrop, seen from above: sand at the
+// top where the basin sits, and the sea below, starting where the todo list
+// starts (SH, in CSS px from the top). Every few seconds a wave washes up the
+// sand with a lacy foam edge and slides back, leaving a band of darker wet
+// sand. The water is pale (dark by night) so the list stays readable, with
+// light patterns like the pool's. x and y are CSS px, y down.
+export const SHORE = `
+precision mediump float;
+uniform vec2 RES; uniform float T; uniform float NT; uniform float SH; uniform float PX;
+float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
+float noise(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);
+ return mix(mix(hash(i),hash(i+vec2(1.,0.)),u.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),u.x),u.y);}
+const mat2 M2=mat2(1.6,1.2,-1.2,1.6);
+float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<4;i++){v+=a*noise(p);p=M2*p;a*=.5;}return v;}
+float caustic(vec2 uv,float t){vec2 p=mod(uv*6.28318,6.28318)-250.;vec2 i=p;float c=1.,inten=.005;
+ for(int n=0;n<3;n++){float tt=t*(1.-(3.5/float(n+1)));i=p+vec2(cos(tt-i.x)+sin(tt+i.y),sin(tt-i.y)+cos(tt+i.x));
+  c+=1./length(vec2(p.x/(sin(i.x+tt)/inten),p.y/(cos(i.y+tt)/inten)));}
+ c/=3.;c=1.17-pow(c,1.4);return pow(abs(c),8.);}
+void main(){
+ float x=gl_FragCoord.x/PX,y=(RES.y-gl_FragCoord.y)/PX;
+ // one wave every 8 seconds: runs up the sand, lingers, slides back
+ float ph=fract(T/8.);
+ float up=smoothstep(0.,.3,ph)*(1.-smoothstep(.42,.95,ph));
+ // a beach curves: a slow bay shape, plus smaller wobbles that shift with each wave
+ float wob=sin(x*.011+1.3)*14.+(noise(vec2(x*.016,T*.12))-.5)*18.+(noise(vec2(x*.05,T*.25))-.5)*6.;
+ float reach=34.;
+ float edge=SH-up*reach+wob;
+ float high=SH-reach+wob*.7-3.;
+
+ // sand: fine grain and soft wind ripples
+ vec2 sp=vec2(x,y);
+ float grain=noise(sp*1.4)*.45+noise(sp*.4)*.35+noise(sp*.08)*.2;
+ float rip=.5+.5*sin((y*.9+x*.25+(fbm(sp*.012)-.5)*60.)*.16);
+ vec3 sand=mix(vec3(.84,.78,.67),vec3(.94,.9,.82),grain)*(.95+.05*rip);
+ sand=mix(sand,sand*vec3(.2,.23,.31),NT);
+ // wet sand where the last wave reached, a little glossy
+ float wet=smoothstep(high-8.,high+6.,y);
+ vec3 col=mix(sand,sand*vec3(.74,.73,.72)+vec3(.04,.05,.06)*(1.-NT),wet*.85);
+
+ float d=y-edge;
+ if(d>-3.){
+  // the water: clear and thin at the edge (sand shows through), then pale
+  // sea; deep blue by night
+  vec3 shallow=mix(vec3(.78,.91,.89),vec3(.07,.15,.19),NT);
+  vec3 sea=mix(vec3(.84,.93,.92),vec3(.045,.09,.12),NT);
+  vec3 wc=mix(col*mix(vec3(.82,.95,.95),vec3(.6,.8,.9),NT),shallow,smoothstep(0.,26.,d));
+  wc=mix(wc,sea,smoothstep(26.,200.,d));
+  float cs=caustic(vec2(x,y)/150.+vec2(T*.01,0.),T*.28);
+  wc+=mix(vec3(1.),vec3(.5,.7,.9),NT)*cs*mix(.16,.04,NT)*smoothstep(0.,20.,d);
+  // foam: a lacy band at the leading edge, and a fainter one behind it as
+  // the wave slides back
+  if(d<60.){
+   float fn=fbm(vec2(x*.09,y*.13-T*.5))*.7+noise(vec2(x*.35,y*.4+T))*.3;
+   float band=exp(-pow(d/6.,2.))+exp(-pow((d-17.)/10.,2.))*.55*(1.-up);
+   float foam=smoothstep(.42,.8,fn*.85+band*.55)*smoothstep(55.,0.,d);
+   // the crest itself: a thin bright line right at the edge
+   foam=max(foam,exp(-pow(d/2.2,2.))*.75);
+   wc=mix(wc,mix(vec3(.99),vec3(.55,.62,.7),NT),foam*.9);
+  }
+  col=mix(col,wc,smoothstep(-1.5,1.5,d));
+ }
+ col+=(hash(gl_FragCoord.xy+fract(T))-.5)/255.;
+ gl_FragColor=vec4(col,1.);
+}`;

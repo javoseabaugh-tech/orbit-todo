@@ -4,7 +4,7 @@ import { reminderHM, nowHM } from "../../dial/dates";
 import Dial from "../../dial/Dial";
 import { DISC } from "./shaders";
 import { createScene, runScene, reducedMotion } from "./gl";
-import { causticLayers, causticWash } from "./caustics";
+import Shore from "./Shore";
 
 // The Water theme's version of the dial: a round basin of live water floating
 // over the page's light patterns. Same job as Dial.jsx: the middle says how
@@ -30,44 +30,21 @@ function padPos(a, level, T) {
   return [ex + r * Math.sin(a) + 0.02 * Math.sin(T * 0.5 + a * 3), ey + r * Math.cos(a) + 0.02 * Math.cos(T * 0.4 + a * 2)];
 }
 
-// The page's light patterns, moving very softly behind the home screen (this
-// covers the still copy the page itself draws). Each of the two layers drifts
-// slowly and also sways: a small, slow swell in position, size and angle, on
-// its own cycle, so the light shapes seem to shift and re-form like water
-// rather than scroll. Still for reduced motion.
-const DRIFT_CSS = `
-@keyframes waterDriftA { from { background-position: 0 0 } to { background-position: 360px 720px } }
-@keyframes waterDriftB { from { background-position: 0 0 } to { background-position: -522px 522px } }
-@keyframes waterSwayA { 0%, 100% { transform: translate(0, 0) scale(1.06) rotate(0deg) } 50% { transform: translate(14px, -10px) scale(1.1) rotate(1.2deg) } }
-@keyframes waterSwayB { 0%, 100% { transform: translate(0, 0) scale(1.09) rotate(0deg) } 50% { transform: translate(-12px, 12px) scale(1.05) rotate(-1deg) } }
-@media (prefers-reduced-motion: reduce) { .water-drift { animation: none !important } }`;
-
-function Drift() {
-  const [a, b] = causticLayers(prefersDarkDial);
-  const sway = (name, secs) => ({
-    position: "absolute", inset: "-10%", willChange: "transform",
-    animation: `${name} ${secs}s ease-in-out infinite`,
-  });
-  const layer = (l, name, secs) => ({
-    position: "absolute", inset: 0, backgroundImage: l.image, backgroundSize: `${l.size}px ${l.size}px`,
-    animation: `${name} ${secs}s linear infinite`,
-  });
-  return (
-    <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", overflow: "hidden", background: causticWash(prefersDarkDial) }}>
-      <style>{DRIFT_CSS}</style>
-      <div className="water-drift" style={sway("waterSwayA", 17)}>
-        <div className="water-drift" style={layer(a, "waterDriftA", 140)} />
-      </div>
-      <div className="water-drift" style={sway("waterSwayB", 23)}>
-        <div className="water-drift" style={layer(b, "waterDriftB", 190)} />
-      </div>
-    </div>
-  );
-}
-
 export default function WaterDial({ todayTodos, isAssigned, onOpen }) {
   const canvasRef = useRef(null);
+  const boxRef = useRef(null);
   const [noGL, setNoGL] = useState(false);
+  // Where the sea starts: just below the basin, where the list begins.
+  const [shoreY, setShoreY] = useState(360);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const measure = () => setShoreY(el.getBoundingClientRect().bottom + 6);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(document.documentElement);
+    return () => ro.disconnect();
+  }, [noGL]);
   const total = todayTodos.length;
   const done = todayTodos.filter((t) => t.done).length;
   const open = total - done;
@@ -168,8 +145,8 @@ export default function WaterDial({ todayTodos, isAssigned, onOpen }) {
   const textShadow = "0 1px 3px rgba(0,30,40,.45)";
   return (
     <>
-      <Drift />
-      <div onPointerDown={onPointerDown} style={{
+      <Shore shoreY={shoreY} />
+      <div ref={boxRef} onPointerDown={onPointerDown} style={{
         position: "relative", height: HEIGHT, flexShrink: 0, touchAction: "manipulation", margin: "4px 0 6px",
       }}>
         <canvas ref={canvasRef} aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }} />

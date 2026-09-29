@@ -197,3 +197,47 @@ void main(){
  c+=vec3(.9,.94,1.)*k*sky;
  gl_FragColor=vec4(c,1.);
 }`;
+
+// SKY is the Space home screen's backdrop: deep space with a living nebula.
+// Domain-warped clouds in violet, magenta and teal, a Milky-Way-like band
+// across the screen with dark dust lanes, all drifting very slowly. Soft, so
+// it's drawn at reduced resolution and a few times a second; the crisp stars
+// sit on top in CSS. By day it's the pale sky with faint lavender wisps.
+export const SKY = `
+precision mediump float;
+uniform vec2 RES; uniform float T; uniform float NT;
+float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
+float noise(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);
+ return mix(mix(hash(i),hash(i+vec2(1.,0.)),u.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),u.x),u.y);}
+const mat2 M2=mat2(1.6,1.2,-1.2,1.6);
+float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*noise(p);p=M2*p;a*=.5;}return v;}
+void main(){
+ vec2 s=gl_FragCoord.xy/RES;
+ vec2 p=gl_FragCoord.xy/RES.y*1.7+vec2(T*.006,T*.003);
+ vec2 q=vec2(fbm(p),fbm(p+vec2(5.2,1.3)));
+ vec2 r=vec2(fbm(p+3.5*q+vec2(1.7,9.2)+T*.004),fbm(p+3.5*q+vec2(8.3,2.8)));
+ float f=fbm(p+3.5*r);
+ // a band across the sky, lower-left to upper-right
+ vec2 c=s-.5;c.x*=RES.x/RES.y;
+ float bd=dot(c,normalize(vec2(-.62,1.)));
+ float band=exp(-pow(bd*2.4+(f-.5)*.5,2.));
+ vec3 col;
+ if(NT>.5){
+  vec3 base=mix(vec3(.02,.025,.07),vec3(.07,.08,.2),smoothstep(.0,1.,s.y));
+  col=base;
+  col+=vec3(.36,.2,.7)*smoothstep(.4,.95,f)*.55;
+  col+=vec3(.75,.22,.55)*smoothstep(.55,1.,r.x)*.38*(.35+band);
+  col+=vec3(.08,.42,.6)*smoothstep(.55,1.,q.y)*.28;
+  col+=vec3(.42,.38,.62)*band*(.25+.35*f);
+  // dust lanes darken the band
+  float dust=smoothstep(.5,.78,fbm(p*2.2+r*1.8+7.));
+  col*=1.-.6*dust*band;
+  // a faint core glow where the band crosses the middle
+  col+=vec3(.9,.7,.8)*exp(-dot(c-vec2(.05,.08),c-vec2(.05,.08))*6.)*band*.12;
+ }else{
+  vec3 base=mix(vec3(.9,.91,.98),vec3(1.,1.,1.),smoothstep(.2,1.,s.y));
+  col=base-vec3(.16,.14,.02)*smoothstep(.45,.95,f)*.5-vec3(.05,.12,.02)*smoothstep(.6,1.,r.x)*.35*(.4+band);
+ }
+ col+=(hash(gl_FragCoord.xy+fract(T))-.5)/255.;
+ gl_FragColor=vec4(col,1.);
+}`;
