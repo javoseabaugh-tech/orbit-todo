@@ -69,12 +69,14 @@ basin sits on sand, the sea starts where the list starts, and every few
 seconds a wave washes up the sand with a foam edge and slides back, leaving
 wet sand.
 
-Space (`src/themes/space/`) is built the same way: every screen sits on a
+Space (`src/themes/space/`) is built the same way (in light mode it's dusk from orbit rather than a pale
+page: a lighter indigo sky warming to rose, the brightest stars, a big
+sunrise and the near world in dawn light, still with light text): every screen sits on a
 starfield with faint nebula drawn in code (`starfield.js`, nothing to
 download), and on the home screen a view from orbit: a near world's curved edge crosses
 just below the dial and the list sits on its surface (night side with faint
 city lights, a glowing band of atmosphere, aurora rippling above it and a
-sunrise at one end; sunlit and cloudy by day), under a live nebula (`SpaceSky.jsx`: violet, magenta and teal
+sunrise at one end), under a live nebula (`SpaceSky.jsx`: violet, magenta and teal
 clouds, a dusty band across the sky) under crisp stars that drift at three
 depths and twinkle, with the odd shooting star. The dial is a live gas
 giant on a transparent canvas: the sun comes round it as the day gets done

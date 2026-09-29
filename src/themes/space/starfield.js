@@ -69,9 +69,10 @@ function nebulaTile(night) {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
+// By day Space is dusk: indigo overhead warming to rose low down.
 export const skyWash = (night) => night
   ? "radial-gradient(120% 70% at 50% 0%, #1A2150 0%, #0A0D1F 62%)"
-  : "radial-gradient(120% 70% at 50% 0%, #FFFFFF 0%, #E6E9FA 62%)";
+  : "linear-gradient(180deg, #1B2160 0%, #2B3274 45%, #54407F 80%, #7A4F7E 100%)";
 
 let cache = {};
 // Nebula plus (at night) near, far and fine "dust" layers of stars.
@@ -85,7 +86,10 @@ export function skyLayers(night) {
           { image: starTile(29, 220, 1.4, 0.7), size: Math.round(STAR_TILE * 0.7) },
           { image: starTile(47, 420, 0.9, 0.45), size: Math.round(STAR_TILE * 0.55) },
         ]
-      : [{ image: nebulaTile(false), size: NEB_TILE }];
+      : [
+          { image: nebulaTile(true), size: NEB_TILE },
+          { image: starTile(11, 60, 1.8, 0.8, true), size: STAR_TILE },
+        ];
   }
   return cache[key];
 }

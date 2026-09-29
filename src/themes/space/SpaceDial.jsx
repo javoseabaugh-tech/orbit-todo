@@ -78,7 +78,7 @@ export default function SpaceDial({ todayTodos, isAssigned, onOpen }) {
       ["C", "RAD", "T", "LV", "NT", "SURGE", "NOW", "TX", "MK", "MAP"], { alpha: true, extensions: ["OES_standard_derivatives"] });
     if (!scene) { setNoGL(true); return; }
     const { gl, U } = scene;
-    gl.uniform1f(U.NT, prefersDarkDial ? 1 : 0);
+    gl.uniform1f(U.NT, 1); // Space is night or dusk, never a pale page
     gl.uniform1i(U.MAP, 0);
     let mapReady = false;
     if (PLANET_MAP) loadTexture(gl, 0, PLANET_MAP, { repeat: true }, () => { mapReady = true; });

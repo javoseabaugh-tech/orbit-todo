@@ -28,10 +28,11 @@ export default function SpaceSky({ horizonY }) {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const scene = createScene(canvas, SKY, ["RES", "T", "NT"]);
+    const scene = createScene(canvas, SKY, ["RES", "T", "NT", "DK"]);
     if (!scene) { setStill(true); return; }
     const { gl, U } = scene;
-    gl.uniform1f(U.NT, night ? 1 : 0);
+    gl.uniform1f(U.NT, 1);
+    gl.uniform1f(U.DK, night ? 0 : 1); // light mode: dusk
     const loop = runScene(canvas, gl, (dt, T) => {
       gl.uniform2f(U.RES, canvas.width, canvas.height);
       gl.uniform1f(U.T, T);
@@ -40,7 +41,8 @@ export default function SpaceSky({ horizonY }) {
     return () => loop.stop();
   }, []);
 
-  const [, near, far, dust] = skyLayers(night);
+  const [, near, far, dust] = skyLayers(true);
+  const [, duskStars] = skyLayers(false);
   const stars = (l, anim) => ({
     position: "absolute", inset: 0, backgroundImage: l.image, backgroundSize: `${l.size}px ${l.size}px`, animation: anim,
   });
@@ -48,6 +50,7 @@ export default function SpaceSky({ horizonY }) {
     <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", overflow: "hidden", background: skyBackground(night) }}>
       <style>{CSS}</style>
       {!still && <canvas ref={canvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }} />}
+      {!night && <div className="sky-anim" style={stars(duskStars, "skyNear 180s linear infinite, skyTwinkleA 6s ease-in-out infinite")} />}
       {night && (
         <>
           <div className="sky-anim" style={stars(dust, "skyFar 420s linear infinite")} />
@@ -80,10 +83,11 @@ function Horizon({ horizonY, night }) {
   hy.current = horizonY;
   useEffect(() => {
     const canvas = canvasRef.current;
-    const scene = createScene(canvas, HORIZON, ["RES", "T", "NT", "HY", "PX"], { alpha: true });
+    const scene = createScene(canvas, HORIZON, ["RES", "T", "NT", "DK", "HY", "PX"], { alpha: true });
     if (!scene) return;
     const { gl, U } = scene;
-    gl.uniform1f(U.NT, night ? 1 : 0);
+    gl.uniform1f(U.NT, 1);
+    gl.uniform1f(U.DK, night ? 0 : 1);
     const loop = runScene(canvas, gl, (dt, T) => {
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
