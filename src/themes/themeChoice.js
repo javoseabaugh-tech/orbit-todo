@@ -8,7 +8,7 @@ import { db } from "../firebase";
 import { THEME_ID, THEME_IDS, THEME_KEY } from "../dial/tokens";
 
 export const THEME_OPTIONS = [
-  { id: "space", label: "Space", blurb: "The original. Deep orbit, planets for reminders.", swatch: "linear-gradient(140deg, #1A2150, #6B7CFF 60%, #9A6BFF)" },
+  { id: "space", label: "Space", blurb: "A living planet among the stars. Its sunlit side grows as your day gets done; reminders are moons.", swatch: "linear-gradient(140deg, #1A2150, #6B7CFF 60%, #9A6BFF)" },
   { id: "water", label: "Water", blurb: "A pool of light and water that fills as your day gets done. Lily pads for reminders.", swatch: "linear-gradient(140deg, #0F2A2C, #1E6B6A 55%, #7FD8B0)" },
 ];
 

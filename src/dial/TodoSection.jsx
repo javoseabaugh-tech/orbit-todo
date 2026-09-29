@@ -3,10 +3,12 @@ import { Check, Repeat, ChevronDown } from "lucide-react";
 import Dial from "./Dial";
 import { D, FONT_DISPLAY, THEME_ID, faceColor, initials } from "./tokens";
 
-// The Water theme draws its own dial. Loaded only for people using Water, so
-// Space users never download it.
+// Each theme draws its own live dial (the plain Dial is the fallback). Only
+// the chosen theme's dial is downloaded.
 const WaterDial = lazy(() => import("../themes/water/WaterDial"));
-const WATER = THEME_ID === "water";
+const SpaceDial = lazy(() => import("../themes/space/SpaceDial"));
+const LiveDial = THEME_ID === "water" ? WaterDial : SpaceDial;
+const WATER = THEME_ID === "water" || THEME_ID === "space"; // themes with a live, pinned dial
 import { dateStr, addDays, dayLabel, fmtHM, reminderHM } from "./dates";
 
 // One list (Work or Personal): today's dial on top, then the todos grouped by
@@ -131,7 +133,7 @@ export default function TodoSection({ todos, assigneeOf, sharedFromOf, onToggle,
   const list = (
     <div className="orbit-scroll" style={{
       flex: 1, minHeight: 0, padding: `${WATER ? 4 : 0}px 16px ${listTail}`,
-      // Water: rows fade out just below the rim instead of being cut off.
+      // Rows fade out just below the dial instead of being cut off.
       ...(WATER && { WebkitMaskImage: "linear-gradient(transparent, #000 14px)", maskImage: "linear-gradient(transparent, #000 14px)" }),
     }}>
       {!WATER && <Dial todayTodos={todayTodos} isAssigned={isAssigned} onOpen={onOpen} />}
@@ -180,11 +182,11 @@ export default function TodoSection({ todos, assigneeOf, sharedFromOf, onToggle,
   );
   if (!WATER) return list;
 
-  // Water: the dial stays put and only the list scrolls under it.
+  // The live dial stays put and only the list scrolls under it.
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
       <Suspense fallback={null}>
-        <WaterDial todayTodos={todayTodos} isAssigned={isAssigned} onOpen={onOpen} />
+        <LiveDial todayTodos={todayTodos} isAssigned={isAssigned} onOpen={onOpen} />
       </Suspense>
       {list}
     </div>

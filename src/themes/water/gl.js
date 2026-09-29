@@ -10,9 +10,10 @@ export const reducedMotion =
 // draw it (WebGL off, or the shader won't compile), so callers can fall back.
 // With `alpha`, the shader writes premultiplied colour and the page shows
 // through wherever it leaves alpha at 0.
-export function createScene(canvas, fragmentSource, uniformNames, { alpha = false } = {}) {
+export function createScene(canvas, fragmentSource, uniformNames, { alpha = false, extensions = [] } = {}) {
   const gl = canvas.getContext("webgl", { antialias: false, alpha, premultipliedAlpha: true, powerPreference: "high-performance" });
   if (!gl) return null;
+  extensions.forEach((e) => gl.getExtension(e)); // before compiling, so the shader can use them
   try {
     const compile = (type, src) => {
       const s = gl.createShader(type);
