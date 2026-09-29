@@ -64,9 +64,16 @@ for people using Water, pauses off screen and in the background, lowers its
 resolution on slow phones, slows for reduced motion, and falls back to the
 plain dial where WebGL isn't available.
 
+On the home screen Water is a beach seen from above (`Shore.jsx`): the
+basin sits on sand, the sea starts where the list starts, and every few
+seconds a wave washes up the sand with a foam edge and slides back, leaving
+wet sand.
+
 Space (`src/themes/space/`) is built the same way: every screen sits on a
 starfield with faint nebula drawn in code (`starfield.js`, nothing to
-download), drifting in two depths on the home screen. The dial is a live gas
+download), and on the home screen a live nebula (`SpaceSky.jsx`: violet, magenta and teal
+clouds, a dusty band across the sky) under crisp stars that drift at three
+depths and twinkle, with the odd shooting star. The dial is a live gas
 giant on a transparent canvas: the sun comes round it as the day gets done
 (crescent to full), its orbit is the progress ring with a chip for the time,
 reminders are moons at their hour that break orbit when ticked, and

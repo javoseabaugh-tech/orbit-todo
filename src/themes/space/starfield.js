@@ -16,7 +16,7 @@ function rng(seed) {
   };
 }
 
-function starTile(seed, count, maxSize, alpha) {
+function starTile(seed, count, maxSize, alpha, spikes = false) {
   if (typeof document === "undefined") return "none";
   const c = document.createElement("canvas");
   c.width = c.height = STAR_TILE;
@@ -35,6 +35,18 @@ function starTile(seed, count, maxSize, alpha) {
       glow.addColorStop(1, `rgba(${col},0)`);
       g.fillStyle = glow;
       g.fillRect(x - size * 2.5, y - size * 2.5, size * 5, size * 5);
+      // the brightest get four faint spikes, like a telescope photo
+      if (spikes && r() > 0.4) {
+        const len = size * (4 + r() * 4);
+        [[1, 0], [0, 1]].forEach(([dx, dy]) => {
+          const sg = g.createLinearGradient(x - dx * len, y - dy * len, x + dx * len, y + dy * len);
+          sg.addColorStop(0, `rgba(${col},0)`);
+          sg.addColorStop(0.5, `rgba(${col},${a * 0.55})`);
+          sg.addColorStop(1, `rgba(${col},0)`);
+          g.fillStyle = sg;
+          if (dx) g.fillRect(x - len, y - 0.5, len * 2, 1); else g.fillRect(x - 0.5, y - len, 1, len * 2);
+        });
+      }
     }
     g.fillStyle = `rgba(${col},${a})`;
     g.beginPath();
@@ -62,15 +74,16 @@ export const skyWash = (night) => night
   : "radial-gradient(120% 70% at 50% 0%, #FFFFFF 0%, #E6E9FA 62%)";
 
 let cache = {};
-// Nebula plus (at night) a near and a far layer of stars.
+// Nebula plus (at night) near, far and fine "dust" layers of stars.
 export function skyLayers(night) {
   const key = night ? "n" : "d";
   if (!cache[key]) {
     cache[key] = night
       ? [
           { image: nebulaTile(true), size: NEB_TILE },
-          { image: starTile(11, 90, 1.8, 0.95), size: STAR_TILE },
-          { image: starTile(29, 160, 1.4, 0.6), size: Math.round(STAR_TILE * 0.7) },
+          { image: starTile(11, 110, 2, 1, true), size: STAR_TILE },
+          { image: starTile(29, 220, 1.4, 0.7), size: Math.round(STAR_TILE * 0.7) },
+          { image: starTile(47, 420, 0.9, 0.45), size: Math.round(STAR_TILE * 0.55) },
         ]
       : [{ image: nebulaTile(false), size: NEB_TILE }];
   }

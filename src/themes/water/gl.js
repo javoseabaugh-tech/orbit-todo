@@ -78,12 +78,15 @@ export function loadTexture(gl, unit, url, opts, onLoad) {
 // in front. Keeps the canvas sized to its box, and drops the resolution if
 // the phone can't keep up. Returns a stop function that also frees the GPU
 // context (Todo sections remount the dial, and browsers cap live contexts).
-export function runScene(canvas, gl, draw) {
+// `scale` draws below screen resolution (fine for soft backgrounds) and
+// `interval` (seconds) redraws only that often, for very slow scenes.
+export function runScene(canvas, gl, draw, { scale = 1, interval = 0 } = {}) {
+  let since = Infinity;
   let quality = 1, slow = 0, frames = 0, raf = 0, last = performance.now(), T = 0;
   let visible = true, onScreen = true, stopped = false;
 
   const size = () => {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2) * quality;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2) * quality * scale;
     const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
     const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
     if (canvas.width !== w || canvas.height !== h) {
@@ -99,8 +102,12 @@ export function runScene(canvas, gl, draw) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     T = (T + dt * (reducedMotion ? 0.3 : 1)) % 1000;
-    size();
-    draw(dt, T);
+    since += dt;
+    if (since >= interval) {
+      since = 0;
+      size();
+      draw(dt, T);
+    }
     frames++;
     if (frames > 30) {
       slow = slow * 0.9 + (dt > 0.026 ? 0.1 : 0);

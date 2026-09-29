@@ -4,7 +4,7 @@ import { reminderHM, nowHM } from "../../dial/dates";
 import Dial from "../../dial/Dial";
 import { PLANET } from "./shaders";
 import { createScene, runScene, loadTexture } from "../water/gl";
-import { skyLayers, skyWash } from "./starfield";
+import SpaceSky from "./SpaceSky";
 import planetMap from "./planet.jpg";
 
 // The Space theme's version of the dial: a live gas giant floating among the
@@ -27,33 +27,6 @@ const PLANET_MAP = planetMap;
 
 const toMinutes = (hm) => { const [h, m] = hm.split(":").map(Number); return h * 60 + m; };
 const angleOf = (min) => ((min % 720) / 720) * Math.PI * 2; // 0 at 12, clockwise
-
-// The sky, drifting behind the home screen (this covers the still copy the
-// page itself draws). The nebula barely moves; the two star layers slide at
-// different speeds so they seem to sit at different depths, and the near
-// stars breathe slightly. Still for reduced motion.
-const DRIFT_CSS = `
-@keyframes spaceNeb { from { background-position: 0 0 } to { background-position: -900px 450px } }
-@keyframes spaceNear { from { background-position: 0 0 } to { background-position: -420px 210px } }
-@keyframes spaceFar { from { background-position: 0 0 } to { background-position: -294px 147px } }
-@keyframes spaceTwinkle { 0%, 100% { opacity: 1 } 50% { opacity: .7 } }
-@media (prefers-reduced-motion: reduce) { .space-drift { animation: none !important } }`;
-
-function Drift() {
-  const layers = skyLayers(prefersDarkDial);
-  const anim = ["spaceNeb 400s", "spaceNear 180s", "spaceFar 300s"];
-  return (
-    <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", overflow: "hidden", background: skyWash(prefersDarkDial) }}>
-      <style>{DRIFT_CSS}</style>
-      {layers.map((l, i) => (
-        <div key={i} className="space-drift" style={{
-          position: "absolute", inset: 0, backgroundImage: l.image, backgroundSize: `${l.size}px ${l.size}px`,
-          animation: `${anim[i]} linear infinite${i === 1 ? ", spaceTwinkle 7s ease-in-out infinite" : ""}`,
-        }} />
-      ))}
-    </div>
-  );
-}
 
 export default function SpaceDial({ todayTodos, isAssigned, onOpen }) {
   const canvasRef = useRef(null);
@@ -134,7 +107,7 @@ export default function SpaceDial({ todayTodos, isAssigned, onOpen }) {
   const textShadow = "0 1px 3px rgba(4,6,20,.7), 0 0 14px rgba(4,6,20,.5)";
   return (
     <>
-      <Drift />
+      <SpaceSky />
       <div style={{ position: "relative", height: HEIGHT, flexShrink: 0, margin: "4px 0 6px" }}>
         <canvas ref={canvasRef} aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }} />
 
