@@ -8,8 +8,10 @@ export const reducedMotion =
 
 // A context plus one full-screen program. Returns null when the phone can't
 // draw it (WebGL off, or the shader won't compile), so callers can fall back.
-export function createScene(canvas, fragmentSource, uniformNames) {
-  const gl = canvas.getContext("webgl", { antialias: false, alpha: false, powerPreference: "high-performance" });
+// With `alpha`, the shader writes premultiplied colour and the page shows
+// through wherever it leaves alpha at 0.
+export function createScene(canvas, fragmentSource, uniformNames, { alpha = false } = {}) {
+  const gl = canvas.getContext("webgl", { antialias: false, alpha, premultipliedAlpha: true, powerPreference: "high-performance" });
   if (!gl) return null;
   try {
     const compile = (type, src) => {

@@ -180,7 +180,7 @@ export default function TodoSection({ todos, assigneeOf, sharedFromOf, onToggle,
   );
   if (!WATER) return list;
 
-  // Water: the well stays put and only the list scrolls, over the moss below it.
+  // Water: the dial stays put and only the list scrolls under it.
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
       <Suspense fallback={null}>

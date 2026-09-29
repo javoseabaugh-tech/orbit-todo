@@ -52,24 +52,24 @@ reloads the app, the same way a system light/dark change does. Day and night
 follow the phone within every theme.
 
 A theme is more than colours: it can redraw the dial and the Nightly
-backdrop. Water (`src/themes/water/`) is a stone well on a forest floor seen
-from above: one full-screen Gemini photo per mode (`well-day.jpg`, and
-`well-night.jpg`, an edit of the same photo that lines up pixel for pixel),
-plus the Nightly scene. The home screen draws the photo with WebGL and
-computes only the water inside the photo's well, refracting the photo's own
-pebbles: the water rises as the day gets done, reminders are lily pads, a wet
-trail round the rim is the progress arc, and a pale pebble marks the time.
-The well's centre and radii are measured in `well.js`; if the photos change,
-measure again. Other screens show the photo's moss carpet only. It is loaded
-only for people using Water, pauses off screen and in the background, lowers
-its resolution on slow phones, slows for reduced motion, and falls back to
-the plain dial where WebGL isn't available.
+backdrop. Water (`src/themes/water/`) is a pool of light: every screen sits
+on a pale teal wash (deep blue at night) with soft light patterns, like sun
+on the floor of a pool, built from a small SVG tile with nothing to
+download (`caustics.js`); on the home screen they drift slowly. The dial is
+a disc of live water drawn with WebGL on a transparent canvas: it fills as
+the day gets done, reminders are lily pads, the ring round it is the
+progress arc with a chip for the time, and finishing the day makes it
+surge. Nightly keeps its animated forest-pool photo. The dial is loaded only
+for people using Water, pauses off screen and in the background, lowers its
+resolution on slow phones, slows for reduced motion, and falls back to the
+plain dial where WebGL isn't available.
 
 Adding the next theme: its palettes in `src/dial/tokens.js`, an entry in
 `src/themes/themeChoice.js`, and optionally its own dial and Nightly backdrop
-under `src/themes/<name>/`. Photoreal beats assembled: prefer one finished
-Gemini scene (and a matching night edit of it) that the code animates, over
-separate textures stacked on top of each other.
+under `src/themes/<name>/`. Keep it feeling like an app: we tried a
+full-screen photoreal scene for Water and it read as a place, not a tool.
+Designed, simplified surroundings with one live, detailed element (the
+water) worked better.
 
 ## Desktop layout (in scope, not started)
 

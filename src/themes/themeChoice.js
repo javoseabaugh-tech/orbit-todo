@@ -9,7 +9,7 @@ import { THEME_ID, THEME_IDS, THEME_KEY } from "../dial/tokens";
 
 export const THEME_OPTIONS = [
   { id: "space", label: "Space", blurb: "The original. Deep orbit, planets for reminders.", swatch: "linear-gradient(140deg, #1A2150, #6B7CFF 60%, #9A6BFF)" },
-  { id: "water", label: "Water", blurb: "A forest well that fills as your day gets done. Lily pads for reminders.", swatch: "linear-gradient(140deg, #0F2A2C, #1E6B6A 55%, #7FD8B0)" },
+  { id: "water", label: "Water", blurb: "A pool of light and water that fills as your day gets done. Lily pads for reminders.", swatch: "linear-gradient(140deg, #0F2A2C, #1E6B6A 55%, #7FD8B0)" },
 ];
 
 const settingsRef = (uid) => doc(db, "users", uid, "settings", "ui");

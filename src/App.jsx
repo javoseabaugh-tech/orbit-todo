@@ -567,7 +567,7 @@ function TodoApp({ user, access }) {
     <div className="orbit-shell" style={{
       position: "relative", overflow: "hidden", display: "flex", flexDirection: "column",
       background: pageBackground, color: D.text, fontFamily: FONT_BODY,
-      isolation: "isolate", // Water draws its scene just above this background
+      isolation: "isolate", // Water draws its moving background just above this one
     }}>
       <div style={{ flex: 1, minHeight: 0, width: "100%", maxWidth: 640, margin: "0 auto", display: "flex", flexDirection: "column" }}>
         <header style={{

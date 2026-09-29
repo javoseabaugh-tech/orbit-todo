@@ -1,29 +1,26 @@
 // GLSL for the Water theme. Written for WebGL 1 so it runs on every phone.
 //
-// WELL_SHADER draws the whole home screen: the forest photo (well-day.jpg or
-// well-night.jpg) fills the screen, and only the water inside the photo's
-// well is computed live: a calm uneven surface that refracts the photo's own
-// pebbles, murk that deepens toward the middle, reflections of the sky and
-// canopy, sparkle, ripples, lily pads for reminders, and the level rising as
-// the day gets done. The rim carries the progress channel and the now-chip.
-// Units: q is measured in well radii from the centre of the opening, y up.
+// DISC draws the home screen's dial: a round basin of live water floating
+// over the page, on a transparent canvas so the page's light patterns show
+// around it. The water fills the basin as the day gets done; it has a calm
+// uneven surface, light patterns and depth, a sheen of sky (the moon by
+// night), sparkle, ripples, lily pads for reminders and a surge when the day
+// is done. Round it runs the progress ring, with a chip for the current time.
+// Units: q is measured in basin radii from its centre, y up.
 //
 // NIGHTLY brings nightly.jpg to life: the water moves, the candle flickers,
 // fireflies drift and a tick sends a ripple out from the candle.
 
-export const WELL_SHADER = `
+export const DISC = `
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
 #else
 precision mediump float;
 #endif
-uniform vec2 RES; uniform vec4 IR; uniform vec3 WC; uniform vec2 RIMO; uniform float RO;
-uniform float T; uniform float LV; uniform float NT; uniform float SURGE; uniform float NOW;
+uniform vec2 C; uniform float RAD; uniform float T; uniform float LV; uniform float NT; uniform float SURGE; uniform float NOW;
 uniform vec3 RIP[8]; uniform vec4 MK[6];
-uniform sampler2D IMG; uniform sampler2D BLR;
 #define PI 3.14159265
-#define RCH 1.3
-float lum(vec3 c){return dot(c,vec3(.2126,.7152,.0722));}
+#define RR 1.17
 float RW; vec2 E; vec3 Ld; vec3 H;
 
 float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
@@ -36,135 +33,114 @@ float caustic(vec2 uv,float t){vec2 p=mod(uv*6.28318,6.28318)-250.;vec2 i=p;floa
   c+=1./length(vec2(p.x/(sin(i.x+tt)/inten),p.y/(cos(i.y+tt)/inten)));}
  c/=4.;c=1.17-pow(c,1.4);return pow(abs(c),8.);}
 
-// The photo, addressed in screen pixels (top-left origin) or in well units.
-vec2 uvPx(vec2 p){return clamp((p-IR.xy)/IR.zw,0.,1.);}
-vec2 uvQ(vec2 q){return uvPx(WC.xy+WC.z*vec2(q.x,-q.y));}
-// On a screen wider than the photo, its sides soften into a blurred, darker
-// continuation of the photo's own edge instead of stopping hard.
-vec3 photo(vec2 p){
- vec2 uv=(p-IR.xy)/IR.zw;float e=max(-uv.x,uv.x-1.)*IR.z/IR.w;
- vec3 c=texture2D(IMG,clamp(uv,0.,1.)).rgb;
- if(e>-.04){vec3 b=texture2D(BLR,clamp(uv,0.,1.),6.).rgb*mix(1.,.7,smoothstep(0.,.25,e));c=mix(c,b,smoothstep(-.04,.01,e));}
- return c;}
-
-vec2 padPos(vec4 m){float a=m.x;return E+RW*.7*vec2(sin(a),cos(a))+.02*vec2(sin(T*.5+a*3.),cos(T*.4+a*2.));}
+vec2 padPos(vec4 m){float a=m.x;return E+RW*.68*vec2(sin(a),cos(a))+.02*vec2(sin(T*.5+a*3.),cos(T*.4+a*2.));}
 float wh(vec2 q){
  vec2 s=q-E;float r=length(s);
- float h=.0075*noise(q*4.+T*vec2(.1,.035))+.004*noise(q*9.3-T*vec2(.06,.12))+.0015*noise(q*21.+T*vec2(.19,-.08));
+ float h=.007*noise(q*4.+T*vec2(.1,.035))+.004*noise(q*9.3-T*vec2(.06,.12))+.0015*noise(q*21.+T*vec2(.19,-.08));
  h+=SURGE*.016*sin(r*26.-T*6.)*exp(-r*2.2);
  for(int i=0;i<8;i++){vec3 k=RIP[i];float a=T-k.z;if(a>0.&&a<5.){float x=length(q-k.xy)-a*.45;h+=.024*sin(x*48.)*exp(-x*x*80.)*exp(-a*.9);}}
  for(int i=0;i<6;i++){vec4 m=MK[i];if(m.y>.01){float r2=length(q-padPos(m));h+=.003*m.y*sin(r2*70.-T*3.)*exp(-r2*9.);}}
  return h;}
 
+// Paints c with coverage k over what's there (premultiplied).
+void over(inout vec4 o,vec3 c,float k){o=vec4(c*k,k)+o*(1.-k);}
+
 void main(){
- vec2 p=vec2(gl_FragCoord.x,RES.y-gl_FragCoord.y);
- vec3 col=photo(p);
- vec2 q=vec2(p.x-WC.x,WC.y-p.y)/WC.z;float d=length(q);
- float dith=(hash(gl_FragCoord.xy+fract(T))-.5)/255.;
- if(d>RO+.08){gl_FragColor=vec4(col+dith,1.);return;}
- float aa=1.5/WC.z;
- RW=mix(.6,.995,LV);E=vec2(0.,-(1.-LV)*.05);
- Ld=mix(normalize(vec3(-.25,.35,.9)),normalize(vec3(-.55,.5,.65)),NT);H=normalize(Ld+vec3(0.,0.,1.));
- vec3 lc=mix(vec3(1.,.99,.96),vec3(.7,.8,1.),NT);   // light colour: overcast sky / moon
- vec2 s=q-E;float ds=length(s);
+ vec2 q=(gl_FragCoord.xy-C)/RAD;float d=length(q);
+ float aa=1.5/RAD;
+ vec4 o=vec4(0.);
+ if(d>RR+.12){gl_FragColor=o;return;}
+ RW=mix(.72,1.,LV);E=vec2(0.,-(1.-LV)*.04);
+ Ld=mix(normalize(vec3(-.35,.45,.82)),normalize(vec3(-.55,.5,.65)),NT);H=normalize(Ld+vec3(0.,0.,1.));
+ vec3 lc=mix(vec3(1.),vec3(.72,.82,1.),NT);
 
- // stones just above the waterline are wet: darker and a touch richer
- if(d<1.03){float wet=(1.-smoothstep(RW,RW+.08,ds))*smoothstep(RW-.01,RW+.01,ds);
-  col=mix(col,col*col*1.9,wet*.35)*(1.-.3*wet);}
+ // a soft shadow under the basin
+ float sd=length(q-vec2(.02,-.05));
+ o.a=mix(.16,.4,NT)*smoothstep(1.13,.94,sd);
 
- if(ds<RW+.03){
-  float e=.004;float h0=wh(q);
-  vec2 g=vec2(wh(q+vec2(e,0.))-h0,wh(q+vec2(0.,e))-h0)/e;
-  vec3 n=normalize(vec3(-g,1.));
-  float bowl=sqrt(max(1.-ds*ds/(RW*RW),0.));
-  float depth=(.06+.14*LV)*(.25+.75*bowl);
-  vec2 fq=q+n.xy*(depth*1.4+.01);
-  vec3 sharp=texture2D(IMG,uvQ(fq)).rgb;
-  vec3 soft=texture2D(BLR,uvQ(fq),1.+depth*16.).rgb;
-  vec3 fl=mix(sharp,soft,smoothstep(.05,.18,depth));
-  fl=max(mix(vec3(lum(fl)),fl,1.05),0.)*.85;   // wet pebbles: a little deeper
-  // soft light patterns on the floor, strongest in the shallows
-  float cs=caustic(fq*.6+(vec2(noise(fq*3.),noise(fq*3.+9.))-.5)*.25,T*.3);
-  fl*=1.+cs*mix(.4,.1,NT)*(1.-.7*smoothstep(.06,.18,depth));
-  // pads shade the floor under them
-  for(int i=0;i<6;i++){vec4 m=MK[i];if(m.y>.01){float sd=length(fq-padPos(m)-Ld.xy*depth*.4);fl*=1.-.5*m.y*smoothstep(.22,.14,sd);}}
-  // murk: tea-coloured forest water, darker toward the middle
-  vec3 tr=exp(-vec3(1.55,1.5,2.3)*depth*mix(8.,4.,NT));
-  vec3 deep=mix(vec3(.05,.052,.035),vec3(.004,.008,.01),NT);
-  vec3 wc=fl*tr+deep*(1.-tr);
-  // the wall shades the water on the side the light comes from
-  float ws=smoothstep(.5,.97,ds/RW)*max(dot(normalize(s+1e-4),normalize(Ld.xy)),0.);
-  wc*=1.-mix(.3,.55,NT)*ws;
-  // reflection: sky between the leaves of the canopy overhead
-  vec3 R=reflect(vec3(0.,0.,-1.),n);
-  vec2 rq=q*.55+R.xy*3.;
-  float cl=fbm3(rq*1.3+vec2(T*.008,0.));
-  vec3 sky=mix(mix(vec3(.62,.66,.68),vec3(.84,.86,.87),smoothstep(.35,.75,cl)),vec3(.07,.09,.13)+vec3(.05,.06,.08)*cl,NT);
-  sky*=.8+.35*clamp(dot(rq,normalize(Ld.xy))*.9+.5,0.,1.);   // brighter toward the light
-  float can=smoothstep(.52,.66,fbm3(rq*.9+3.7)+.3*smoothstep(RW*.4,RW,ds));
-  vec3 canopy=mix(vec3(.05,.07,.045),vec3(.004,.006,.008),NT)*(.8+.4*noise(rq*14.));
-  vec3 refl=mix(sky,canopy,can);
-  float fres=clamp(mix(.13,.2,NT)+(1.-n.z)*9.,0.,.5);
-  wc=mix(wc,refl,fres);
-  // the moon, wavering with the surface
-  vec2 mq=q-vec2(-.26,.24)+R.xy*.22;
-  wc+=NT*(1.-can*.7)*(vec3(.85,.9,1.)*smoothstep(.034,.024,length(mq))*.8+vec3(.4,.5,.7)*exp(-dot(mq,mq)*60.)*.22+vec3(.3,.4,.6)*exp(-dot(mq,mq)*10.)*.12);
-  // sparkle on tiny ripples, and a broad sheen
-  vec2 mg=(vec2(noise(q*85.+T*1.6),noise(q*85.+37.-T*1.4))-.5)*.22;
-  float nh=max(dot(n,H),0.),ns=max(dot(normalize(n+vec3(mg,0.)),H),0.);
-  wc+=lc*(pow(ns,600.)*mix(1.4,2.2,NT)+pow(nh,30.)*mix(.05,.04,NT))*(1.-can*.5);
-  // meniscus: a thin bright lip and a dark contact line
-  float lip=exp(-pow((RW-ds)/.008,2.));
-  wc=mix(wc,wc*.6,smoothstep(RW-.05,RW,ds)*.6)+lc*lip*mix(.16,.08,NT);
-  // lily pads: glossy, with a slit, veins, a lifted rim and a flower
-  for(int i=0;i<6;i++){vec4 m=MK[i];if(m.y>.01){
-   vec2 pq=q-padPos(m);float sc=.6+.4*m.y;float pr=.17*sc;float pd=length(pq);
-   wc*=1.-.35*m.y*smoothstep(pr+.03,pr-.01,length(pq-Ld.xy*.035));
-   float ang=atan(pq.x,pq.y)-m.x*1.7-.4;float an=abs(atan(sin(ang),cos(ang)));
-   float notch=smoothstep(.2,.16,an)*step(pr*.06,pd);
-   float edge=pr*(1.+.03*sin(ang*7.+m.x*5.));
-   float mask=smoothstep(edge,edge-aa,pd)*(1.-notch)*smoothstep(0.,.3,m.y);
-   vec3 pc=mix(vec3(.12,.19,.07),vec3(.22,.3,.11),fbm3(pq*40.+m.x));
-   pc*=1.-.18*smoothstep(.9,1.,abs(cos(ang*11.)))*smoothstep(pr*.1,pr*.3,pd);
-   pc=mix(pc,pc*1.35+vec3(.02,.02,0.),smoothstep(pr*.82,pr*.97,pd));
-   vec3 pn=normalize(vec3(pq/pr*.35*smoothstep(pr*.6,pr,pd),1.));
-   vec3 pl=pc*mix(1.,.42,NT)*(.7+.45*max(dot(pn,Ld),0.));
-   pl=mix(pl,refl,.1)+lc*pow(max(dot(pn,H),0.),60.)*mix(.12,.1,NT);
-   float fa=atan(pq.x,pq.y);float flr=.05*sc*(.72+.28*abs(cos(fa*4.+m.x)));
-   float flower=smoothstep(flr,flr-aa,pd);
-   vec3 lot=mix(vec3(.96,.93,.93),mix(vec3(.9,.6,.7),vec3(.96,.76,.4),m.z),smoothstep(0.,flr,pd)*.8);
-   lot=mix(vec3(.98,.82,.32),lot,smoothstep(.008,.013,pd));
-   lot*=mix(1.,.6,NT)*(.8+.3*max(dot(normalize(vec3(pq*3.,1.)),Ld),0.));
-   pl=mix(pl,lot,flower);
-   wc=mix(wc,pl,mask);
-  }}
-  col=mix(col,wc,smoothstep(RW+aa,RW-aa,ds+h0*.5));
+ // the progress ring, filling clockwise from 12, and the now-chip on it
+ float fr=fract(atan(q.x,q.y)/(2.*PI));
+ float rw=.024,gd=abs(d-RR);
+ over(o,mix(vec3(.83,.88,.87),vec3(.16,.22,.26),NT),smoothstep(rw+aa,rw-aa,gd));
+ float fa=fr*2.*PI,la=LV*2.*PI;
+ float capA=length(q-RR*vec2(sin(0.),cos(0.))),capB=length(q-RR*vec2(sin(la),cos(la)));
+ float on=max(step(fr,LV)*smoothstep(rw+aa,rw-aa,gd),max(smoothstep(rw+aa,rw-aa,capA),smoothstep(rw+aa,rw-aa,capB)))*step(.001,LV);
+ vec3 rc=mix(vec3(.106,.541,.549),vec3(.486,.788,.878),NT);
+ over(o,rc,on);
+ float glow=exp(-pow(length(q-RR*vec2(sin(la),cos(la)))/.07,2.))*step(.001,LV)*step(LV,.999);
+ o.rgb+=rc*glow*.25*o.a;
+ vec2 np=RR*vec2(sin(NOW),cos(NOW));
+ over(o,mix(vec3(.059,.129,.141),vec3(.89,.93,.94),NT),smoothstep(.052,.052-aa,length(q-np)));
+
+ if(d<1.+aa){
+  // the empty basin: a pale floor with faint light on it, and a thin lip
+  vec3 fl=mix(vec3(.8,.9,.88),vec3(.06,.14,.19),NT);
+  fl*=1.-mix(.12,.25,NT)*smoothstep(.5,1.,d)*max(dot(normalize(q+1e-4),normalize(Ld.xy)),0.);
+  fl+=mix(.12,.03,NT)*caustic(q*.7,T*.25);
+  vec3 col=fl;
+  vec2 s=q-E;float ds=length(s);
+  if(ds<RW+.03){
+   float e=.004;float h0=wh(q);
+   vec2 g=vec2(wh(q+vec2(e,0.))-h0,wh(q+vec2(0.,e))-h0)/e;
+   vec3 n=normalize(vec3(-g,1.));
+   float bowl=sqrt(max(1.-ds*ds/(RW*RW),0.));
+   float dep=(.35+.65*LV)*(.45+.55*bowl);
+   vec2 fq=q+n.xy*(.05+dep*.12);
+   // the water's own colour: lighter toward the light, deep at the edges
+   float gg=length(fq-vec2(-.16,.2))/1.25;
+   vec3 w1=mix(vec3(.478,.796,.769),vec3(.122,.337,.439),NT);
+   vec3 w2=mix(vec3(.2,.604,.612),vec3(.067,.196,.275),NT);
+   vec3 w3=mix(vec3(.106,.416,.463),vec3(.031,.114,.165),NT);
+   vec3 wc=mix(mix(w1,w2,smoothstep(0.,.55,gg)),w3,smoothstep(.55,1.,gg));
+   wc*=mix(1.12,.9,dep);
+   // light patterns through it, strongest where it's shallow
+   float cs=caustic(fq*.75+(vec2(noise(fq*3.),noise(fq*3.+9.))-.5)*.2,T*.32);
+   wc+=lc*cs*mix(.32,.07,NT)*mix(1.,.55,dep);
+   for(int i=0;i<6;i++){vec4 m=MK[i];if(m.y>.01){float pd=length(fq-padPos(m)-Ld.xy*.05);wc*=1.-.3*m.y*smoothstep(.2,.13,pd);}}
+   // a sheen of sky, stronger where the surface tilts
+   vec3 R=reflect(vec3(0.,0.,-1.),n);
+   float cl=fbm3((q*.5+R.xy*2.5)*1.3+vec2(T*.01,0.));
+   vec3 sky=mix(vec3(.92,.97,.97),vec3(.08,.12,.2),NT)*(.85+.3*cl);
+   float fres=clamp(.04+(1.-n.z)*8.,0.,.4);
+   wc=mix(wc,sky,fres);
+   vec2 sh=mat2(.848,.53,-.53,.848)*(q-vec2(-.35,.42));
+   wc+=lc*exp(-dot(sh*vec2(1.,3.),sh*vec2(1.,3.))*4.)*mix(.16,.04,NT);
+   // the moon
+   vec2 mq=q-vec2(-.28,.32)+R.xy*.22;
+   wc+=NT*(vec3(.86,.9,1.)*smoothstep(.07,.05,length(mq))*.85+vec3(.35,.45,.65)*exp(-dot(mq,mq)*40.)*.25);
+   // sparkle and a broad sheen
+   vec2 mg=(vec2(noise(q*85.+T*1.6),noise(q*85.+37.-T*1.4))-.5)*.22;
+   float nh=max(dot(n,H),0.),ns=max(dot(normalize(n+vec3(mg,0.)),H),0.);
+   wc+=lc*(pow(ns,600.)*mix(1.2,2.,NT)+pow(nh,30.)*.04);
+   // meniscus: a bright lip at the water's edge
+   wc+=lc*exp(-pow((RW-ds)/.01,2.))*mix(.22,.1,NT);
+   wc=mix(wc,wc*.8,smoothstep(RW-.06,RW,ds)*.5);
+   // lily pads
+   for(int i=0;i<6;i++){vec4 m=MK[i];if(m.y>.01){
+    vec2 pq=q-padPos(m);float sc=.6+.4*m.y;float pr=.17*sc;float pd=length(pq);
+    wc*=1.-.28*m.y*smoothstep(pr+.03,pr-.01,length(pq-Ld.xy*.04));
+    float ang=atan(pq.x,pq.y)-m.x*1.7-.4;float an=abs(atan(sin(ang),cos(ang)));
+    float notch=smoothstep(.2,.16,an)*step(pr*.06,pd);
+    float mask=smoothstep(pr,pr-aa,pd)*(1.-notch)*smoothstep(0.,.3,m.y);
+    vec3 pc=mix(vec3(.3,.54,.22),vec3(.4,.64,.28),fbm3(pq*40.+m.x))*mix(1.,.5,NT);
+    pc*=1.-.12*smoothstep(.9,1.,abs(cos(ang*11.)))*smoothstep(pr*.1,pr*.3,pd);
+    pc=mix(pc,pc*1.2,smoothstep(pr*.8,pr*.97,pd));
+    vec3 pn=normalize(vec3(pq/pr*.35*smoothstep(pr*.6,pr,pd),1.));
+    pc=pc*(.8+.3*max(dot(pn,Ld),0.))+lc*pow(max(dot(pn,H),0.),60.)*.08;
+    float fa2=atan(pq.x,pq.y);float flr=.05*sc*(.72+.28*abs(cos(fa2*4.+m.x)));
+    vec3 lot=mix(vec3(.97,.94,.94),mix(vec3(.96,.72,.8),vec3(.96,.8,.45),m.z),smoothstep(0.,flr,pd)*.8);
+    lot=mix(vec3(.98,.82,.32),lot,smoothstep(.008,.013,pd))*mix(1.,.6,NT);
+    pc=mix(pc,lot,smoothstep(flr,flr-aa,pd));
+    wc=mix(wc,pc,mask);
+   }}
+   col=mix(col,wc,smoothstep(RW+aa,RW-aa,ds+h0*.5));
+  }
+  // the basin's lip
+  col=mix(col,mix(vec3(1.),vec3(.63,.82,.94),NT),exp(-pow((1.-d)/.012,2.))*mix(.45,.2,NT));
+  over(o,col,smoothstep(1.+aa,1.-aa,d));
  }
-
- // the progress channel: water running round the rim from 12, wetting the
- // stones it has reached, with a bright leading edge
- vec2 qr=q-RIMO;float dr=length(qr);
- if(dr>1.05&&dr<RO-.05){
-  float fr=fract(atan(qr.x,qr.y)/(2.*PI));
-  float rc=RCH+.012*sin(fr*31.4159+1.3)+.012*(noise(vec2(fr*46.,.5))-.5);
-  float across=(dr-rc)/.042;
-  float band=exp(-across*across*1.6)*(.85+.3*noise(vec2(fr*90.,across*2.)));
-  float fill=smoothstep(LV+.003,LV-.003,fr)*step(.0001,LV);
-  float st=noise(vec2(fr*170.-T*2.2,across*2.5))*.6+noise(vec2(fr*360.-T*3.6,across))*.4;
-  float core=exp(-across*across*5.);
-  vec3 wetc=col*.42+mix(vec3(.42,.58,.62),vec3(.2,.34,.52),NT)*core*(.7+.6*st);
-  wetc+=lc*pow(st,4.)*mix(1.,1.1,NT)*core;
-  wetc+=mix(vec3(.72,.9,.95),vec3(.5,.75,1.),NT)*exp(-across*across*14.)*mix(.35,.4,NT);   // a thin bright thread of water
-  col=mix(col,wetc,fill*clamp(band,0.,1.));
-  col+=mix(vec3(.75,.95,1.),vec3(.5,.8,1.),NT)*exp(-pow((fr-LV)*dr*2.*PI/.03,2.))*exp(-across*across*3.)*mix(.8,.9,NT)*step(.001,LV);
-  // now: a small pale pebble sitting in the groove
-  vec2 np=RIMO+(RCH+.012*sin(NOW/(2.*PI)*31.4159+1.3))*vec2(sin(NOW),cos(NOW));vec2 nq=q-np;float nd=length(nq*vec2(1.,1.15));
-  col*=1.-.45*smoothstep(.055,.035,length(nq+Ld.xy*.02));
-  vec3 nn=normalize(vec3(nq/.042*.8,1.));
-  vec3 pc=mix(vec3(.86,.85,.8),vec3(.62,.68,.78),NT)*mix(1.,.55,NT)*(.55+.55*max(dot(nn,Ld),0.))+lc*pow(max(dot(nn,H),0.),40.)*.25;
-  col=mix(col,pc,smoothstep(.042,.042-aa,nd));
- }
- gl_FragColor=vec4(col+dith,1.);
+ o.rgb+=(hash(gl_FragCoord.xy+fract(T))-.5)/255.*o.a;
+ gl_FragColor=o;
 }`;
 
 export const NIGHTLY = `
