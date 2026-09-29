@@ -5,6 +5,7 @@ import Dial from "../../dial/Dial";
 import { PLANET } from "./shaders";
 import { createScene, runScene, loadTexture } from "../water/gl";
 import { skyLayers, skyWash } from "./starfield";
+import planetMap from "./planet.jpg";
 
 // The Space theme's version of the dial: a live gas giant floating among the
 // stars. Same job as Dial.jsx: the middle says how many of today's todos are
@@ -20,9 +21,9 @@ const RF = 0.3; // planet radius as a share of the box's shorter side (orbit at 
 const RR = 1.42;
 const MAX_MOONS = 6;
 
-// Drop a Gemini surface map at src/themes/space/planet.jpg and list it here;
-// until then the shader draws the surface itself.
-const PLANET_MAP = null;
+// The planet's surface: a Gemini map, edges blended so it wraps without a
+// seam. Until it loads the shader draws a stand-in surface.
+const PLANET_MAP = planetMap;
 
 const toMinutes = (hm) => { const [h, m] = hm.split(":").map(Number); return h * 60 + m; };
 const angleOf = (min) => ((min % 720) / 720) * Math.PI * 2; // 0 at 12, clockwise

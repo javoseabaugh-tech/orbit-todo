@@ -139,3 +139,48 @@ void main(){
  o.rgb+=(hash(gl_FragCoord.xy+fract(T))-.5)/255.*o.a;
  gl_FragColor=o;
 }`;
+
+// NIGHTLY_SKY brings nightly.jpg (the Milky Way over an observatory) to life:
+// stars twinkle, the dome's light breathes, a shooting star crosses now and
+// then on its own, and SS (start x, start y, start time) launches one on
+// each tick. uv is the photo's own coordinates, y down.
+export const NIGHTLY_SKY = `
+precision mediump float;
+uniform sampler2D IMG; uniform vec2 RES; uniform float T; uniform float IA; uniform vec3 SS;
+float h1(float n){return fract(sin(n)*43758.5453);}
+float h2(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+// A streak from p along dir, age a seconds, over about 1.1s.
+float streak(vec2 uv,vec2 p,vec2 dir,float a){
+ if(a<0.||a>1.1)return 0.;
+ vec2 head=p+dir*a*.55;
+ vec2 d=(uv-head)*vec2(1.,1./IA);vec2 dr=normalize(dir*vec2(1.,1./IA));
+ float along=dot(d,-dr);float across=length(d+dr*along);
+ float len=.16*min(a*4.,1.);
+ float k=step(0.,along)*step(along,len)*(1.-along/len)*exp(-across*across*6e5);
+ k+=exp(-dot(d,d)*4e4);
+ return k*smoothstep(1.1,.6,a);}
+void main(){
+ vec2 s=gl_FragCoord.xy/RES;float ca=RES.x/RES.y;
+ vec2 uv=vec2(s.x,1.-s.y);
+ if(ca>IA){uv.y=.5+(uv.y-.5)*IA/ca;}else{uv.x=.5+(uv.x-.5)*ca/IA;}
+ vec3 c=texture2D(IMG,uv).rgb;
+ float sky=1.-smoothstep(.55,.61,uv.y);
+ // twinkle: stars are pixels brighter than their neighbourhood; each small
+ // patch of sky gets its own slow flicker
+ vec2 o1=vec2(.004,0.),o2=vec2(0.,.004*IA);
+ vec3 bl=(texture2D(IMG,uv+o1).rgb+texture2D(IMG,uv-o1).rgb+texture2D(IMG,uv+o2).rgb+texture2D(IMG,uv-o2).rgb)*.25;
+ float star=max(dot(c-bl,vec3(.33)),0.);
+ vec2 cell=floor(uv*vec2(180.,180./IA));
+ float tw=sin(T*(1.2+2.6*h2(cell))+h2(cell+7.)*6.28);
+ c+=vec3(star)*tw*.9*sky;
+ // the observatory's light breathes
+ vec2 dp=(uv-vec2(.505,.563))*vec2(1.,1./IA);
+ c+=vec3(1.,.72,.42)*exp(-dot(dp,dp)*2500.)*(.07+.04*sin(T*.6));
+ // shooting stars: one on each tick, and one every so often on their own
+ vec2 dir=normalize(vec2(-.85,.5));
+ float k=streak(uv,SS.xy,dir,T-SS.z);
+ float slot=floor(T/23.);float at=T-slot*23.-6.;
+ k+=streak(uv,vec2(.45+.45*h1(slot),.06+.25*h1(slot+9.)),dir,at)*.8;
+ c+=vec3(.9,.94,1.)*k*sky;
+ gl_FragColor=vec4(c,1.);
+}`;

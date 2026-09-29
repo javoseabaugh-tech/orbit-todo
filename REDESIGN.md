@@ -70,8 +70,10 @@ download), drifting in two depths on the home screen. The dial is a live gas
 giant on a transparent canvas: the sun comes round it as the day gets done
 (crescent to full), its orbit is the progress ring with a chip for the time,
 reminders are moons at their hour that break orbit when ticked, and
-finishing the day brings a sunrise flare. The surface is drawn in code until
-a Gemini surface map is added (`PLANET_MAP` in `SpaceDial.jsx`).
+finishing the day brings a sunrise flare. Its surface is a Gemini map
+(`planet.jpg`, edges blended so it wraps without a seam). Nightly shows a
+Gemini Milky Way over an observatory, alive: twinkling stars, a breathing
+dome light, a shooting star now and then and one on every tick.
 
 Adding the next theme: its palettes in `src/dial/tokens.js`, an entry in
 `src/themes/themeChoice.js`, and optionally its own dial and Nightly backdrop

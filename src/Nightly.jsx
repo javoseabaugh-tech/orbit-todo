@@ -8,10 +8,14 @@ import { db } from "./firebase";
 import { StreakStrip, TomorrowPlan, TestNudge } from "./dial/NightlyExtras";
 import { THEME_ID, FONT_DISPLAY } from "./dial/tokens";
 
-// The Water theme puts a living photo behind this screen (and the photo's own
-// moon stands in for the moon badge). Loaded only for people using Water.
+// Each theme puts a living photo behind this screen: Water's forest pool (its
+// own moon stands in for the moon badge) and Space's Milky Way over an
+// observatory. Only the chosen theme's backdrop is downloaded.
 const WATER = THEME_ID === "water";
-const NightlyWater = lazy(() => import("./themes/water/NightlyWater"));
+const LIVE = WATER || THEME_ID === "space";
+const Backdrop = WATER
+  ? lazy(() => import("./themes/water/NightlyWater"))
+  : lazy(() => import("./themes/space/NightlySpace"));
 
 // Build-time constant: false in the live build, so the staging test tool is
 // dropped from the live bundle entirely.
@@ -405,7 +409,7 @@ export default function Nightly({ uid, onBack, plan, household = false, myName =
   }
 
   async function toggleDone(item) {
-    if (WATER) setRipple((n) => n + 1);
+    if (LIVE) setRipple((n) => n + 1);
     const ref = doc(db, ...base(item.scope), "nightly", item.id);
     if (item.scope === "house") {
       // Shared items remember who ticked them, so the other person can see.
@@ -544,14 +548,14 @@ export default function Nightly({ uid, onBack, plan, household = false, myName =
       style={{
         position: "relative", zIndex: 2, overflow: "hidden",
         display: "flex", flexDirection: "column",
-        background: WATER ? "#050c0e" : NIGHT.bg, color: NIGHT.text,
+        background: LIVE ? "#05070d" : NIGHT.bg, color: NIGHT.text,
         fontFamily: "'Geist', system-ui, sans-serif",
         animation: `screenIn .5s ${EASE_OUT}`,
       }}
     >
-      {WATER && (
+      {LIVE && (
         <Suspense fallback={null}>
-          <NightlyWater ripple={ripple} />
+          <Backdrop ripple={ripple} tick={ripple} />
         </Suspense>
       )}
       <div style={{
@@ -582,7 +586,7 @@ export default function Nightly({ uid, onBack, plan, household = false, myName =
 
         <div style={{ flexShrink: 0, textAlign: "center", marginBottom: 18 }}>
           <div style={{
-            fontFamily: WATER ? FONT_DISPLAY : "'Bricolage Grotesque', system-ui, sans-serif",
+            fontFamily: LIVE ? FONT_DISPLAY : "'Bricolage Grotesque', system-ui, sans-serif",
             fontSize: 26, fontWeight: 600, letterSpacing: "-.03em",
             color: NIGHT.textBright,
           }}>
@@ -620,7 +624,7 @@ export default function Nightly({ uid, onBack, plan, household = false, myName =
         )}
 
         {tonight.length > 0 && (
-          <div style={WATER ? {
+          <div style={LIVE ? {
             // Over the photo: the same framed panel as "Set up tomorrow", with
             // enough shade behind it that tonight's items read clearly.
             padding: "4px 16px", borderRadius: 20, border: `1px solid ${NIGHT.border}`,
