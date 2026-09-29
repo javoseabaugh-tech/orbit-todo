@@ -30,15 +30,24 @@ function padPos(a, level, T) {
   return [ex + r * Math.sin(a) + 0.02 * Math.sin(T * 0.5 + a * 3), ey + r * Math.cos(a) + 0.02 * Math.cos(T * 0.4 + a * 2)];
 }
 
-// The page's light patterns, drifting slowly behind the home screen (this
-// covers the still copy the page itself draws).
+// The page's light patterns, moving very softly behind the home screen (this
+// covers the still copy the page itself draws). Each of the two layers drifts
+// slowly and also sways: a small, slow swell in position, size and angle, on
+// its own cycle, so the light shapes seem to shift and re-form like water
+// rather than scroll. Still for reduced motion.
 const DRIFT_CSS = `
 @keyframes waterDriftA { from { background-position: 0 0 } to { background-position: 360px 720px } }
 @keyframes waterDriftB { from { background-position: 0 0 } to { background-position: -522px 522px } }
+@keyframes waterSwayA { 0%, 100% { transform: translate(0, 0) scale(1.06) rotate(0deg) } 50% { transform: translate(14px, -10px) scale(1.1) rotate(1.2deg) } }
+@keyframes waterSwayB { 0%, 100% { transform: translate(0, 0) scale(1.09) rotate(0deg) } 50% { transform: translate(-12px, 12px) scale(1.05) rotate(-1deg) } }
 @media (prefers-reduced-motion: reduce) { .water-drift { animation: none !important } }`;
 
 function Drift() {
   const [a, b] = causticLayers(prefersDarkDial);
+  const sway = (name, secs) => ({
+    position: "absolute", inset: "-10%", willChange: "transform",
+    animation: `${name} ${secs}s ease-in-out infinite`,
+  });
   const layer = (l, name, secs) => ({
     position: "absolute", inset: 0, backgroundImage: l.image, backgroundSize: `${l.size}px ${l.size}px`,
     animation: `${name} ${secs}s linear infinite`,
@@ -46,8 +55,12 @@ function Drift() {
   return (
     <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: -1, pointerEvents: "none", overflow: "hidden", background: causticWash(prefersDarkDial) }}>
       <style>{DRIFT_CSS}</style>
-      <div className="water-drift" style={layer(a, "waterDriftA", 140)} />
-      <div className="water-drift" style={layer(b, "waterDriftB", 190)} />
+      <div className="water-drift" style={sway("waterSwayA", 17)}>
+        <div className="water-drift" style={layer(a, "waterDriftA", 140)} />
+      </div>
+      <div className="water-drift" style={sway("waterSwayB", 23)}>
+        <div className="water-drift" style={layer(b, "waterDriftB", 190)} />
+      </div>
     </div>
   );
 }
