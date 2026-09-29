@@ -63,7 +63,7 @@ void main(){
  float dith=(hash(gl_FragCoord.xy+fract(T))-.5)/255.;
  if(d>RO+.08){gl_FragColor=vec4(col+dith,1.);return;}
  float aa=1.5/WC.z;
- RW=mix(.6,.975,LV);E=vec2(0.,-(1.-LV)*.05);
+ RW=mix(.6,.995,LV);E=vec2(0.,-(1.-LV)*.05);
  Ld=mix(normalize(vec3(-.25,.35,.9)),normalize(vec3(-.55,.5,.65)),NT);H=normalize(Ld+vec3(0.,0.,1.));
  vec3 lc=mix(vec3(1.,.99,.96),vec3(.7,.8,1.),NT);   // light colour: overcast sky / moon
  vec2 s=q-E;float ds=length(s);
@@ -147,15 +147,16 @@ void main(){
  if(dr>1.05&&dr<RO-.05){
   float fr=fract(atan(qr.x,qr.y)/(2.*PI));
   float rc=RCH+.012*sin(fr*31.4159+1.3)+.012*(noise(vec2(fr*46.,.5))-.5);
-  float across=(dr-rc)/.032;
+  float across=(dr-rc)/.042;
   float band=exp(-across*across*1.6)*(.85+.3*noise(vec2(fr*90.,across*2.)));
   float fill=smoothstep(LV+.003,LV-.003,fr)*step(.0001,LV);
   float st=noise(vec2(fr*170.-T*2.2,across*2.5))*.6+noise(vec2(fr*360.-T*3.6,across))*.4;
   float core=exp(-across*across*5.);
-  vec3 wetc=col*.5+mix(vec3(.3,.37,.39),vec3(.11,.16,.24),NT)*core*(.55+.6*st);
-  wetc+=lc*pow(st,6.)*mix(.8,.9,NT)*core;
+  vec3 wetc=col*.42+mix(vec3(.42,.58,.62),vec3(.2,.34,.52),NT)*core*(.7+.6*st);
+  wetc+=lc*pow(st,4.)*mix(1.,1.1,NT)*core;
+  wetc+=mix(vec3(.72,.9,.95),vec3(.5,.75,1.),NT)*exp(-across*across*14.)*mix(.35,.4,NT);   // a thin bright thread of water
   col=mix(col,wetc,fill*clamp(band,0.,1.));
-  col+=mix(vec3(.75,.95,1.),vec3(.5,.8,1.),NT)*exp(-pow((fr-LV)*dr*2.*PI/.03,2.))*exp(-across*across*3.)*mix(.4,.5,NT)*step(.001,LV);
+  col+=mix(vec3(.75,.95,1.),vec3(.5,.8,1.),NT)*exp(-pow((fr-LV)*dr*2.*PI/.03,2.))*exp(-across*across*3.)*mix(.8,.9,NT)*step(.001,LV);
   // now: a small pale pebble sitting in the groove
   vec2 np=RIMO+(RCH+.012*sin(NOW/(2.*PI)*31.4159+1.3))*vec2(sin(NOW),cos(NOW));vec2 nq=q-np;float nd=length(nq*vec2(1.,1.15));
   col*=1.-.45*smoothstep(.055,.035,length(nq+Ld.xy*.02));
