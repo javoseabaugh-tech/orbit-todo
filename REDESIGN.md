@@ -71,7 +71,10 @@ wet sand.
 
 Space (`src/themes/space/`) is built the same way: every screen sits on a
 starfield with faint nebula drawn in code (`starfield.js`, nothing to
-download), and on the home screen a live nebula (`SpaceSky.jsx`: violet, magenta and teal
+download), and on the home screen a view from orbit: a near world's curved edge crosses
+just below the dial and the list sits on its surface (night side with faint
+city lights, a glowing band of atmosphere, aurora rippling above it and a
+sunrise at one end; sunlit and cloudy by day), under a live nebula (`SpaceSky.jsx`: violet, magenta and teal
 clouds, a dusty band across the sky) under crisp stars that drift at three
 depths and twinkle, with the odd shooting star. The dial is a live gas
 giant on a transparent canvas: the sun comes round it as the day gets done

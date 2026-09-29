@@ -241,3 +241,75 @@ void main(){
  col+=(hash(gl_FragCoord.xy+fract(T))-.5)/255.;
  gl_FragColor=vec4(col,1.);
 }`;
+
+// HORIZON is the near world under the Space home screen, seen from orbit:
+// its curved edge crosses just below the planet dial (HY, CSS px from the
+// top) and the todo list sits on its surface. By night the surface is dark
+// with faint city lights; a thin band of atmosphere glows along the edge,
+// aurora curtains ripple above it, and a sunrise burns at the right-hand end.
+// By day the world is sunlit, pale and cloudy, under a soft blue haze.
+// Transparent above the edge (premultiplied), so the nebula shows through.
+// x and y are CSS px, y down.
+export const HORIZON = `
+precision mediump float;
+uniform vec2 RES; uniform float T; uniform float NT; uniform float HY; uniform float PX;
+float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
+float noise(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);
+ return mix(mix(hash(i),hash(i+vec2(1.,0.)),u.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),u.x),u.y);}
+const mat2 M2=mat2(1.6,1.2,-1.2,1.6);
+float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<4;i++){v+=a*noise(p);p=M2*p;a*=.5;}return v;}
+void main(){
+ float W=RES.x/PX;
+ float x=gl_FragCoord.x/PX,y=(RES.y-gl_FragCoord.y)/PX;
+ float Rw=W*2.4;
+ vec2 cen=vec2(W*.5,HY+Rw);
+ float d=length(vec2(x,y)-cen)-Rw; // < 0 inside the world
+ // where along the horizon: -1 left edge .. 1 right edge
+ float hx=(x-W*.5)/(W*.5);
+ vec4 o=vec4(0.);
+ float sun=exp(-pow((hx-.95)/.35,2.));
+
+ if(d<1.){
+  float depth=-d;
+  vec2 sp=vec2(x,y)*.012+vec2(T*.002,0.);
+  float land=fbm(sp);
+  vec3 c;
+  if(NT>.5){
+   c=mix(vec3(.012,.016,.035),vec3(.03,.038,.07),smoothstep(.35,.7,land));
+   // city lights: small warm clusters on the land, twinkling a little
+   vec2 g=floor(vec2(x,y)/1.6);
+   float lit=step(.993,hash(g))*smoothstep(.52,.64,land)*smoothstep(.5,.75,noise(vec2(x,y)*.03));
+   c+=vec3(1.,.72,.38)*lit*(.6+.4*sin(T*2.+hash(g+3.)*6.28))*.7*smoothstep(0.,30.,depth)*exp(-depth/260.);
+   // airglow and aurora light spilling onto the ground near the edge
+   c+=vec3(.1,.35,.3)*exp(-depth/28.)*.35;
+   c+=vec3(1.,.55,.3)*sun*exp(-depth/40.)*.35;
+  }else{
+   c=mix(vec3(.8,.82,.92),vec3(.93,.94,.99),smoothstep(.3,.75,land));
+   float cloud=smoothstep(.45,.8,fbm(sp*2.3+vec2(T*.004,0.)+land));
+   c=mix(c,vec3(1.),cloud*.5);
+   c=mix(c,vec3(.72,.8,.98),exp(-depth/30.)*.5);
+  }
+  // soft limb shading just inside the edge
+  c*=mix(.85,1.,smoothstep(0.,14.,depth));
+  o=vec4(c,1.)*smoothstep(1.,-1.,d);
+ }
+ // the atmosphere: a thin bright line on the edge and a haze above it
+ float up=max(d,0.);
+ vec3 atm=mix(vec3(.55,.75,1.),vec3(.35,.55,1.),NT);
+ float line=exp(-pow(d/2.2,2.));
+ float haze=exp(-up/mix(22.,16.,NT))*step(0.,d);
+ vec3 glow=atm*(line*mix(.7,1.1,NT)+haze*mix(.35,.28,NT));
+ glow+=vec3(1.,.72,.45)*sun*(line*1.6+haze*.9+exp(-up/60.)*step(0.,d)*.35);
+ if(NT>.5){
+  // aurora: curtains rising from the edge, rippling sideways
+  float h=up;
+  float cur=pow(noise(vec2(x*.018+T*.07,T*.05)),2.2)*1.6+fbm(vec2(x*.006-T*.02,h*.004))*.6;
+  cur*=smoothstep(0.,10.,h)*exp(-pow((h-38.)/32.,2.));
+  float ray=.6+.4*sin(x*.35+fbm(vec2(x*.02,T*.1))*6.);
+  vec3 ac=mix(vec3(.2,1.,.6),vec3(.6,.35,1.),smoothstep(20.,80.,h));
+  glow+=ac*cur*ray*.55*(1.-sun*.8);
+ }
+ float ga=clamp(dot(glow,vec3(.33)),0.,1.);
+ o.rgb+=glow*(1.-o.a);o.a=max(o.a,ga);
+ gl_FragColor=o;
+}`;

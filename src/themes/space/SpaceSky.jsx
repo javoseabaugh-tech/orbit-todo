@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { prefersDarkDial } from "../../dial/tokens";
-import { SKY } from "./shaders";
+import { SKY, HORIZON } from "./shaders";
 import { createScene, runScene } from "../water/gl";
 import { skyLayers, skyBackground } from "./starfield";
 
@@ -21,7 +21,7 @@ const CSS = `
 }
 @media (prefers-reduced-motion: reduce) { .sky-anim { animation: none !important } }`;
 
-export default function SpaceSky() {
+export default function SpaceSky({ horizonY }) {
   const canvasRef = useRef(null);
   const [still, setStill] = useState(false);
   const night = prefersDarkDial;
@@ -67,6 +67,34 @@ export default function SpaceSky() {
           }} />
         </>
       )}
+      <Horizon horizonY={horizonY} night={night} />
     </div>
   );
+}
+
+// The near world's curved edge, its atmosphere and (by night) aurora, drawn
+// over the stars at full frame rate but reduced resolution.
+function Horizon({ horizonY, night }) {
+  const canvasRef = useRef(null);
+  const hy = useRef(horizonY);
+  hy.current = horizonY;
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const scene = createScene(canvas, HORIZON, ["RES", "T", "NT", "HY", "PX"], { alpha: true });
+    if (!scene) return;
+    const { gl, U } = scene;
+    gl.uniform1f(U.NT, night ? 1 : 0);
+    const loop = runScene(canvas, gl, (dt, T) => {
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      if (hy.current == null) return; // not measured yet
+      gl.uniform2f(U.RES, canvas.width, canvas.height);
+      gl.uniform1f(U.T, T);
+      gl.uniform1f(U.HY, hy.current);
+      gl.uniform1f(U.PX, canvas.width / Math.max(1, canvas.clientWidth));
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }, { scale: 0.7 });
+    return () => loop.stop();
+  }, []);
+  return <canvas ref={canvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }} />;
 }
