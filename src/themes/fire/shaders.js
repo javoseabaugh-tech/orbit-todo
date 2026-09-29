@@ -68,7 +68,9 @@ void main(){
  if(d<1.03){
   vec3 emb=TX>.5?texture2D(EMB,q*.55+.5).rgb:vec3(.08,.06,.05)+vec3(.5,.12,.02)*step(.7,noise(q*9.));
   float breathe=.5+.5*noise(q*2.6+vec2(T*.35,-T*.27));
-  vec3 bed=emb*.28+vec3(1.,.36,.08)*hot(emb)*(.3+.6*breathe)*heat;
+  vec3 bed=emb*.26+vec3(1.,.36,.08)*hot(emb)*(.8+1.2*breathe)*heat;
+  // the heart of the fire glows through the coals
+  bed+=vec3(1.,.3,.05)*smoothstep(.95,.2,d)*.18*heat*(.6+.4*breathe);
   bed*=.55+.45*smoothstep(1.02,.7,d);
   // three charred logs meeting in the middle
   for(int i=0;i<3;i++){
@@ -226,19 +228,19 @@ void main(){
  if(ca>IA){uv.y=.5+(uv.y-.5)*IA/ca;}else{uv.x=.5+(uv.x-.5)*ca/IA;}
  float flick=.86+.14*noise(vec2(T*3.,0.))+.07*sin(T*12.);
  // heat shimmer over and above the flames
- vec2 fd=(uv-vec2(.5,.36))*vec2(1.,1./IA);
+ vec2 fd=(uv-vec2(.5,.47))*vec2(1.,1./IA);
  float hz=exp(-dot(fd*vec2(3.,1.2),fd*vec2(3.,1.2))*14.);
  uv.x+=sin(uv.y*90.-T*6.)*.0025*hz;
  vec3 c=texture2D(IMG,uv).rgb;
  // flicker: warm, lit parts brighten and dim with the fire
  float warm=clamp((c.r-c.b)*1.6,0.,1.);
  c*=1.+(flick-.93)*warm*1.4;
- vec2 gd=(uv-vec2(.5,.58))*vec2(1.,1./IA);
+ vec2 gd=(uv-vec2(.5,.66))*vec2(1.,1./IA);
  c+=vec3(1.,.5,.15)*exp(-dot(gd,gd)*18.)*.06*(flick-.8);
  // stars: pixels brighter than their neighbourhood, in the upper sky
  vec2 o1=vec2(.003,0.),o2=vec2(0.,.003*IA);
  vec3 bl=(texture2D(IMG,uv+o1).rgb+texture2D(IMG,uv-o1).rgb+texture2D(IMG,uv+o2).rgb+texture2D(IMG,uv-o2).rgb)*.25;
- float star=max(dot(c-bl,vec3(.33)),0.)*(1.-warm)*step(uv.y,.45);
+ float star=max(dot(c-bl,vec3(.33)),0.)*(1.-warm)*step(uv.y,.5);
  vec2 cell=floor(uv*vec2(150.,150./IA));
  c+=vec3(star)*sin(T*(1.3+2.4*hash(cell))+hash(cell+7.)*6.28)*.8;
  // sparks rising from the fire; more for a moment after a tick
@@ -247,7 +249,7 @@ void main(){
   float fk=float(k);
   float life=fract(T*(.12+.08*h1(fk))+h1(fk*2.3));
   float on=step(fk,10.)+boost*step(10.,fk);
-  vec2 pos=vec2(.5+(h1(fk*5.1)-.5)*.05+sin(T*1.4+fk)*.012*life+(h1(fk*8.7)-.5)*.08*life,.43-life*.35);
+  vec2 pos=vec2(.5+(h1(fk*5.1)-.5)*.06+sin(T*1.4+fk)*.012*life+(h1(fk*8.7)-.5)*.1*life,.54-life*.3);
   vec2 dd=(uv-pos)*vec2(1.,1./IA);
   c+=vec3(1.,.66,.28)*exp(-dot(dd,dd)*1.2e5)*(1.-life)*on*1.4;
  }

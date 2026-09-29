@@ -30,7 +30,7 @@ export default function NightlyFire({ tick }) {
       gl.uniform2f(U.RES, canvas.width, canvas.height);
       gl.uniform1f(U.T, T);
       gl.uniform1f(U.IA, aspect);
-      gl.uniform3f(U.SS, 0.5, 0.43, s.t0);
+      gl.uniform3f(U.SS, 0.5, 0.54, s.t0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     });
     s.time = loop.time;

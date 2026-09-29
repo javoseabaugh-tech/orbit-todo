@@ -88,7 +88,7 @@ Gemini Milky Way over an observatory, alive: twinkling stars, a breathing
 dome light, a shooting star now and then and one on every tick.
 
 Fire (`src/themes/fire/`) is a hearth at night. The dial is a fire pit seen
-from above: a Gemini coal bed (`embers.jpg`, made to tile) under three
+from above: a Gemini coal bed (`embers.jpg`, a seamless tile) under three
 charred logs, flames that grow as the day gets done, a ring of stones lit
 from inside; the progress ring is a line of embers, reminders are glowing
 coals that flare and go up in sparks when ticked, and finishing the day makes
