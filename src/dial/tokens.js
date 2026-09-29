@@ -14,10 +14,11 @@
 // so nothing here needs to be reactive.
 //
 // Themes: "space" is the Orbit Dial look below. "water" swaps in its own
-// colours and a rock background, and src/themes/water/ redraws the dial and
+// colours and the forest photo, and src/themes/water/ redraws the dial and
 // the Nightly scene. The choice is cached on the device under THEME_KEY and
 // synced to the person's account.
-import waterRock from "../themes/water/rock.jpg";
+import waterDay from "../themes/water/well-day.jpg";
+import waterNight from "../themes/water/well-night.jpg";
 
 export const THEME_KEY = "orbit-theme";
 export const THEME_IDS = ["space", "water"];
@@ -92,15 +93,16 @@ const LIGHT = {
   scrim: "rgba(10,13,31,0.35)",
 };
 
-// Water: deep teal-green on dark mossy rock by night; misty rock under light
-// glass by day. Surfaces are more opaque than Space's because a photo, not a
-// flat gradient, sits behind them.
+// Water: light text on the forest photo's dark moss, day and night alike (the
+// moss is dark in both). Day is a warmer moss green, night a moonlit teal.
+// Surfaces are more opaque than Space's because a photo, not a flat
+// gradient, sits behind them.
 const WATER_NIGHT = {
-  bgTop: "#0F2A2C",
-  bgBottom: "#061214",
-  surface: "rgba(6,20,22,0.66)",
-  surfaceStrong: "rgba(16,38,40,0.82)",
-  panel: "#0C1C1E",
+  bgTop: "#0D1810",
+  bgBottom: "#060C09",
+  surface: "rgba(6,16,14,0.62)",
+  surfaceStrong: "rgba(14,30,28,0.82)",
+  panel: "#0C1A17",
   line: "rgba(255,255,255,0.10)",
   text: "#E8F2EF",
   muted: "#A9C2BC",
@@ -123,30 +125,30 @@ const WATER_NIGHT = {
 };
 
 const WATER_DAY = {
-  bgTop: "#EAF1EE",
-  bgBottom: "#D5E2DD",
-  surface: "rgba(250,252,250,0.82)",
-  surfaceStrong: "rgba(255,255,255,0.94)",
-  panel: "#FFFFFF",
-  line: "rgba(8,30,28,0.12)",
-  text: "#0B1F1D",
-  muted: "#3E5E58",
-  faint: "#5E7C76",
-  accent: "#0B7F83",
-  accent2: "#2E8F5E",
-  amber: "#D9861F",
-  onAmber: "#0B1F1D",
-  green: "#16895E",
-  red: "#C8453A",
-  sheet: "#0E2426",
-  sheetText: "#E8F2EF",
-  sheetMuted: "#A9C2BC",
-  chip: "#1E3A3A",
-  chipText: "#CFE6E1",
-  chipOn: "#E8F2EF",
-  chipOnText: "#0B1F1D",
-  scrim: "rgba(8,20,20,0.35)",
-  textShadow: "0 0 10px rgba(234,241,238,0.9)",
+  bgTop: "#2C3B17",
+  bgBottom: "#162010",
+  surface: "rgba(16,26,10,0.5)",
+  surfaceStrong: "rgba(26,40,18,0.78)",
+  panel: "#1A2612",
+  line: "rgba(240,248,228,0.14)",
+  text: "#F3F6EC",
+  muted: "#C9D4BA",
+  faint: "#A3B292",
+  accent: "#74D3C6",
+  accent2: "#AEDD8E",
+  amber: "#FFC271",
+  onAmber: "#141A0C",
+  green: "#86DE9C",
+  red: "#FF9C88",
+  sheet: "#F1F4EA",
+  sheetText: "#12190C",
+  sheetMuted: "#4B5A3E",
+  chip: "#DCE4D0",
+  chipText: "#233019",
+  chipOn: "#12190C",
+  chipOnText: "#F1F4EA",
+  scrim: "rgba(6,10,4,0.5)",
+  textShadow: "0 1px 2px rgba(0,0,0,0.6), 0 0 12px rgba(0,0,0,0.35)",
 };
 
 const PALETTES = {
@@ -159,10 +161,10 @@ export const D = PALETTES[THEME_ID][prefersDarkDial ? "dark" : "light"];
 export const FONT_DISPLAY = "'Syne', 'Figtree', system-ui, sans-serif";
 export const FONT_BODY = "'Figtree', system-ui, -apple-system, sans-serif";
 
+// Water: the moss carpet from the bottom of the photo, below the well (the
+// home screen draws the whole photo, with the well, over this).
 export const pageBackground = THEME_ID === "water"
-  ? (prefersDarkDial
-      ? `linear-gradient(rgba(4,12,13,0.58), rgba(3,9,10,0.84)), url(${waterRock}) center / 420px repeat, ${D.bgBottom}`
-      : `linear-gradient(rgba(234,241,238,0.72), rgba(213,226,221,0.86)), url(${waterRock}) center / 420px repeat, ${D.bgBottom}`)
+  ? `url(${prefersDarkDial ? waterNight : waterDay}) center bottom / auto 270% no-repeat, ${prefersDarkDial ? "#060C09" : "#243212"}`
   : `radial-gradient(120% 70% at 50% 0%, ${D.bgTop} 0%, ${D.bgBottom} 62%)`;
 
 // A small palette for people's faces. Index by a stable hash of their email so
