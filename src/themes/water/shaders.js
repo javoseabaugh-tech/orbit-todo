@@ -21,6 +21,7 @@ uniform vec2 C; uniform float RAD; uniform float T; uniform float LV; uniform fl
 uniform vec3 RIP[8]; uniform vec4 MK[6];
 #define PI 3.14159265
 #define RR 1.17
+#define BW 1.07
 float RW; vec2 E; vec3 Ld; vec3 H;
 
 float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
@@ -55,8 +56,8 @@ void main(){
  vec3 lc=mix(vec3(1.),vec3(.72,.82,1.),NT);
 
  // a soft shadow under the basin
- float sd=length(q-vec2(.02,-.05));
- o.a=mix(.16,.4,NT)*smoothstep(1.13,.94,sd);
+ float sd=length(q-vec2(.03,-.07));
+ o.a=mix(.24,.5,NT)*smoothstep(1.2,.97,sd);
 
  // the progress ring, filling clockwise from 12, and the now-chip on it
  float fr=fract(atan(q.x,q.y)/(2.*PI));
@@ -72,10 +73,23 @@ void main(){
  vec2 np=RR*vec2(sin(NOW),cos(NOW));
  over(o,mix(vec3(.059,.129,.141),vec3(.89,.93,.94),NT),smoothstep(.052,.052-aa,length(q-np)));
 
+ // the basin's wall: a raised rim in its own tone, lit on the side facing
+ // the light and shaded on the other, with a fine outline so it stands off
+ // the background
+ float lit=dot(normalize(q+1e-4),normalize(Ld.xy));
+ if(d<BW+aa){
+  vec3 wc0=mix(vec3(.95,.98,.97),vec3(.14,.23,.29),NT)*(1.+mix(.06,.12,NT)*lit);
+  wc0+=lc*exp(-pow((BW-.012-d)/.012,2.))*max(lit,0.)*mix(.25,.18,NT);
+  wc0*=1.-mix(.1,.2,NT)*exp(-pow((BW-.012-d)/.014,2.))*max(-lit,0.);
+  over(o,wc0,smoothstep(BW+aa,BW-aa,d));
+ }
+ over(o,mix(vec3(.3,.5,.52),vec3(.02,.05,.07),NT),exp(-pow((d-BW)/(.006+aa),2.))*mix(.45,.6,NT));
+
  if(d<1.+aa){
-  // the empty basin: a pale floor with faint light on it, and a thin lip
-  vec3 fl=mix(vec3(.8,.9,.88),vec3(.06,.14,.19),NT);
-  fl*=1.-mix(.12,.25,NT)*smoothstep(.5,1.,d)*max(dot(normalize(q+1e-4),normalize(Ld.xy)),0.);
+  // the empty basin: a floor a shade deeper than the page, with faint light
+  // on it, shaded by the wall on the side the light comes from
+  vec3 fl=mix(vec3(.72,.85,.83),vec3(.05,.12,.17),NT);
+  fl*=1.-mix(.3,.4,NT)*smoothstep(.6,1.,d)*max(lit,0.);
   fl+=mix(.12,.03,NT)*caustic(q*.7,T*.25);
   vec3 col=fl;
   vec2 s=q-E;float ds=length(s);
@@ -135,8 +149,8 @@ void main(){
    }}
    col=mix(col,wc,smoothstep(RW+aa,RW-aa,ds+h0*.5));
   }
-  // the basin's lip
-  col=mix(col,mix(vec3(1.),vec3(.63,.82,.94),NT),exp(-pow((1.-d)/.012,2.))*mix(.45,.2,NT));
+  // where the floor meets the wall: a fine dark crease
+  col*=1.-mix(.3,.4,NT)*exp(-pow((1.-d)/.012,2.));
   over(o,col,smoothstep(1.+aa,1.-aa,d));
  }
  o.rgb+=(hash(gl_FragCoord.xy+fract(T))-.5)/255.*o.a;
