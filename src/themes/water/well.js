@@ -1,10 +1,11 @@
 // Where the well sits in the Water photos (well-day.jpg and well-night.jpg,
 // which line up pixel for pixel), and where that lands on screen.
 //
-// Measured on the 1536×2752 originals: the opening (the water's edge when the
-// well is full) is centred at (757, 1020) with radius 368; the outer edge of
-// the stone rim is centred at (767, 1027) with radius 612. x and radii are
-// shares of the photo's width, y a share of its height.
+// Measured on the shipped 1152×2064 JPEGs: the opening (the inner edge of the
+// stones, where the water meets them when the well is full) is centred at
+// (576, 770) with radius 278; the outer edge of the stone rim is centred at
+// (575, 770) with radius 459. x and radii are shares of the photo's width, y a
+// share of its height.
 import dayUrl from "./well-day.jpg";
 import nightUrl from "./well-night.jpg";
 import { prefersDarkDial } from "../../dial/tokens";
@@ -12,7 +13,7 @@ import { prefersDarkDial } from "../../dial/tokens";
 export const photoUrl = prefersDarkDial ? nightUrl : dayUrl;
 export const PHOTO_ASPECT = 1152 / 2064; // width / height of the shipped JPEGs
 
-export const WELL = { x: 0.49284, y: 0.37064, r: 0.23958, rimX: 0.49935, rimY: 0.37318, rimR: 0.39844 };
+export const WELL = { x: 0.5, y: 0.37306, r: 0.24132, rimX: 0.49935, rimY: 0.37318, rimR: 0.39844 };
 
 // The rim, in well radii from the opening's centre (y up), for the shader.
 export const RIM_OFFSET = [

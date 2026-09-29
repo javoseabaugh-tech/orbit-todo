@@ -20,7 +20,7 @@ import { photoUrl, wellLayout, RIM_OFFSET, RIM_OUTER } from "./well";
 // and only the list below it scrolls, over the quiet moss.
 
 const MAX_PADS = 6;
-const waterRadiusAt = (level) => 0.6 + 0.375 * level;
+const waterRadiusAt = (level) => 0.6 + 0.395 * level;
 const waterCentreAt = (level) => [0, -(1 - level) * 0.05];
 
 const toMinutes = (hm) => { const [h, m] = hm.split(":").map(Number); return h * 60 + m; };

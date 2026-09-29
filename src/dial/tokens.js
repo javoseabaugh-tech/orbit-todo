@@ -17,8 +17,8 @@
 // colours and the forest photo, and src/themes/water/ redraws the dial and
 // the Nightly scene. The choice is cached on the device under THEME_KEY and
 // synced to the person's account.
-import waterDay from "../themes/water/well-day.jpg";
-import waterNight from "../themes/water/well-night.jpg";
+import waterDay from "../themes/water/moss-day.jpg";
+import waterNight from "../themes/water/moss-night.jpg";
 
 export const THEME_KEY = "orbit-theme";
 export const THEME_IDS = ["space", "water"];
@@ -161,10 +161,12 @@ export const D = PALETTES[THEME_ID][prefersDarkDial ? "dark" : "light"];
 export const FONT_DISPLAY = "'Syne', 'Figtree', system-ui, sans-serif";
 export const FONT_BODY = "'Figtree', system-ui, -apple-system, sans-serif";
 
-// Water: the moss carpet from the bottom of the photo, below the well (the
-// home screen draws the whole photo, with the well, over this).
+// Water: the moss carpet from below the well, as a seamless tile (the photo's
+// bottom strip plus its mirror, moss-day.jpg / moss-night.jpg) shown at the
+// same scale as on the home screen, so it stays sharp on every screen (the home
+// screen draws the whole photo, with the well, over this).
 export const pageBackground = THEME_ID === "water"
-  ? `url(${prefersDarkDial ? waterNight : waterDay}) center bottom / auto 270% no-repeat, ${prefersDarkDial ? "#060C09" : "#243212"}`
+  ? `url(${prefersDarkDial ? waterNight : waterDay}) center top / auto 66vh repeat, ${prefersDarkDial ? "#060C09" : "#243212"}`
   : `radial-gradient(120% 70% at 50% 0%, ${D.bgTop} 0%, ${D.bgBottom} 62%)`;
 
 // A small palette for people's faces. Index by a stable hash of their email so
