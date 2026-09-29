@@ -1,7 +1,11 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Check, Repeat, ChevronDown } from "lucide-react";
 import Dial from "./Dial";
-import { D, FONT_DISPLAY, faceColor, initials } from "./tokens";
+import { D, FONT_DISPLAY, THEME_ID, faceColor, initials } from "./tokens";
+
+// The Water theme draws its own dial. Loaded only for people using Water, so
+// Space users never download it.
+const WaterDial = lazy(() => import("../themes/water/WaterDial"));
 import { dateStr, addDays, dayLabel, fmtHM, reminderHM } from "./dates";
 
 // One list (Work or Personal): today's dial on top, then the todos grouped by
@@ -120,7 +124,13 @@ export default function TodoSection({ todos, assigneeOf, sharedFromOf, onToggle,
 
   return (
     <div className="orbit-scroll" style={{ flex: 1, minHeight: 0, padding: `0 16px ${listTail}` }}>
-      <Dial todayTodos={todayTodos} isAssigned={(t) => !!assigneeOf(t) || !!sharedFromOf(t)} onOpen={onOpen} />
+      {THEME_ID === "water" ? (
+        <Suspense fallback={<div style={{ height: 310 }} />}>
+          <WaterDial todayTodos={todayTodos} isAssigned={(t) => !!assigneeOf(t) || !!sharedFromOf(t)} onOpen={onOpen} />
+        </Suspense>
+      ) : (
+        <Dial todayTodos={todayTodos} isAssigned={(t) => !!assigneeOf(t) || !!sharedFromOf(t)} onOpen={onOpen} />
+      )}
 
       {groups.length === 0 && (
         <div style={{ textAlign: "center", color: D.muted, fontSize: 14, padding: "18px 8px 8px" }}>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query,
   runTransaction, serverTimestamp, setDoc, updateDoc,
@@ -6,6 +6,12 @@ import {
 import { Plus, Trash2, Check, ChevronLeft, Calendar, X, Repeat, Home } from "lucide-react";
 import { db } from "./firebase";
 import { StreakStrip, TomorrowPlan, TestNudge } from "./dial/NightlyExtras";
+import { THEME_ID } from "./dial/tokens";
+
+// The Water theme puts a living photo behind this screen (and the photo's own
+// moon stands in for the moon badge). Loaded only for people using Water.
+const WATER = THEME_ID === "water";
+const NightlyWater = lazy(() => import("./themes/water/NightlyWater"));
 
 // Build-time constant: false in the live build, so the staging test tool is
 // dropped from the live bundle entirely.
@@ -195,6 +201,7 @@ export default function Nightly({ uid, onBack, plan, household = false, myName =
   const [houseLoaded, setHouseLoaded] = useState(!household);
   const [houseTemplatesLoaded, setHouseTemplatesLoaded] = useState(!household);
   const [scope, setScope] = useState("mine"); // where new items go: 'mine' | 'house'
+  const [ripple, setRipple] = useState(0); // Water: bumps on each tick
   const loaded = mineLoaded && houseLoaded;
   const templatesLoaded = mineTemplatesLoaded && houseTemplatesLoaded;
   const base = (sc) => (sc === "house" ? HOUSE : ["users", uid]);
@@ -398,6 +405,7 @@ export default function Nightly({ uid, onBack, plan, household = false, myName =
   }
 
   async function toggleDone(item) {
+    if (WATER) setRipple((n) => n + 1);
     const ref = doc(db, ...base(item.scope), "nightly", item.id);
     if (item.scope === "house") {
       // Shared items remember who ticked them, so the other person can see.
@@ -536,12 +544,18 @@ export default function Nightly({ uid, onBack, plan, household = false, myName =
       style={{
         position: "relative", zIndex: 2, overflow: "hidden",
         display: "flex", flexDirection: "column",
-        background: NIGHT.bg, color: NIGHT.text,
+        background: WATER ? "#050c0e" : NIGHT.bg, color: NIGHT.text,
         fontFamily: "'Geist', system-ui, sans-serif",
         animation: `screenIn .5s ${EASE_OUT}`,
       }}
     >
+      {WATER && (
+        <Suspense fallback={null}>
+          <NightlyWater ripple={ripple} />
+        </Suspense>
+      )}
       <div style={{
+        position: "relative", zIndex: 1,
         width: "100%", maxWidth: 600, margin: "0 auto", padding: "24px 20px 0",
         flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
       }}>
@@ -558,9 +572,13 @@ export default function Nightly({ uid, onBack, plan, household = false, myName =
           <ChevronLeft size={16} /> Back
         </button>
 
-        <div style={{ flexShrink: 0, display: "flex", justifyContent: "center", marginBottom: 18 }}>
-          <Moon progress={progress} id="tonight" />
-        </div>
+        {WATER ? (
+          <div style={{ flexShrink: 0, height: 96 }} />
+        ) : (
+          <div style={{ flexShrink: 0, display: "flex", justifyContent: "center", marginBottom: 18 }}>
+            <Moon progress={progress} id="tonight" />
+          </div>
+        )}
 
         <div style={{ flexShrink: 0, textAlign: "center", marginBottom: 18 }}>
           <div style={{
