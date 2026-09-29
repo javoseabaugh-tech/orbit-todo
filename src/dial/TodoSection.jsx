@@ -6,6 +6,7 @@ import { D, FONT_DISPLAY, THEME_ID, faceColor, initials } from "./tokens";
 // The Water theme draws its own dial. Loaded only for people using Water, so
 // Space users never download it.
 const WaterDial = lazy(() => import("../themes/water/WaterDial"));
+const WATER = THEME_ID === "water";
 import { dateStr, addDays, dayLabel, fmtHM, reminderHM } from "./dates";
 
 // One list (Work or Personal): today's dial on top, then the todos grouped by
@@ -71,7 +72,11 @@ function TodoRow({ todo, assignee, sharedFrom, showDate, today, onToggle, onOpen
   if (todo.categoryName && !assignee) meta.push(todo.categoryName);
 
   return (
-    <div style={{
+    <div style={WATER ? {
+      display: "flex", alignItems: "center", gap: 12, padding: "12px 4px 12px 0",
+      borderBottom: `1px solid ${D.line}`, textShadow: D.textShadow,
+      animation: "rowIn .35s cubic-bezier(.22,1,.36,1) both",
+    } : {
       display: "flex", alignItems: "center", gap: 12, padding: "11px 12px 11px 10px", borderRadius: 18,
       background: D.surface, animation: "rowIn .35s cubic-bezier(.22,1,.36,1) both",
     }}>
@@ -122,15 +127,10 @@ export default function TodoSection({ todos, assigneeOf, sharedFromOf, onToggle,
   const todayTodos = todos.filter((t) => t.due === today || (!t.done && t.due && t.due < today));
   const done = todos.filter((t) => t.done).sort((a, b) => (b.due || "").localeCompare(a.due || ""));
 
-  return (
-    <div className="orbit-scroll" style={{ flex: 1, minHeight: 0, padding: `0 16px ${listTail}` }}>
-      {THEME_ID === "water" ? (
-        <Suspense fallback={<div style={{ height: 310 }} />}>
-          <WaterDial todayTodos={todayTodos} isAssigned={(t) => !!assigneeOf(t) || !!sharedFromOf(t)} onOpen={onOpen} />
-        </Suspense>
-      ) : (
-        <Dial todayTodos={todayTodos} isAssigned={(t) => !!assigneeOf(t) || !!sharedFromOf(t)} onOpen={onOpen} />
-      )}
+  const isAssigned = (t) => !!assigneeOf(t) || !!sharedFromOf(t);
+  const list = (
+    <div className="orbit-scroll" style={{ flex: 1, minHeight: 0, padding: `${WATER ? 4 : 0}px 16px ${listTail}` }}>
+      {!WATER && <Dial todayTodos={todayTodos} isAssigned={isAssigned} onOpen={onOpen} />}
 
       {groups.length === 0 && (
         <div style={{ textAlign: "center", color: D.muted, fontSize: 14, padding: "18px 8px 8px" }}>
@@ -172,6 +172,19 @@ export default function TodoSection({ todos, assigneeOf, sharedFromOf, onToggle,
           </section>
         )}
       </div>
+    </div>
+  );
+  if (!WATER) return list;
+
+  // Water: the well stays put and only the list scrolls under it.
+  return (
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <div style={{ flexShrink: 0, padding: "0 16px" }}>
+        <Suspense fallback={<div style={{ height: 310 }} />}>
+          <WaterDial todayTodos={todayTodos} isAssigned={isAssigned} onOpen={onOpen} />
+        </Suspense>
+      </div>
+      {list}
     </div>
   );
 }

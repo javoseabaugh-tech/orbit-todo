@@ -140,8 +140,8 @@ export default function WaterDial({ todayTodos, isAssigned, onOpen }) {
   return (
     <div onPointerDown={onPointerDown} style={{
       position: "relative", height: HEIGHT, margin: "0 -16px 10px", flexShrink: 0, touchAction: "manipulation",
-      WebkitMaskImage: "linear-gradient(transparent, #000 10%, #000 90%, transparent)",
-      maskImage: "linear-gradient(transparent, #000 10%, #000 90%, transparent)",
+      WebkitMaskImage: "linear-gradient(#000 88%, transparent)",
+      maskImage: "linear-gradient(#000 88%, transparent)",
     }}>
       <canvas ref={canvasRef} aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }} />
 
