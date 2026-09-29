@@ -52,18 +52,24 @@ reloads the app, the same way a system light/dark change does. Day and night
 follow the phone within every theme.
 
 A theme is more than colours: it can redraw the dial and the Nightly
-backdrop. Water (`src/themes/water/`) draws a live rock pool from above with
-WebGL, built on four Gemini images (rock, rim, pebbles, the Nightly scene):
-the pool rises as the day gets done, reminders are lily pads, the rim channel
-is the progress arc, and Nightly's photo moves. It is loaded only for people
-using Water, pauses off screen and in the background, lowers its resolution
-on slow phones, slows for reduced motion, and falls back to the plain dial
-where WebGL isn't available.
+backdrop. Water (`src/themes/water/`) is a stone well on a forest floor seen
+from above: one full-screen Gemini photo per mode (`well-day.jpg`, and
+`well-night.jpg`, an edit of the same photo that lines up pixel for pixel),
+plus the Nightly scene. The home screen draws the photo with WebGL and
+computes only the water inside the photo's well, refracting the photo's own
+pebbles: the water rises as the day gets done, reminders are lily pads, a wet
+trail round the rim is the progress arc, and a pale pebble marks the time.
+The well's centre and radii are measured in `well.js`; if the photos change,
+measure again. Other screens show the photo's moss carpet only. It is loaded
+only for people using Water, pauses off screen and in the background, lowers
+its resolution on slow phones, slows for reduced motion, and falls back to
+the plain dial where WebGL isn't available.
 
 Adding the next theme: its palettes in `src/dial/tokens.js`, an entry in
 `src/themes/themeChoice.js`, and optionally its own dial and Nightly backdrop
-under `src/themes/<name>/`. Gemini assets are flat, evenly lit materials for
-anything the code lights, and a finished scene only for Nightly.
+under `src/themes/<name>/`. Photoreal beats assembled: prefer one finished
+Gemini scene (and a matching night edit of it) that the code animates, over
+separate textures stacked on top of each other.
 
 ## Desktop layout (in scope, not started)
 

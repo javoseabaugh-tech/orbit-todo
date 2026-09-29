@@ -129,7 +129,11 @@ export default function TodoSection({ todos, assigneeOf, sharedFromOf, onToggle,
 
   const isAssigned = (t) => !!assigneeOf(t) || !!sharedFromOf(t);
   const list = (
-    <div className="orbit-scroll" style={{ flex: 1, minHeight: 0, padding: `${WATER ? 4 : 0}px 16px ${listTail}` }}>
+    <div className="orbit-scroll" style={{
+      flex: 1, minHeight: 0, padding: `${WATER ? 4 : 0}px 16px ${listTail}`,
+      // Water: rows fade out just below the rim instead of being cut off.
+      ...(WATER && { WebkitMaskImage: "linear-gradient(transparent, #000 14px)", maskImage: "linear-gradient(transparent, #000 14px)" }),
+    }}>
       {!WATER && <Dial todayTodos={todayTodos} isAssigned={isAssigned} onOpen={onOpen} />}
 
       {groups.length === 0 && (
@@ -176,14 +180,12 @@ export default function TodoSection({ todos, assigneeOf, sharedFromOf, onToggle,
   );
   if (!WATER) return list;
 
-  // Water: the well stays put and only the list scrolls under it.
+  // Water: the well stays put and only the list scrolls, over the moss below it.
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-      <div style={{ flexShrink: 0, padding: "0 16px" }}>
-        <Suspense fallback={<div style={{ height: 310 }} />}>
-          <WaterDial todayTodos={todayTodos} isAssigned={isAssigned} onOpen={onOpen} />
-        </Suspense>
-      </div>
+      <Suspense fallback={null}>
+        <WaterDial todayTodos={todayTodos} isAssigned={isAssigned} onOpen={onOpen} />
+      </Suspense>
       {list}
     </div>
   );
