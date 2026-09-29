@@ -148,8 +148,31 @@ const WATER_DAY = {
   scrim: "rgba(8,24,28,0.35)",
 };
 
+// Space in light mode isn't a pale page: it's dusk from orbit. A lighter,
+// warmer indigo than night, still with light text, so the scene keeps its
+// sky (see src/themes/space/). LIGHT stays for anything that asks for it.
+const SPACE_DUSK = {
+  ...DARK,
+  bgTop: "#2B3274",
+  bgBottom: "#1A1D4C",
+  surface: "rgba(255,255,255,0.08)",
+  surfaceStrong: "rgba(255,255,255,0.14)",
+  panel: "#242A66",
+  line: "rgba(255,255,255,0.14)",
+  text: "#F3F4FF",
+  muted: "#C6CBF0",
+  faint: "#A2A8D8",
+  accent: "#8C9BFF",
+  accent2: "#B38CFF",
+  amber: "#FFC06A",
+  onAmber: "#15173A",
+  green: "#5FE0BD",
+  red: "#FF8C9B",
+  scrim: "rgba(8,10,30,0.5)",
+};
+
 const PALETTES = {
-  space: { dark: DARK, light: LIGHT },
+  space: { dark: DARK, light: SPACE_DUSK },
   water: { dark: WATER_NIGHT, light: WATER_DAY },
 };
 

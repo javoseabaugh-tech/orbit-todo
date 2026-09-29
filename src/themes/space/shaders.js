@@ -205,7 +205,7 @@ void main(){
 // sit on top in CSS. By day it's the pale sky with faint lavender wisps.
 export const SKY = `
 precision mediump float;
-uniform vec2 RES; uniform float T; uniform float NT;
+uniform vec2 RES; uniform float T; uniform float NT; uniform float DK;
 float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
 float noise(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);
  return mix(mix(hash(i),hash(i+vec2(1.,0.)),u.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),u.x),u.y);}
@@ -224,6 +224,11 @@ void main(){
  vec3 col;
  if(NT>.5){
   vec3 base=mix(vec3(.02,.025,.07),vec3(.07,.08,.2),smoothstep(.0,1.,s.y));
+  // dusk: indigo overhead warming to rose low down, and a warm glow where
+  // the sun is coming up (low right)
+  vec3 dusk=mix(vec3(.46,.28,.46),vec3(.1,.13,.38),smoothstep(.15,.85,s.y));
+  dusk+=vec3(1.,.55,.35)*exp(-dot(s-vec2(.95,.35),s-vec2(.95,.35))*6.)*.35;
+  base=mix(base,dusk,DK);
   col=base;
   col+=vec3(.36,.2,.7)*smoothstep(.4,.95,f)*.55;
   col+=vec3(.75,.22,.55)*smoothstep(.55,1.,r.x)*.38*(.35+band);
@@ -232,6 +237,7 @@ void main(){
   // dust lanes darken the band
   float dust=smoothstep(.5,.78,fbm(p*2.2+r*1.8+7.));
   col*=1.-.6*dust*band;
+  col=mix(col,base+(col-base)*.55,DK); // the nebula fades into the dusk
   // a faint core glow where the band crosses the middle
   col+=vec3(.9,.7,.8)*exp(-dot(c-vec2(.05,.08),c-vec2(.05,.08))*6.)*band*.12;
  }else{
@@ -251,7 +257,7 @@ void main(){
 // x and y are CSS px, y down.
 export const HORIZON = `
 precision mediump float;
-uniform vec2 RES; uniform float T; uniform float NT; uniform float HY; uniform float PX;
+uniform vec2 RES; uniform float T; uniform float NT; uniform float DK; uniform float HY; uniform float PX;
 float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
 float noise(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);
  return mix(mix(hash(i),hash(i+vec2(1.,0.)),u.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),u.x),u.y);}
@@ -267,7 +273,7 @@ void main(){
  if(d>(NT>.5?130.:70.)){gl_FragColor=vec4(0.);return;} // empty sky above
  float hx=(x-W*.5)/(W*.5);
  vec4 o=vec4(0.);
- float sun=exp(-pow((hx-.95)/.35,2.));
+ float sun=exp(-pow((hx-.95)/mix(.35,.6,DK),2.))*(1.+DK*.6);
 
  if(d<1.){
   float depth=-d;
@@ -281,10 +287,16 @@ void main(){
    vec2 at=(cell+.2+.6*vec2(hash(cell+1.7),hash(cell+8.3)))*7.;
    float pt=exp(-dot(vec2(x,y)-at,vec2(x,y)-at)/.9);
    float lit=step(.8,hash(cell))*smoothstep(.52,.64,land)*smoothstep(.5,.75,noise(at*.03));
-   c+=vec3(1.,.72,.38)*pt*lit*(.6+.4*sin(T*2.+hash(cell+3.)*6.28))*.8*smoothstep(0.,30.,depth)*exp(-depth/260.);
+   c+=(1.-DK)*vec3(1.,.72,.38)*pt*lit*(.6+.4*sin(T*2.+hash(cell+3.)*6.28))*.8*smoothstep(0.,30.,depth)*exp(-depth/260.);
    // airglow and aurora light spilling onto the ground near the edge
    c+=vec3(.1,.35,.3)*exp(-depth/28.)*.35;
    c+=vec3(1.,.55,.3)*sun*exp(-depth/40.)*.35;
+   // dusk: the ground in early dawn light, soft cloud tops catching it
+   vec3 dawn=mix(vec3(.07,.09,.2),vec3(.13,.16,.32),smoothstep(.35,.7,land));
+   float cl=smoothstep(.5,.8,fbm(sp*2.3+vec2(T*.004,0.)+land));
+   dawn=mix(dawn,vec3(.32,.3,.48),cl*.45);
+   dawn+=vec3(1.,.6,.4)*sun*exp(-depth/90.)*.3;
+   c=mix(c,dawn,DK);
   }else{
    c=mix(vec3(.8,.82,.92),vec3(.93,.94,.99),smoothstep(.3,.75,land));
    float cloud=smoothstep(.45,.8,fbm(sp*2.3+vec2(T*.004,0.)+land));
@@ -298,7 +310,7 @@ void main(){
  // the atmosphere: a thin bright line on the edge and a haze above it
  float up=max(d,0.);
  vec3 atm=mix(vec3(.55,.75,1.),vec3(.35,.55,1.),NT);
- float line=exp(-pow(d/2.2,2.));
+ float line=exp(-pow(d/2.2,2.))*(1.+DK*.4);
  float haze=exp(-up/mix(22.,16.,NT))*step(0.,d);
  vec3 glow=atm*(line*mix(.7,1.1,NT)+haze*mix(.35,.28,NT));
  glow+=vec3(1.,.72,.45)*sun*(line*1.6+haze*.9+exp(-up/60.)*step(0.,d)*.35);
@@ -309,7 +321,7 @@ void main(){
   cur*=smoothstep(0.,10.,h)*exp(-pow((h-38.)/32.,2.));
   float ray=.6+.4*sin(x*.35+fbm(vec2(x*.02,T*.1))*6.);
   vec3 ac=mix(vec3(.2,1.,.6),vec3(.6,.35,1.),smoothstep(20.,80.,h));
-  glow+=ac*cur*ray*.55*(1.-sun*.8);
+  glow+=ac*cur*ray*.55*(1.-sun*.8)*(1.-DK);
  }
  float ga=clamp(dot(glow,vec3(.33)),0.,1.);
  o.rgb+=glow*(1.-o.a);o.a=max(o.a,ga);
