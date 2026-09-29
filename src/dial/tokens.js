@@ -18,6 +18,7 @@
 // redraws the dial and the Nightly scene. The choice is cached on the device
 // under THEME_KEY and synced to the person's account.
 import { causticBackground } from "../themes/water/caustics";
+import { skyBackground } from "../themes/space/starfield";
 
 export const THEME_KEY = "orbit-theme";
 export const THEME_IDS = ["space", "water"];
@@ -161,10 +162,11 @@ export const FONT_DISPLAY = THEME_ID === "water"
   : "'Syne', 'Figtree', system-ui, sans-serif";
 export const FONT_BODY = "'Figtree', system-ui, -apple-system, sans-serif";
 
-// Water: the light patterns, still (the home screen lets them drift).
+// Water: the light patterns; Space: the starfield. Both still here (the home
+// screen lets them drift).
 export const pageBackground = THEME_ID === "water"
   ? causticBackground(prefersDarkDial)
-  : `radial-gradient(120% 70% at 50% 0%, ${D.bgTop} 0%, ${D.bgBottom} 62%)`;
+  : skyBackground(prefersDarkDial);
 
 // A small palette for people's faces. Index by a stable hash of their email so
 // the same person always gets the same colour on every device.

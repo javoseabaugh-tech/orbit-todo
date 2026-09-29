@@ -64,6 +64,15 @@ for people using Water, pauses off screen and in the background, lowers its
 resolution on slow phones, slows for reduced motion, and falls back to the
 plain dial where WebGL isn't available.
 
+Space (`src/themes/space/`) is built the same way: every screen sits on a
+starfield with faint nebula drawn in code (`starfield.js`, nothing to
+download), drifting in two depths on the home screen. The dial is a live gas
+giant on a transparent canvas: the sun comes round it as the day gets done
+(crescent to full), its orbit is the progress ring with a chip for the time,
+reminders are moons at their hour that break orbit when ticked, and
+finishing the day brings a sunrise flare. The surface is drawn in code until
+a Gemini surface map is added (`PLANET_MAP` in `SpaceDial.jsx`).
+
 Adding the next theme: its palettes in `src/dial/tokens.js`, an entry in
 `src/themes/themeChoice.js`, and optionally its own dial and Nightly backdrop
 under `src/themes/<name>/`. Keep it feeling like an app: we tried a
