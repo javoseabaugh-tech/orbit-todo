@@ -93,8 +93,9 @@ charred logs, flames that grow as the day gets done, a ring of stones lit
 from inside; the progress ring is a line of embers, reminders are glowing
 coals that flare and go up in sparks when ticked, and finishing the day makes
 the fire roar. Above, night air with smoke and rising sparks; below, where
-the list starts, a dark bed of breathing coals. Light mode is a sunset
-hybrid with light text. Nightly shows a Gemini campfire (`nightly.jpg`) with
+the list starts, dark ash with a few breathing cracks. Everything is kept
+muted so it doesn't feel heavy. Light mode is the same fire by day: pale ash
+and sand, sunlit stones, a grey column of smoke, dark text. Nightly shows a Gemini campfire (`nightly.jpg`) with
 flicker, heat shimmer, twinkling stars and a flurry of sparks on each tick.
 Display font: Unbounded.
 
