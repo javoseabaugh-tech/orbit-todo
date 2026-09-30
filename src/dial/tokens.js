@@ -185,12 +185,12 @@ const FIRE_NIGHT = {
   text: "#FFF1E6",
   muted: "#E2C3AE",
   faint: "#BD9A85",
-  accent: "#FF8A3D",
-  accent2: "#FFB057",
-  amber: "#FFC857",
+  accent: "#E09B6E",
+  accent2: "#E8B98C",
+  amber: "#EBC688",
   onAmber: "#1A0E08",
   green: "#8FD694",
-  red: "#FF6B5E",
+  red: "#E8776B",
   sheet: "#FFF1E6",
   sheetText: "#1A0E08",
   sheetMuted: "#6E4B3A",
@@ -232,7 +232,7 @@ export const FONT_BODY = "'Figtree', system-ui, -apple-system, sans-serif";
 export const pageBackground = THEME_ID === "water"
   ? causticBackground(prefersDarkDial)
   : THEME_ID === "fire"
-    ? `linear-gradient(${prefersDarkDial ? "rgba(14,8,6,.88), rgba(10,6,4,.8)" : "rgba(58,26,30,.84), rgba(30,14,14,.8)"}), url(${fireEmbers}) center / 420px repeat, ${D.bgBottom}`
+    ? `linear-gradient(${prefersDarkDial ? "rgba(16,12,10,.94), rgba(12,9,8,.9)" : "rgba(58,30,32,.9), rgba(30,16,16,.88)"}), url(${fireEmbers}) center / 420px repeat, ${D.bgBottom}`
     : skyBackground(prefersDarkDial);
 
 // A small palette for people's faces. Index by a stable hash of their email so
