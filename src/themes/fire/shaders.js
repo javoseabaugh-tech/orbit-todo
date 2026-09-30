@@ -33,7 +33,7 @@ precision highp float;
 precision mediump float;
 #endif
 uniform vec2 C; uniform float RAD; uniform float T; uniform float LV; uniform float SURGE; uniform float NOW; uniform float TX;
-uniform vec4 MK[6]; uniform vec3 BURST[4]; uniform sampler2D EMB;
+uniform vec4 MK[6]; uniform vec3 BURST[4]; uniform sampler2D EMB; uniform float DY;
 #define PI 3.14159265
 #define RR 1.46
 ${COMMON}
@@ -50,19 +50,19 @@ void main(){
 
  // firelight pooling on the ground round the pit
  float pool=exp(-max(d-1.2,0.)*2.4)*step(1.2,d);
- glowAdd(o,vec3(1.,.5,.22)*pool*.07*heat*flick);
+ glowAdd(o,vec3(1.,.5,.22)*pool*.07*heat*flick*(1.-DY));
 
  // progress: a line of embers round the pit, catching light from 12 clockwise
  float fr=fract(atan(q.x,q.y)/(2.*PI));float gd=abs(d-RR);float rw=.011;
- over(o,vec3(.22,.18,.16),smoothstep(rw+aa,rw-aa,gd)*.5);
+ over(o,mix(vec3(.22,.18,.16),vec3(.35,.28,.24),DY),smoothstep(rw+aa,rw-aa,gd)*mix(.5,.22,DY));
  float on=step(fr,LV)*smoothstep(rw+aa,rw-aa,gd)*step(.001,LV);
  float grain=.55+.45*noise(vec2(fr*160.,T*.9));
- over(o,fireCol(.4+.3*grain)*(.85+.15*flick),on*.9);
- glowAdd(o,vec3(1.,.45,.12)*exp(-pow(gd/.06,2.))*step(fr,LV)*.06*step(.001,LV));
+ over(o,mix(fireCol(.4+.3*grain)*(.85+.15*flick),vec3(.72,.34,.14)*(.9+.2*grain),DY),on*.9);
+ glowAdd(o,vec3(1.,.45,.12)*exp(-pow(gd/.06,2.))*step(fr,LV)*.06*step(.001,LV)*(1.-DY));
  vec2 tp=RR*vec2(sin(LV*2.*PI),cos(LV*2.*PI));
- glowAdd(o,vec3(1.,.8,.5)*exp(-dot(q-tp,q-tp)/.002)*.45*step(.001,LV)*step(LV,.999));
+ glowAdd(o,vec3(1.,.8,.5)*exp(-dot(q-tp,q-tp)/.002)*.45*step(.001,LV)*step(LV,.999)*(1.-DY*.7));
  vec2 np=RR*vec2(sin(NOW),cos(NOW));
- over(o,vec3(1.,.95,.86),smoothstep(.03,.03-aa,length(q-np)));
+ over(o,mix(vec3(1.,.95,.86),vec3(.2,.13,.09),DY),smoothstep(.03,.03-aa,length(q-np)));
 
  // the bed: coals, logs and flames
  if(d<1.03){
@@ -71,6 +71,16 @@ void main(){
   vec3 bed=emb*.2+vec3(.9,.38,.14)*hot(emb)*(.25+.45*breathe)*heat;
   // the heart of the fire glows through the coals
   bed+=vec3(.9,.36,.12)*smoothstep(.8,.1,d)*.08*heat*(.6+.4*breathe);
+  // by day the same bed reads as grey ash over charcoal, the coals dull
+  // (sooty charcoal in the middle, soft pale ash towards the stones, with
+  // lumps of charcoal half buried in it)
+  float pale=smoothstep(.3,1.,d+.35*(fbm(q*2.5)-.5));
+  float grain=fbm(q*14.)*.7+noise(q*40.)*.3;
+  float lf=fbm(q*11.+3.);float lump=smoothstep(.56,.64,lf)*(.6+.4*pale);
+  vec3 dayBed=mix(vec3(.13,.12,.11),vec3(.6,.58,.55),pale)*(.72+.5*grain);
+  dayBed=mix(dayBed,vec3(.1,.09,.085)*(.7+1.6*smoothstep(.6,.75,lf)),lump*.8);
+  dayBed+=vec3(.7,.25,.08)*hot(emb)*(.12+.18*breathe)*heat*(1.-pale);
+  bed=mix(bed,dayBed,DY);
   bed*=.55+.45*smoothstep(1.02,.7,d);
   // three charred logs meeting in the middle
   for(int i=0;i<3;i++){
@@ -81,6 +91,10 @@ void main(){
    float bark=noise(vec2(along*18.,across*50.));
    vec3 lc=vec3(.1,.07,.05)*(.6+.8*bark);
    lc+=vec3(.9,.38,.14)*smoothstep(.66,.92,noise(vec2(along*13.+T*.25,across*32.)))*.35*heat*breathe;
+   // by day: charred black with patches of white ash on top
+   vec3 lcd=mix(vec3(.08,.07,.065)*(.7+.6*bark),vec3(.62,.6,.57),smoothstep(.42,.7,noise(vec2(along*9.,across*20.)))*.85);
+   lcd+=lc*.35*smoothstep(.66,.92,noise(vec2(along*13.+T*.25,across*32.)));
+   lc=mix(lc,lcd,DY);
    lc*=.55+.45*sqrt(max(1.-pow(across/lw,2.),0.));
    bed=mix(bed,lc,lg);
   }
@@ -92,7 +106,8 @@ void main(){
   float f=smoothstep(size,0.,d+(fl-.6)*.62)*flick;
   f*=.75+.5*smoothstep(.35,.7,fbm(vec2(ang*3.+T*.4,d*4.-T*2.)));
   vec3 fc=fireCol(clamp(f*1.15,0.,.93));
-  float fa=smoothstep(.04,.5,f)*.85;
+  float fa=smoothstep(.04,.5,f)*mix(.85,.7,DY);
+  fc=mix(fc,fc*vec3(1.,.95,.9),DY);
   bed=mix(bed,fc,fa)+fc*fa*.08;
   over(o,bed,smoothstep(1.03,1.,d));
  }
@@ -116,11 +131,15 @@ void main(){
     float top=.2+.65*h*h;
     float fire=max(dot(n,vec3(-rad,.35)),0.)*heat*flick;
     sc=st*top+vec3(1.,.55,.3)*fire*.35*st*1.5;
+    // by day, sunlight from the upper left
+    vec3 sun=normalize(vec3(-.45,.55,.7));
+    vec3 sd2=mix(vec3(.46,.43,.4),vec3(.66,.62,.57),noise(q*14.+cell))*(.85+.22*noise(q*40.));
+    sc=mix(sc,sd2*(.3+.85*max(dot(n,sun),0.)),DY);
    }
   }
   float edge=smoothstep(1.,.92,best);
   // a soft dark gap round each stone
-  over(o,vec3(.04,.03,.025),smoothstep(1.1,1.,best)*.45);
+  over(o,vec3(.04,.03,.025),smoothstep(1.1,1.,best)*mix(.45,.3,DY));
   over(o,sc,edge);
  }
 
@@ -132,11 +151,11 @@ void main(){
   float flare=1.+m.w*(1.-m.w)*6.;
   float pulse=.7+.3*sin(T*2.2+m.x*5.);
   vec3 gc=mix(vec3(.92,.48,.22),vec3(.95,.76,.42),m.z);
-  glowAdd(o,gc*exp(-dot(dq,dq)/(r*r*5.))*.22*pulse*flare*(1.-m.w*.8));
+  glowAdd(o,gc*exp(-dot(dq,dq)/(r*r*5.))*.22*pulse*flare*(1.-m.w*.8)*(1.-DY*.75));
   float cs=length(dq/r)+(noise(dq/r*2.+m.x*7.)-.5)*.3;
   float body=smoothstep(1.,.9,cs)*smoothstep(0.,.3,m.y)*(1.-m.w);
   float cr=smoothstep(.55,.8,noise(dq/r*3.+m.x*3.));
-  vec3 cc=vec3(.1,.075,.06)+gc*cr*pulse*.7*flare;
+  vec3 cc=mix(vec3(.1,.075,.06)+gc*cr*pulse*.7*flare,vec3(.42,.17,.08)+gc*(.25+.5*cr)*pulse*.6*flare,DY);
   over(o,cc,body);
  }}
 
@@ -147,7 +166,7 @@ void main(){
   float an=h1(fk*7.7)*6.2832+life*1.5;
   vec2 sp=vec2(cos(an),sin(an))*(.2+life*(1.1+SURGE));
   float b=exp(-dot(q-sp,q-sp)/.0012)*(1.-life)*step(.08,life);
-  glowAdd(o,vec3(1.,.72,.4)*b*heat*.6);
+  glowAdd(o,vec3(1.,.72,.4)*b*heat*.6*(1.-DY*.8));
  }
  for(int j=0;j<4;j++){vec3 bu=BURST[j];float age=T-bu.z;if(age>0.&&age<1.4){
   for(int k=0;k<14;k++){
@@ -155,7 +174,9 @@ void main(){
    float an=h1(fk*5.3)*6.2832,sp=.35+.7*h1(fk*2.9);
    vec2 pp=bu.xy+vec2(cos(an),sin(an))*sp*age*(1.-age*.25);
    float b=exp(-dot(q-pp,q-pp)/.0015)*exp(-age*2.2);
-   glowAdd(o,vec3(1.,.8,.5)*b*.9);
+   glowAdd(o,vec3(1.,.8,.5)*b*.9*(1.-DY));
+   // by day a tick throws up flecks of ash instead
+   over(o,vec3(.3,.26,.24),clamp(b*1.4,0.,1.)*DY*.8);
   }
  }}
  gl_FragColor=o;
@@ -165,7 +186,8 @@ void main(){
 // where the list begins): night air lit by the fire, smoke drifting up and
 // sparks rising from the pit (PC, its centre in CSS px; PRD its radius). At HY
 // a faint warm edge, and below it the list sits on dark, mostly grey ash
-// (EMB) where a few cracks slowly breathe. DK = 1 is light mode's sunset.
+// (EMB) where a few cracks slowly breathe. DK = 1 is light mode: the same pit
+// by day, on pale ash and sand, with grey smoke and a soft shadow.
 export const HEARTH = `
 precision mediump float;
 uniform vec2 RES; uniform float T; uniform float HY; uniform float PX; uniform vec2 PC; uniform float PRD; uniform float DK; uniform float TX;
@@ -179,14 +201,16 @@ void main(){
  if(y<edge+8.){
   // the air: dark and warm by night, a sunset by day
   vec3 night=mix(vec3(.045,.028,.022),vec3(.075,.04,.03),smoothstep(0.,HY,y));
-  vec3 dusk=mix(vec3(.24,.12,.2),vec3(.62,.28,.2),smoothstep(0.,HY,y));
-  col=mix(night,dusk,DK);
+  vec3 day=mix(vec3(.957,.933,.9),vec3(.925,.89,.845),smoothstep(0.,HY,y));
+  col=mix(night,day,DK);
   vec2 rel=(vec2(x,y)-PC)/PRD;
-  col+=vec3(1.,.5,.22)*exp(-length(rel)*1.1)*.07*flick;
+  col+=vec3(1.,.5,.22)*exp(-length(rel)*1.1)*.07*flick*(1.-DK);
+  // by day the pit sits on the ground: a soft shadow under the stones
+  col*=1.-DK*.2*exp(-pow((length(rel-vec2(.06,.1))-1.12)/.22,2.));
   // smoke rising from the pit, drifting and thinning
   float up=-rel.y;
-  float sm=fbm(vec2(rel.x*1.1+sin(up*.7+T*.25)*.5,up*.8-T*.3))*smoothstep(0.,1.2,up)*smoothstep(4.5,1.,abs(rel.x-up*.15));
-  col=mix(col,mix(vec3(.32,.27,.25),vec3(.55,.42,.4),DK),sm*.14);
+  float sm=fbm(vec2(rel.x*1.1+sin(up*.7+T*.25)*.5,up*.8-T*.3))*smoothstep(.6,1.8,up)*smoothstep(mix(4.5,2.2,DK),.6,abs(rel.x-up*.15));
+  col=mix(col,mix(vec3(.32,.27,.25),vec3(.52,.5,.49),DK),sm*mix(.14,.24,DK));
   // sparks rising out of the fire and swaying as they go
   for(int k=0;k<12;k++){
    float fk=float(k);
@@ -194,7 +218,7 @@ void main(){
    vec2 st=PC+vec2((h1(fk*3.3)-.5)*PRD*1.2,-PRD*.3);
    vec2 pos=st+vec2(sin(T*1.1+fk)*14.*life+(h1(fk*9.1)-.5)*120.*life,-life*(PC.y+60.));
    float b=exp(-dot(vec2(x,y)-pos,vec2(x,y)-pos)/1.6)*(1.-life);
-   col+=vec3(1.,.72,.4)*b*.6;
+   col+=vec3(1.,.72,.4)*b*.6*(1.-DK);
   }
  }
  if(y>edge-6.){
@@ -208,14 +232,17 @@ void main(){
   vec3 bed=mix(vec3(ash),emb,.35)*vec3(.1,.085,.075)+vec3(.85,.36,.14)*hot(emb)*(.03+.08*dep)*breathe;
   bed+=vec3(.05,.03,.022)*(1.-dep*.5);
   bed*=.7+.3*smoothstep(0.,26.,y-edge)+.3*exp(-max(y-edge,0.)/10.);
-  bed=mix(bed,bed*vec3(1.1,.95,1.),DK);
+  // by day: pale, sunlit ash with only its grain showing
+  vec3 dayBed=vec3(.905,.875,.835)-vec3(.06,.065,.07)*(ash-.2)*(.4+.6*dep)-vec3(.05,.04,.03)*exp(-max(y-edge,0.)/14.);
+  bed=mix(bed,dayBed,DK);
   float k=smoothstep(edge-5.,edge+6.,y);
   col=y<edge+8.?mix(col,bed,k):bed;
   // the hot edge
-  col+=vec3(.95,.45,.18)*exp(-pow((y-edge)/4.,2.))*.14*(.6+.4*breathe)*flick;
+  col+=vec3(.95,.45,.18)*exp(-pow((y-edge)/4.,2.))*.14*(.6+.4*breathe)*flick*(1.-DK);
+  col*=1.-DK*.06*exp(-pow((y-edge)/6.,2.));
  }
  // heat haze just above the edge
- col+=vec3(.95,.45,.18)*exp(-max(edge-y,0.)/22.)*step(y,edge)*.04*flick;
+ col+=vec3(.95,.45,.18)*exp(-max(edge-y,0.)/22.)*step(y,edge)*.04*flick*(1.-DK);
  gl_FragColor=vec4(col,1.);
 }`;
 

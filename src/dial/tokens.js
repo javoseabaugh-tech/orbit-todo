@@ -172,8 +172,8 @@ const SPACE_DUSK = {
   scrim: "rgba(8,10,30,0.5)",
 };
 
-// Fire: a hearth at night, warm charcoal with ember accents. In light mode it's
-// a hybrid like Space: sunset rather than a pale page, still with light text.
+// Fire: a hearth at night, warm charcoal with ember accents. By day it's the
+// same fire pit outdoors in daylight: pale ash and sand, dark text.
 const FIRE_NIGHT = {
   ...DARK,
   bgTop: "#2A1510",
@@ -200,20 +200,36 @@ const FIRE_NIGHT = {
   chipOnText: "#FFF1E6",
   scrim: "rgba(10,5,3,0.6)",
 };
-const FIRE_DUSK = {
-  ...FIRE_NIGHT,
-  bgTop: "#5A2A2E",
-  bgBottom: "#241214",
-  panel: "#3A1D1F",
-  surface: "rgba(255,235,220,0.09)",
-  surfaceStrong: "rgba(255,235,220,0.16)",
-  line: "rgba(255,225,200,0.16)",
+const FIRE_DAY = {
+  bgTop: "#F4EEE6",
+  bgBottom: "#E8DFD4",
+  surface: "rgba(255,255,255,0.5)",
+  surfaceStrong: "rgba(255,255,255,0.78)",
+  panel: "#FFFFFF",
+  line: "rgba(42,26,18,0.11)",
+  text: "#2A1B13",
+  muted: "#6A5345",
+  faint: "#86705F",
+  accent: "#B85A2B",
+  accent2: "#A8703C",
+  amber: "#C8861F",
+  onAmber: "#2A1B13",
+  green: "#3C8751",
+  red: "#BF4636",
+  sheet: "#2C1E17",
+  sheetText: "#F6EEE6",
+  sheetMuted: "#C6B1A2",
+  chip: "#3B2B22",
+  chipText: "#EADBCF",
+  chipOn: "#F6EEE6",
+  chipOnText: "#2A1B13",
+  scrim: "rgba(30,18,12,0.35)",
 };
 
 const PALETTES = {
   space: { dark: DARK, light: SPACE_DUSK },
   water: { dark: WATER_NIGHT, light: WATER_DAY },
-  fire: { dark: FIRE_NIGHT, light: FIRE_DUSK },
+  fire: { dark: FIRE_NIGHT, light: FIRE_DAY },
 };
 
 export const D = PALETTES[THEME_ID][prefersDarkDial ? "dark" : "light"];
@@ -232,7 +248,9 @@ export const FONT_BODY = "'Figtree', system-ui, -apple-system, sans-serif";
 export const pageBackground = THEME_ID === "water"
   ? causticBackground(prefersDarkDial)
   : THEME_ID === "fire"
-    ? `linear-gradient(${prefersDarkDial ? "rgba(16,12,10,.94), rgba(12,9,8,.9)" : "rgba(58,30,32,.9), rgba(30,16,16,.88)"}), url(${fireEmbers}) center / 420px repeat, ${D.bgBottom}`
+    ? (prefersDarkDial
+      ? `linear-gradient(rgba(16,12,10,.94), rgba(12,9,8,.9)), url(${fireEmbers}) center / 420px repeat, ${D.bgBottom}`
+      : `linear-gradient(180deg, ${D.bgTop}, ${D.bgBottom})`)
     : skyBackground(prefersDarkDial);
 
 // A small palette for people's faces. Index by a stable hash of their email so

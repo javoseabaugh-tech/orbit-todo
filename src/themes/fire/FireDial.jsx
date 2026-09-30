@@ -84,10 +84,11 @@ export default function FireDial({ todayTodos, isAssigned, onOpen }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     const scene = createScene(canvas, PIT,
-      ["C", "RAD", "T", "LV", "SURGE", "NOW", "TX", "MK", "BURST", "EMB"], { alpha: true });
+      ["C", "RAD", "T", "LV", "SURGE", "NOW", "TX", "MK", "BURST", "EMB", "DY"], { alpha: true });
     if (!scene) { setNoGL(true); return; }
     const { gl, U } = scene;
     gl.uniform1i(U.EMB, 0);
+    gl.uniform1f(U.DY, prefersDarkDial ? 0 : 1); // light mode is the same fire by day
     let mapReady = false;
     loadTexture(gl, 0, embersUrl, { repeat: true }, () => { mapReady = true; });
 
