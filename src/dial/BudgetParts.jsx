@@ -1,19 +1,12 @@
 import { useState } from "react";
-import { X, Trash2, ExternalLink, Plus } from "lucide-react";
+import { X, Trash2, ExternalLink, Plus, ChevronDown, Check, Undo2, Pencil } from "lucide-react";
+import { cycleLabel, checkPayment, planFor, halfOf, paymentTotal } from "./billCycles";
 import { D, FONT_DISPLAY, FONT_BODY } from "./tokens";
 import useKeyboardInset from "./useKeyboardInset";
 
 // The Budget screen's pieces in the Orbit Dial look. They only display and
 // call back; every change still goes through Budget.jsx's own state and its
-// single save path, so the stored shape of the budget document is unchanged.
-
-export const STATUS = {
-  unpaid: { label: "Unpaid", color: () => D.red },
-  scheduled: { label: "Scheduled", color: () => D.amber },
-  paid: { label: "Paid", color: () => D.green },
-  skip: { label: "No payment", color: () => D.faint },
-};
-const STATUS_ORDER = ["unpaid", "scheduled", "paid", "skip"];
+// single save path. The pay-cycle rules live in billCycles.js.
 
 export function fmtMoney(n, cents = false) {
   const v = Number.isFinite(Number(n)) ? Number(n) : 0;
@@ -99,28 +92,6 @@ export function AccountTile({ name, balance, assigned, onOpen }) {
   );
 }
 
-// ---------- bills ----------
-export function BillTile({ bill, onOpen }) {
-  const st = STATUS[bill.status] || STATUS.unpaid;
-  const resolved = bill.status === "paid" || bill.status === "skip";
-  return (
-    <button onClick={onOpen} style={{
-      minWidth: 0, textAlign: "left", border: "none", cursor: "pointer", borderRadius: 14,
-      padding: "9px 11px", background: D.surface, color: D.text, fontFamily: FONT_BODY,
-      display: "flex", flexDirection: "column", gap: 3, opacity: resolved ? 0.55 : 1,
-      boxShadow: `inset 3px 0 0 ${st.color()}`,
-    }}>
-      <span style={{ fontSize: 12.5, color: D.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: resolved ? "line-through" : "none" }}>
-        {bill.name || "Unnamed"}
-      </span>
-      <span style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
-        <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16, fontVariantNumeric: "tabular-nums" }}>{fmtMoney(bill.amount)}</span>
-        <span style={{ fontSize: 10.5, fontWeight: 800, color: st.color(), textTransform: "uppercase", letterSpacing: ".04em" }}>{st.label}</span>
-      </span>
-    </button>
-  );
-}
-
 // ---------- the shared bottom sheet ----------
 function Sheet({ title, onClose, children }) {
   const inset = useKeyboardInset();
@@ -162,105 +133,6 @@ const primaryBtn = (on) => ({
   fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15,
 });
 
-// Status is the thing you change most, so it leads and saves on tap.
-export function BillSheet({ bill, accounts, loginNames, loginUrl, onStatus, onUpdate, onDelete, onClose }) {
-  const [confirm, setConfirm] = useState(false);
-  const [amount, setAmount] = useState(String(bill.amount ?? ""));
-  return (
-    <Sheet title={bill.name || "Bill"} onClose={onClose}>
-      <div>
-        <span style={label}>Status</span>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {STATUS_ORDER.map((s) => (
-            <button key={s} style={chip(bill.status === s, bill.status === s ? STATUS[s].color() : null)} onClick={() => onStatus(s)}>
-              {STATUS[s].label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <label>
-          <span style={label}>Amount</span>
-          <input type="number" inputMode="decimal" value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            onBlur={() => onUpdate({ amount: parseFloat(amount) || 0 })}
-            style={{ ...field, fontVariantNumeric: "tabular-nums" }} />
-        </label>
-        <label>
-          <span style={label}>Paid from</span>
-          <select value={bill.bankId || ""} onChange={(e) => onUpdate({ bankId: e.target.value })} disabled={!accounts.length} style={field}>
-            {!accounts.length && <option value="">No account</option>}
-            {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-        </label>
-      </div>
-
-      <label>
-        <span style={label}>Bill</span>
-        <select value={bill.name} onChange={(e) => onUpdate({ name: e.target.value })} style={field}>
-          {!loginNames.includes(bill.name) && bill.name && <option value={bill.name}>{bill.name} (no login saved)</option>}
-          {loginNames.map((n) => <option key={n} value={n}>{n}</option>)}
-        </select>
-      </label>
-
-      <div style={{ display: "flex", gap: 10 }}>
-        {loginUrl && (
-          <a href={loginUrl} target="_blank" rel="noopener noreferrer" style={{ ...chip(false), textDecoration: "none", flex: 1, justifyContent: "center", padding: 13 }}>
-            <ExternalLink size={15} /> Open site
-          </a>
-        )}
-        {confirm ? (
-          <button style={{ ...chip(true, D.red), color: "#fff", flex: 1, justifyContent: "center", padding: 13 }} onClick={onDelete}>Delete bill</button>
-        ) : (
-          <button style={{ ...chip(false), color: D.red, justifyContent: "center", padding: 13 }} onClick={() => setConfirm(true)} aria-label="Delete bill">
-            <Trash2 size={16} />
-          </button>
-        )}
-      </div>
-    </Sheet>
-  );
-}
-
-export function AddBillSheet({ period, accounts, loginNames, onAdd, onClose }) {
-  const [name, setName] = useState("");
-  const [amount, setAmount] = useState("");
-  const [dueDate, setDueDate] = useState(period);
-  const [bankId, setBankId] = useState(accounts[0]?.id || "");
-  const ready = name.trim() && amount !== "" && Number.isFinite(parseFloat(amount));
-  return (
-    <Sheet title="Add a bill" onClose={onClose}>
-      <div style={{ display: "flex", gap: 6 }}>
-        <button style={chip(dueDate === "15")} onClick={() => setDueDate("15")}>Due the 15th</button>
-        <button style={chip(dueDate === "30")} onClick={() => setDueDate("30")}>Due the 30th</button>
-      </div>
-      <label>
-        <span style={label}>Bill</span>
-        <select value={name} onChange={(e) => setName(e.target.value)} style={field}>
-          <option value="">{loginNames.length ? "Choose a bill…" : "Add a login first"}</option>
-          {loginNames.map((n) => <option key={n} value={n}>{n}</option>)}
-        </select>
-      </label>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <label>
-          <span style={label}>Amount</span>
-          <input type="number" inputMode="decimal" value={amount} placeholder="0.00" onChange={(e) => setAmount(e.target.value)} style={field} />
-        </label>
-        <label>
-          <span style={label}>Paid from</span>
-          <select value={bankId} onChange={(e) => setBankId(e.target.value)} disabled={!accounts.length} style={field}>
-            {!accounts.length && <option value="">Add an account first</option>}
-            {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-        </label>
-      </div>
-      <button style={primaryBtn(ready)} disabled={!ready} onClick={() => onAdd({ name, amount, dueDate, bankId })}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Plus size={16} /> Add bill</span>
-      </button>
-    </Sheet>
-  );
-}
-
 export function AccountSheet({ account, period, assigned, canDelete, onRename, onBalance, onDelete, onClose }) {
   const [name, setName] = useState(account.name);
   const raw = account.balances?.[period];
@@ -292,6 +164,245 @@ export function AccountSheet({ account, period, assigned, canDelete, onRename, o
           <Trash2 size={15} /> Delete account
         </button>
       ))}
+    </Sheet>
+  );
+}
+
+// ---------- pay cycles ----------
+const cyclesText = (c) => (c.length === 2 ? "15th & 30th" : c[0] === "15" ? "15th" : "30th");
+
+// A bill still owed this cycle (or carried forward). Tap to pay or skip.
+export function OpenBillTile({ item, onOpen }) {
+  const { bill, occ, owed, pastDue } = item;
+  const full = planFor(bill, occ)?.amount || owed;
+  const color = pastDue ? D.red : D.accent;
+  return (
+    <button onClick={onOpen} style={{
+      minWidth: 0, textAlign: "left", border: "none", cursor: "pointer", borderRadius: 14,
+      padding: "9px 11px", background: D.surface, color: D.text, fontFamily: FONT_BODY,
+      display: "flex", flexDirection: "column", gap: 3, boxShadow: `inset 3px 0 0 ${color}`,
+    }}>
+      <span style={{ fontSize: 12.5, color: D.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {bill.name || "Unnamed"}
+      </span>
+      <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16, fontVariantNumeric: "tabular-nums" }}>{fmtMoney(owed)}</span>
+      <span style={{ fontSize: 10.5, fontWeight: 800, color: pastDue ? D.red : D.faint, textTransform: "uppercase", letterSpacing: ".04em" }}>
+        {pastDue ? `Past due · ${cycleLabel(occ)}` : owed < full ? `left of ${fmtMoney(full)}` : "Due"}
+      </span>
+    </button>
+  );
+}
+
+// One payment in "Payments scheduled" or "Paid": who, how much, from where.
+export function PaymentRow({ bill, payment, accounts, action, onAction, onUndo }) {
+  const from = (payment.splits || []).filter((x) => Number(x.amount) > 0)
+    .map((x) => `${accounts.find((a) => a.id === x.bankId)?.name || "No account"}${payment.splits.length > 1 ? ` ${fmtMoney(x.amount)}` : ""}`)
+    .join(" + ");
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 14, background: D.surface }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{bill.name}</div>
+        <div style={{ fontSize: 11.5, color: D.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {from}{payment.occ !== payment.in ? ` · for ${cycleLabel(payment.occ)}` : ""}
+        </div>
+      </div>
+      <b style={{ fontFamily: FONT_DISPLAY, fontSize: 15, fontVariantNumeric: "tabular-nums" }}>{fmtMoney(paymentTotal(payment))}</b>
+      {action && (
+        <button onClick={onAction} style={{ ...chip(false), padding: "7px 10px", fontSize: 12 }}>
+          <Check size={13} /> {action}
+        </button>
+      )}
+      <button onClick={onUndo} aria-label={action ? "Cancel this payment" : "Undo paid"} title={action ? "Cancel this payment" : "Undo paid"} style={{
+        border: "none", background: "transparent", color: D.faint, cursor: "pointer", display: "flex", padding: 4,
+      }}><Undo2 size={15} /></button>
+    </div>
+  );
+}
+
+// A section header that can fold its rows away ("Paid · 3").
+export function Fold({ title, count, open, onToggle, children }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <button onClick={onToggle} aria-expanded={open} style={{
+        border: "none", background: "transparent", cursor: "pointer", padding: 0, color: D.muted,
+        display: "flex", alignItems: "center", justifyContent: "space-between", fontFamily: FONT_DISPLAY,
+        fontSize: 13, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase",
+      }}>
+        <span>{title} · {count}</span>
+        <ChevronDown size={16} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
+// Paying a bill: how much, from which account (or split), schedule it, mark
+// it already paid, or skip it this cycle. Never more than what's owed.
+export function PaySheet({ item, accounts, loginUrl, onPay, onSkip, onEdit, onClose }) {
+  const { bill, occ, owed, pastDue } = item;
+  const first = accounts.find((a) => a.id === bill.bankId)?.id || accounts[0]?.id || "";
+  const [split, setSplit] = useState(false);
+  const [bankId, setBankId] = useState(first);
+  const [amount, setAmount] = useState(String(owed));
+  const [parts, setParts] = useState(() => Object.fromEntries(accounts.map((a) => [a.id, a.id === first ? String(owed) : ""])));
+  const [confirmSkip, setConfirmSkip] = useState(false);
+  const splits = split
+    ? accounts.map((a) => ({ bankId: a.id, amount: parts[a.id] === "" ? 0 : Number(parts[a.id]) })).filter((x) => x.amount !== 0)
+    : [{ bankId, amount: amount === "" ? 0 : Number(amount) }];
+  const error = checkPayment(splits.length ? splits : [{ bankId, amount: 0 }], owed);
+  const total = splits.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  const ok = !error;
+  return (
+    <Sheet title={bill.name || "Bill"} onClose={onClose}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 13.5, color: D.sheetMuted, marginTop: -6 }}>
+        <span style={{ color: pastDue ? D.red : D.sheetMuted, fontWeight: pastDue ? 700 : 400 }}>
+          {pastDue ? `Past due from ${cycleLabel(occ)}` : `Due ${cycleLabel(occ)}`}
+        </span>
+        <span><b style={{ color: D.sheetText }}>{fmtMoney(owed, true)}</b> left</span>
+      </div>
+
+      <div>
+        <span style={label}>Pay from</span>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {accounts.map((a) => (
+            <button key={a.id} style={chip(!split && bankId === a.id)} onClick={() => { setSplit(false); setBankId(a.id); }}>{a.name}</button>
+          ))}
+          {accounts.length > 1 && <button style={chip(split)} onClick={() => setSplit(true)}>Split</button>}
+        </div>
+      </div>
+
+      {!split ? (
+        <label>
+          <span style={label}>Amount</span>
+          <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)}
+            style={{ ...field, fontVariantNumeric: "tabular-nums" }} />
+        </label>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {accounts.map((a) => (
+            <label key={a.id} style={{ display: "grid", gridTemplateColumns: "1fr 140px", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{a.name}</span>
+              <input type="number" inputMode="decimal" placeholder="0.00" value={parts[a.id] ?? ""}
+                onChange={(e) => setParts((p) => ({ ...p, [a.id]: e.target.value }))}
+                style={{ ...field, fontVariantNumeric: "tabular-nums" }} />
+            </label>
+          ))}
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: D.sheetMuted }}>
+            <span>Total</span><b style={{ color: D.sheetText }}>{fmtMoney(total, true)}</b>
+          </div>
+        </div>
+      )}
+
+      {error && total > 0 && <div style={{ fontSize: 13, color: D.red, fontWeight: 600, marginTop: -4 }}>{error}</div>}
+
+      <button style={primaryBtn(ok)} disabled={!ok} onClick={() => onPay(splits, "scheduled")}>Schedule payment</button>
+      <div style={{ display: "flex", gap: 8, marginTop: -4 }}>
+        <button style={{ ...chip(false), flex: 1, justifyContent: "center", padding: 12, opacity: ok ? 1 : 0.5 }} disabled={!ok} onClick={() => onPay(splits, "paid")}>
+          <Check size={15} /> Already paid
+        </button>
+        {confirmSkip ? (
+          <button style={{ ...chip(true, D.red), color: "#fff", flex: 1, justifyContent: "center", padding: 12 }} onClick={onSkip}>Yes, no payment</button>
+        ) : (
+          <button style={{ ...chip(false), flex: 1, justifyContent: "center", padding: 12 }} onClick={() => setConfirmSkip(true)}>
+            Skip {owed < (planFor(bill, occ)?.amount || 0) ? "the rest" : "this payment"}
+          </button>
+        )}
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        {loginUrl && (
+          <a href={loginUrl} target="_blank" rel="noopener noreferrer" style={{ ...chip(false), textDecoration: "none", flex: 1, justifyContent: "center", padding: 12 }}>
+            <ExternalLink size={15} /> Open site
+          </a>
+        )}
+        <button style={{ ...chip(false), flex: 1, justifyContent: "center", padding: 12 }} onClick={onEdit}>
+          <Pencil size={14} /> Edit bill
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
+// Setting a bill up: name, amount, which paydays, usual account. New bills
+// are created as logins in the Bills section (credentials can be added later).
+export function BillSetupSheet({ bill, current, accounts, onSave, onRemove, onClose }) {
+  const plan = bill ? planFor(bill, current) : null;
+  const [name, setName] = useState(bill?.name || "");
+  const [amount, setAmount] = useState(plan ? String(plan.amount) : "");
+  const [cycles, setCycles] = useState(plan ? plan.cycles : [halfOf(current)]);
+  const [bankId, setBankId] = useState(bill?.bankId || accounts[0]?.id || "");
+  const [confirm, setConfirm] = useState(false);
+  const amt = parseFloat(amount);
+  const ready = name.trim() && Number.isFinite(amt) && amt > 0 && cycles.length > 0;
+  const opts = [[["15"], "15th"], [["30"], "30th"], [["15", "30"], "Both"]];
+  return (
+    <Sheet title={bill ? (plan ? "Edit bill" : "Set up bill") : "Add a bill"} onClose={onClose}>
+      <label>
+        <span style={label}>Bill</span>
+        <input value={name} placeholder="e.g. Electric Co." onChange={(e) => setName(e.target.value)} style={field} />
+      </label>
+      <div>
+        <span style={label}>Paid on</span>
+        <div style={{ display: "flex", gap: 6 }}>
+          {opts.map(([c, l]) => (
+            <button key={l} style={{ ...chip(cycles.join() === c.join()), flex: 1, justifyContent: "center" }} onClick={() => setCycles(c)}>{l}</button>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <label>
+          <span style={label}>{cycles.length === 2 ? "Amount each time" : "Amount"}</span>
+          <input type="number" inputMode="decimal" value={amount} placeholder="0.00" onChange={(e) => setAmount(e.target.value)}
+            style={{ ...field, fontVariantNumeric: "tabular-nums" }} />
+        </label>
+        <label>
+          <span style={label}>Usually from</span>
+          <select value={bankId} onChange={(e) => setBankId(e.target.value)} disabled={!accounts.length} style={field}>
+            {!accounts.length && <option value="">Add an account first</option>}
+            {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </label>
+      </div>
+      {plan && <div style={{ fontSize: 12, color: D.sheetMuted, marginTop: -4 }}>Changes apply from {cycleLabel(current)} on; earlier cycles keep what they were.</div>}
+      <button style={primaryBtn(ready)} disabled={!ready} onClick={() => onSave({ name: name.trim(), amount: amt, cycles, bankId })}>
+        {bill ? "Save" : <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Plus size={16} /> Add bill</span>}
+      </button>
+      {plan && (confirm ? (
+        <button style={{ ...primaryBtn(true), background: D.red, color: "#fff" }} onClick={onRemove}>
+          Take off the budget (login and history stay)
+        </button>
+      ) : (
+        <button style={{ ...chip(false), color: D.red, justifyContent: "center" }} onClick={() => setConfirm(true)}>
+          <Trash2 size={15} /> Take off the budget
+        </button>
+      ))}
+    </Sheet>
+  );
+}
+
+// Every login in the Bills section, set up or not, to edit or set up.
+export function ManageBillsSheet({ bills, current, onPick, onAdd, onClose }) {
+  const rows = bills.slice().sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }));
+  return (
+    <Sheet title="Bills" onClose={onClose}>
+      {rows.length === 0 && <div style={{ fontSize: 14, color: D.sheetMuted }}>No bills yet.</div>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {rows.map((b) => {
+          const p = planFor(b, current);
+          return (
+            <button key={b.id} onClick={() => onPick(b)} style={{
+              ...chip(false), borderRadius: 14, justifyContent: "space-between", padding: "11px 13px", textAlign: "left",
+            }}>
+              <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.name || "Unnamed"}</span>
+              <span style={{ fontWeight: 600, opacity: p ? 1 : 0.7, flexShrink: 0 }}>
+                {p ? `${fmtMoney(p.amount)} · ${cyclesText(p.cycles)}` : "Set up"}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <button style={primaryBtn(true)} onClick={onAdd}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Plus size={16} /> Add a bill</span>
+      </button>
     </Sheet>
   );
 }
