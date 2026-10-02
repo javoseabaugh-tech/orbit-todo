@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   ScanFace,
   RotateCcw,
+  ArrowRightLeft,
 } from "lucide-react";
 import { getDoc, setDoc } from "firebase/firestore";
 import { generateSaltB64, deriveKey, encryptText, decryptText, makeVerifier, checkVerifier } from "./vaultCrypto";
@@ -38,7 +39,7 @@ const DEFAULT_STATE = {
     // { id, name, amount, dueDate: '15'|'30', bankId, status: 'unpaid'|'scheduled'|'skip'|'paid', paidAt }
   ],
   logins: [
-    // { id, name, url, username, password: { iv, ct } }
+    // { id, name, url, username, password: { iv, ct }, kind?: 'bill'|'credential' }
   ],
   vaultMeta: null, // { salt, verifier: { iv, ct } } — set once, on first vault creation
 };
@@ -64,7 +65,7 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
   const [saveError, setSaveError] = useState(false);
   const [sheet, setSheet] = useState(null); // null | { kind: 'add' | 'bill' | 'account', id? }
   const [view, setView] = useState("budget"); // 'budget' | 'logins'
-  const [newLogin, setNewLogin] = useState({ name: "", url: "", username: "", password: "" });
+  const [newLogin, setNewLogin] = useState({ name: "", url: "", username: "", password: "", kind: "bill" });
   const [visiblePasswords, setVisiblePasswords] = useState({}); // { [loginId]: true }
   const [copiedFlag, setCopiedFlag] = useState(""); // e.g. "loginId-username"
   const skipNextSave = useRef(true);
@@ -155,6 +156,12 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
     (a, b) => a.localeCompare(b)
   );
 
+  // Each login is either a bill's login or just a saved credential. Logins
+  // saved before the split have no kind: they count as bills when a bill has
+  // the same name, otherwise as credentials, until moved.
+  const billNames = new Set(state.bills.map((b) => b.name));
+  const kindOf = (l) => (l.kind === "bill" || l.kind === "credential" ? l.kind : billNames.has(l.name) ? "bill" : "credential");
+
   function billLoginUrl(billName) {
     const login = (state.logins || []).find((l) => l.name === billName);
     if (!login || !login.url) return null;
@@ -234,10 +241,11 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
           url,
           username: newLogin.username.trim(),
           password: encryptedPassword,
+          kind: newLogin.kind,
         },
       ],
     }));
-    setNewLogin({ name: "", url: "", username: "", password: "" });
+    setNewLogin((n) => ({ name: "", url: "", username: "", password: "", kind: n.kind }));
   }
 
   function updateLogin(id, patch) {
@@ -700,139 +708,166 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
 
         {view === "logins" && vaultKey && (
           <>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 13 }}>
-              <h2 style={{ ...display(17), margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                <KeyRound size={17} color={theme.accentPlum} />
-                Bill logins
-              </h2>
-              <span style={{ fontFamily: MONO, fontSize: 11.5, color: theme.textFainter }}>
-                {(state.logins || []).length} saved
-              </span>
-            </div>
-
             {(state.logins || []).length === 0 && (
               <div style={{ padding: "30px 16px", borderRadius: 20, border: `1px dashed ${theme.glassBorder2}`, textAlign: "center", fontSize: 13, color: theme.textFainter }}>
-                No logins saved yet. Add a bill's website, username, and password below.
+                No logins saved yet. Add a website, username, and password below.
               </div>
             )}
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
-              {sortedLogins.map((login, idx) => {
-                const passwordVisible = !!visiblePasswords[login.id];
-                const href = login.url
-                  ? (/^https?:\/\//i.test(login.url) ? login.url : `https://${login.url}`)
-                  : undefined;
-                return (
-                  <div
-                    key={login.id}
-                    style={{
-                      ...glass.card, padding: 15, borderRadius: 22,
-                      display: "flex", flexDirection: "column", gap: 9,
-                      animation: `rowIn .4s ${EASE_OUT} ${Math.min(idx, 12) * 0.035}s both`,
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                      <input
-                        type="text"
-                        value={login.name}
-                        onChange={(e) => updateLogin(login.id, { name: e.target.value })}
-                        placeholder="Bill name"
-                        style={{ flex: 1, minWidth: 0, fontSize: 14.5, fontWeight: 600, color: theme.textPrimary, background: "transparent", border: "none", padding: 0 }}
-                      />
-                      <a
-                        href={href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="Open in your default browser"
-                        style={{ padding: 5, borderRadius: 9, color: theme.textFainter, display: "flex", ...(login.url ? null : { opacity: 0.35, pointerEvents: "none" }) }}
-                      >
-                        <ExternalLink size={15} />
-                      </a>
-                      <IconAction onClick={() => deleteLogin(login.id)} title="Delete login" hoverColor={theme.accentRed}>
-                        <Trash2 size={15} />
-                      </IconAction>
-                    </div>
-
-                    <VaultField label="Website">
-                      <input
-                        type="text"
-                        value={login.url}
-                        onChange={(e) => updateLogin(login.id, { url: e.target.value })}
-                        placeholder="example.com"
-                        style={vaultValueStyle}
-                      />
-                      {login.url && (
-                        <IconAction
-                          onClick={() => copyToClipboard(href, `${login.id}-url`)}
-                          title="Copy link"
-                          hoverColor={theme.accentPlum}
-                          active={copiedFlag === `${login.id}-url`}
-                          activeColor={theme.accentPlum}
-                          size={4}
-                        >
-                          {copiedFlag === `${login.id}-url` ? <Check size={14} /> : <Copy size={14} />}
-                        </IconAction>
-                      )}
-                    </VaultField>
-
-                    <VaultField label="Username">
-                      <input
-                        type="text"
-                        value={login.username}
-                        onChange={(e) => updateLogin(login.id, { username: e.target.value })}
-                        placeholder="username or email"
-                        style={vaultValueStyle}
-                      />
-                      <IconAction
-                        onClick={() => copyToClipboard(login.username, `${login.id}-user`)}
-                        title="Copy username"
-                        hoverColor={theme.accentPlum}
-                        active={copiedFlag === `${login.id}-user`}
-                        activeColor={theme.accentPlum}
-                        size={4}
-                      >
-                        {copiedFlag === `${login.id}-user` ? <Check size={14} /> : <Copy size={14} />}
-                      </IconAction>
-                    </VaultField>
-
-                    <VaultField label="Password">
-                      <input
-                        type={passwordVisible ? "text" : "password"}
-                        value={decryptedPasswords[login.id] ?? ""}
-                        onChange={(e) => updateLoginPassword(login.id, e.target.value)}
-                        placeholder="password"
-                        autoComplete="new-password"
-                        style={vaultValueStyle}
-                      />
-                      <IconAction
-                        onClick={() => togglePasswordVisible(login.id)}
-                        title={passwordVisible ? "Hide password" : "Show password"}
-                        hoverColor={theme.accentPlum}
-                        size={4}
-                      >
-                        {passwordVisible ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </IconAction>
-                      <IconAction
-                        onClick={() => copyToClipboard(decryptedPasswords[login.id] || "", `${login.id}-pass`)}
-                        title="Copy password"
-                        hoverColor={theme.accentPlum}
-                        active={copiedFlag === `${login.id}-pass`}
-                        activeColor={theme.accentPlum}
-                        size={4}
-                      >
-                        {copiedFlag === `${login.id}-pass` ? <Check size={14} /> : <Copy size={14} />}
-                      </IconAction>
-                    </VaultField>
+            {(state.logins || []).length > 0 && [["bill", "Bills", "Logins for the bills you pay"], ["credential", "Credentials", "Everything else"]].map(([kind, label, hint]) => {
+              const list = sortedLogins.filter((l) => kindOf(l) === kind);
+              return (
+                <section key={kind} style={{ marginBottom: 22 }}>
+                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 11 }}>
+                    <h2 style={{ ...display(17), margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                      <KeyRound size={17} color={theme.accentPlum} />
+                      {label}
+                    </h2>
+                    <span style={{ fontFamily: MONO, fontSize: 11.5, color: theme.textFainter }}>
+                      {list.length} saved
+                    </span>
                   </div>
-                );
-              })}
-            </div>
+                  {list.length === 0 && (
+                    <div style={{ padding: "18px 16px", borderRadius: 18, border: `1px dashed ${theme.glassBorder2}`, textAlign: "center", fontSize: 12.5, color: theme.textFainter }}>
+                      {hint}. Nothing here yet; use the <ArrowRightLeft size={12} style={{ verticalAlign: "-2px" }} /> button on a login to move it here.
+                    </div>
+                  )}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+                    {list.map((login, idx) => {
+                    const passwordVisible = !!visiblePasswords[login.id];
+                    const href = login.url
+                      ? (/^https?:\/\//i.test(login.url) ? login.url : `https://${login.url}`)
+                      : undefined;
+                    return (
+                      <div
+                        key={login.id}
+                        style={{
+                          ...glass.card, padding: 15, borderRadius: 22,
+                          display: "flex", flexDirection: "column", gap: 9,
+                          animation: `rowIn .4s ${EASE_OUT} ${Math.min(idx, 12) * 0.035}s both`,
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                          <input
+                            type="text"
+                            value={login.name}
+                            onChange={(e) => updateLogin(login.id, { name: e.target.value })}
+                            placeholder={kind === "bill" ? "Bill name" : "Name"}
+                            style={{ flex: 1, minWidth: 0, fontSize: 14.5, fontWeight: 600, color: theme.textPrimary, background: "transparent", border: "none", padding: 0 }}
+                          />
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Open in your default browser"
+                            style={{ padding: 5, borderRadius: 9, color: theme.textFainter, display: "flex", ...(login.url ? null : { opacity: 0.35, pointerEvents: "none" }) }}
+                          >
+                            <ExternalLink size={15} />
+                          </a>
+                          <IconAction
+                            onClick={() => updateLogin(login.id, { kind: kind === "bill" ? "credential" : "bill" })}
+                            title={kind === "bill" ? "Move to credentials" : "Move to bills"}
+                            hoverColor={theme.accentPlum}
+                          >
+                            <ArrowRightLeft size={15} />
+                          </IconAction>
+                          <IconAction onClick={() => deleteLogin(login.id)} title="Delete login" hoverColor={theme.accentRed}>
+                            <Trash2 size={15} />
+                          </IconAction>
+                        </div>
+
+                        <VaultField label="Website">
+                          <input
+                            type="text"
+                            value={login.url}
+                            onChange={(e) => updateLogin(login.id, { url: e.target.value })}
+                            placeholder="example.com"
+                            style={vaultValueStyle}
+                          />
+                          {login.url && (
+                            <IconAction
+                              onClick={() => copyToClipboard(href, `${login.id}-url`)}
+                              title="Copy link"
+                              hoverColor={theme.accentPlum}
+                              active={copiedFlag === `${login.id}-url`}
+                              activeColor={theme.accentPlum}
+                              size={4}
+                            >
+                              {copiedFlag === `${login.id}-url` ? <Check size={14} /> : <Copy size={14} />}
+                            </IconAction>
+                          )}
+                        </VaultField>
+
+                        <VaultField label="Username">
+                          <input
+                            type="text"
+                            value={login.username}
+                            onChange={(e) => updateLogin(login.id, { username: e.target.value })}
+                            placeholder="username or email"
+                            style={vaultValueStyle}
+                          />
+                          <IconAction
+                            onClick={() => copyToClipboard(login.username, `${login.id}-user`)}
+                            title="Copy username"
+                            hoverColor={theme.accentPlum}
+                            active={copiedFlag === `${login.id}-user`}
+                            activeColor={theme.accentPlum}
+                            size={4}
+                          >
+                            {copiedFlag === `${login.id}-user` ? <Check size={14} /> : <Copy size={14} />}
+                          </IconAction>
+                        </VaultField>
+
+                        <VaultField label="Password">
+                          <input
+                            type={passwordVisible ? "text" : "password"}
+                            value={decryptedPasswords[login.id] ?? ""}
+                            onChange={(e) => updateLoginPassword(login.id, e.target.value)}
+                            placeholder="password"
+                            autoComplete="new-password"
+                            style={vaultValueStyle}
+                          />
+                          <IconAction
+                            onClick={() => togglePasswordVisible(login.id)}
+                            title={passwordVisible ? "Hide password" : "Show password"}
+                            hoverColor={theme.accentPlum}
+                            size={4}
+                          >
+                            {passwordVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+                          </IconAction>
+                          <IconAction
+                            onClick={() => copyToClipboard(decryptedPasswords[login.id] || "", `${login.id}-pass`)}
+                            title="Copy password"
+                            hoverColor={theme.accentPlum}
+                            active={copiedFlag === `${login.id}-pass`}
+                            activeColor={theme.accentPlum}
+                            size={4}
+                          >
+                            {copiedFlag === `${login.id}-pass` ? <Check size={14} /> : <Copy size={14} />}
+                          </IconAction>
+                        </VaultField>
+                      </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
 
             <div style={{ marginTop: 18, paddingTop: 18, borderTop: `1px solid ${theme.glassBorder2}`, display: "flex", flexDirection: "column", gap: 9 }}>
+              <div style={{ display: "flex", gap: 4, padding: 4, borderRadius: 999, background: D.surface }}>
+                {[["bill", "Bill"], ["credential", "Credential"]].map(([k, lbl]) => (
+                  <button key={k} onClick={() => setNewLogin((n) => ({ ...n, kind: k }))} aria-pressed={newLogin.kind === k} style={{
+                    flex: 1, border: "none", cursor: "pointer", borderRadius: 999, padding: "7px 0",
+                    fontFamily: FONT_BODY, fontSize: 13, fontWeight: 700,
+                    background: newLogin.kind === k ? D.text : "transparent", color: newLogin.kind === k ? D.bgBottom : D.muted,
+                  }}>{lbl}</button>
+                ))}
+              </div>
               <input
                 type="text"
                 autoComplete="off"
-                placeholder="Bill name (e.g. Electric Co.)"
+                placeholder={newLogin.kind === "bill" ? "Bill name (e.g. Electric Co.)" : "Name (e.g. Netflix, Work email)"}
                 value={newLogin.name}
                 onChange={(e) => setNewLogin((n) => ({ ...n, name: e.target.value }))}
                 style={vaultInput}
