@@ -16,7 +16,16 @@ asks for the ship PR (`redesign` → `main`); see CLAUDE.md and STAGING.md.
   see. No data migration.
 - **Thoughts:** a private Messages-style inbox, one conversation per person
   plus "Just me".
-- **Budget:** same data and save path, but the whole pay period fits on one screen.
+- **Budget:** the whole pay cycle fits on one screen. Bills are the logins
+  in the Bills section (logins are split into Bills and Credentials). Each
+  bill is paid on the 15th, the 30th or both, with the full amount due each
+  time. A payment can come from one account or be split, and is never more
+  than what's owed. Payments are scheduled and then marked paid. Short
+  payments carry forward as past due, and skipped ones are hidden. Each new
+  cycle starts on its own, and earlier cycles stay browsable. The rules are
+  in `src/dial/billCycles.js`. Old bills move onto their logins the first
+  time the redesign opens a budget (additive: the old `bills` list is kept
+  for older app copies).
 - **Nightly:** kept, plus A to D below.
 - **Removed:** Star (in-app AI) and Workbench. The Gemini key and the Gemini
   morning digest stay.
@@ -36,6 +45,7 @@ asks for the ship PR (`redesign` → `main`); see CLAUDE.md and STAGING.md.
 | 7 | **Desktop layout** | to do, in scope (owner: last before ship) |
 | 8 | Restyle the remaining old-theme screens: sign-in, account menu and Telegram setup, Access, Logins/vault | done (#32) |
 | 9 | Staging reminder job and keyless Apps Script | to do (optional before ship) |
+| 12 | Budget pay cycles: bills from logins, split payments, scheduled/paid, carry-forward, history | in review |
 | 11 | Themes: picker, per-person sync, Water | Water in review; Earth, Fire, Air and a refreshed Space to follow |
 | 10 | Rehearse on staging with a copy of live data, then ship | to do |
 

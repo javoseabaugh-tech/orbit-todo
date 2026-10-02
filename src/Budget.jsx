@@ -14,14 +14,20 @@ import {
   KeyRound,
   ShieldCheck,
   ScanFace,
-  RotateCcw,
   ArrowRightLeft,
+  ChevronLeft,
+  ChevronRight,
+  Settings2,
 } from "lucide-react";
 import { getDoc, setDoc } from "firebase/firestore";
 import { generateSaltB64, deriveKey, encryptText, decryptText, makeVerifier, checkVerifier } from "./vaultCrypto";
 import { platformAuthAvailable, hasFaceUnlock, registerFaceUnlock, tryFaceUnlock, removeFaceUnlock } from "./faceUnlock";
 import { D, FONT_DISPLAY, FONT_BODY, pageBackground } from "./dial/tokens";
-import { Overview, AccountTile, BillTile, BillSheet, AddBillSheet, AccountSheet } from "./dial/BudgetParts";
+import { Overview, AccountTile, AccountSheet, OpenBillTile, PaymentRow, Fold, PaySheet, BillSetupSheet, ManageBillsSheet } from "./dial/BudgetParts";
+import {
+  cycleOf, nextCycle, prevCycle, cycleLabel, halfOf, openItems, scheduledAsOf, paidIn, usedFrom,
+  paymentTotal, withPlan, migrateOldBills,
+} from "./dial/billCycles";
 import ImportFromBackup from "./dial/ImportFromBackup";
 
 // Build-time constant: false in the live build, so the staging-only import
@@ -35,11 +41,14 @@ const DEFAULT_STATE = {
   accounts: [
     { id: "a1", name: "Bank Account 1", balances: { "15": 0, "30": 0 } },
   ],
+  // The old bills list, from before bills moved onto their logins (see
+  // src/dial/billCycles.js). Kept as is so older app copies still work.
   bills: [
     // { id, name, amount, dueDate: '15'|'30', bankId, status: 'unpaid'|'scheduled'|'skip'|'paid', paidAt }
   ],
   logins: [
-    // { id, name, url, username, password: { iv, ct }, kind?: 'bill'|'credential' }
+    // { id, name, url, username, password: { iv, ct }, kind?: 'bill'|'credential',
+    //   and for bills: plan, bankId, payments, skips (see src/dial/billCycles.js) }
   ],
   vaultMeta: null, // { salt, verifier: { iv, ct } } — set once, on first vault creation
 };
@@ -60,10 +69,13 @@ function normalizeStatus(b) {
 
 export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
   const [state, setState] = useState(DEFAULT_STATE);
-  const [period, setPeriod] = useState("15");
+  const today = cycleOf();
+  const [cycle, setCycle] = useState(today);
+  const period = halfOf(cycle); // account balances are kept per payday half
+  const [paidOpen, setPaidOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [saveError, setSaveError] = useState(false);
-  const [sheet, setSheet] = useState(null); // null | { kind: 'add' | 'bill' | 'account', id? }
+  const [sheet, setSheet] = useState(null); // null | { kind: 'pay' | 'setup' | 'manage' | 'account', id?, occ? }
   const [view, setView] = useState("budget"); // 'budget' | 'logins'
   const [newLogin, setNewLogin] = useState({ name: "", url: "", username: "", password: "", kind: "bill" });
   const [visiblePasswords, setVisiblePasswords] = useState({}); // { [loginId]: true }
@@ -109,12 +121,17 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
             ...b,
             status: normalizeStatus(b),
           }));
-          setState({
+          const next = {
             accounts: parsed.accounts?.length ? parsed.accounts : DEFAULT_STATE.accounts,
             bills,
             logins: parsed.logins || [],
             vaultMeta: parsed.vaultMeta || null,
-          });
+          };
+          // Bills from before the pay-cycle budget move onto their logins
+          // once, and that's saved straight away.
+          const migrated = migrateOldBills(next, cycleOf(), uid);
+          if (migrated) skipNextSave.current = false;
+          setState(migrated || next);
         }
         setLoaded(true);
       } catch (e) {
@@ -141,20 +158,11 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
     })();
   }, [state, loaded]);
 
-  const billsThisPeriod = state.bills.filter((b) => b.dueDate === period);
-  const unresolved = billsThisPeriod.filter((b) => b.status === "unpaid" || b.status === "scheduled");
-  const paidThisPeriod = billsThisPeriod.filter((b) => b.status === "paid");
-  const skippedThisPeriod = billsThisPeriod.filter((b) => b.status === "skip");
-  const resolvedCount = paidThisPeriod.length + skippedThisPeriod.length;
-  const allDone = billsThisPeriod.length > 0 && unresolved.length === 0 && resolvedCount > 0;
 
 
   const sortedLogins = (state.logins || [])
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name));
-  const sortedLoginNames = Array.from(new Set(sortedLogins.map((l) => l.name).filter(Boolean))).sort(
-    (a, b) => a.localeCompare(b)
-  );
 
   // Each login is either a bill's login or just a saved credential. Logins
   // saved before the split have no kind: they count as bills when a bill has
@@ -162,20 +170,14 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
   const billNames = new Set(state.bills.map((b) => b.name));
   const kindOf = (l) => (l.kind === "bill" || l.kind === "credential" ? l.kind : billNames.has(l.name) ? "bill" : "credential");
 
-  function billLoginUrl(billName) {
-    const login = (state.logins || []).find((l) => l.name === billName);
-    if (!login || !login.url) return null;
-    return /^https?:\/\//i.test(login.url) ? login.url : `https://${login.url}`;
-  }
+  const billLogins = (state.logins || []).filter((l) => kindOf(l) === "bill");
+  const loginHref = (l) => (!l?.url ? null : /^https?:\/\//i.test(l.url) ? l.url : `https://${l.url}`);
 
-  // Only ever sums the bills for the given pay period, so the 15th's bills can
-  // never spill into the 30th's math (and vice-versa). Defaults to the period
-  // currently in focus.
-  function accountTotal(bankId, forPeriod = period) {
-    return state.bills
-      .filter((b) => b.dueDate === forPeriod && b.bankId === bankId && b.status !== "skip")
-      .reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
-  }
+  // What an account is carrying in the cycle on screen: what's been put
+  // toward bills from it, plus what's still owed on bills usually paid from
+  // it, so "left" stays "left after bills".
+  const accountTotal = (bankId) => usedFrom(billLogins, bankId, cycle) +
+    openItems(billLogins, cycle).filter((x) => x.bill.bankId === bankId).reduce((t, x) => t + x.owed, 0);
 
   function updateAccountBalance(accountId, value, forPeriod = period) {
     setState((s) => ({
@@ -206,24 +208,46 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
       };
     });
   }
-  const [confirmReset, setConfirmReset] = useState(false);
-
-  function updateBill(id, patch) {
-    setState((s) => ({
-      ...s,
-      bills: s.bills.map((b) => (b.id === id ? { ...b, ...patch } : b)),
+  // ---------- Paying bills ----------
+  function updateBillLogin(id, fn) {
+    setState((s) => ({ ...s, logins: (s.logins || []).map((l) => (l.id === id ? fn(l) : l)) }));
+  }
+  function addPayment(item, splits, status) {
+    const now = new Date().toISOString();
+    updateBillLogin(item.bill.id, (l) => ({
+      ...l,
+      payments: [...(l.payments || []), {
+        id: uid(), occ: item.occ, in: cycle,
+        splits: splits.map((x) => ({ bankId: x.bankId, amount: Math.round(Number(x.amount) * 100) / 100 })),
+        status, at: now, paidAt: status === "paid" ? now : null,
+      }],
     }));
   }
-
-  function setStatus(bill, status) {
-    updateBill(bill.id, {
-      status,
-      paidAt: status === "paid" || status === "skip" ? new Date().toISOString() : null,
-    });
+  function setPaymentStatus(billId, payId, status) {
+    updateBillLogin(billId, (l) => ({
+      ...l,
+      payments: (l.payments || []).map((p) => (p.id === payId ? { ...p, status, paidAt: status === "paid" ? new Date().toISOString() : null } : p)),
+    }));
   }
-
-  function deleteBill(id) {
-    setState((s) => ({ ...s, bills: s.bills.filter((b) => b.id !== id) }));
+  function cancelPayment(billId, payId) {
+    updateBillLogin(billId, (l) => ({ ...l, payments: (l.payments || []).filter((p) => p.id !== payId) }));
+  }
+  function skipPayment(item) {
+    updateBillLogin(item.bill.id, (l) => ({ ...l, skips: Array.from(new Set([...(l.skips || []), item.occ])) }));
+  }
+  // Plans change from the current cycle on, never the past.
+  function saveBill(bill, { name, amount, cycles, bankId }) {
+    if (bill) {
+      updateBillLogin(bill.id, (l) => ({ ...withPlan(l, today, amount, cycles), name, bankId, kind: "bill" }));
+    } else {
+      setState((s) => ({
+        ...s,
+        logins: [...(s.logins || []), withPlan({ id: uid(), name, url: "", username: "", password: null, kind: "bill", bankId }, today, amount, cycles)],
+      }));
+    }
+  }
+  function removeFromBudget(bill) {
+    updateBillLogin(bill.id, (l) => withPlan(l, today, 0, []));
   }
 
   async function addLogin() {
@@ -405,16 +429,6 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
     }
   }
 
-  function resetAllToUnpaid() {
-    setConfirmReset(true);
-  }
-  function doResetAllToUnpaid() {
-    setConfirmReset(false);
-    setState((s) => ({
-      ...s,
-      bills: s.bills.map((b) => ({ ...b, status: "unpaid", paidAt: null })),
-    }));
-  }
 
   if (loadFailed) {
     return (
@@ -464,19 +478,17 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
   // Derived numbers for the budget view (the pinned top and the bill list).
   const accountLeft = (acc) => {
     const raw = acc.balances?.[period];
-    return (raw === "" || raw === undefined ? 0 : Number(raw)) - accountTotal(acc.id, period);
+    return (raw === "" || raw === undefined ? 0 : Number(raw)) - accountTotal(acc.id);
   };
-  const sumOf = (status) => billsThisPeriod
-    .filter((b) => b.status === status)
-    .reduce((s, b) => s + (Number(b.amount) || 0), 0);
   const totalLeft = state.accounts.reduce((s, a) => s + accountLeft(a), 0);
-  // Everything for the period stays on screen: open bills first (by name),
-  // then the handled ones, dimmed, so the whole picture is visible without
-  // toggling anything.
-  const rank = { unpaid: 0, scheduled: 1, paid: 2, skip: 3 };
-  const tiles = billsThisPeriod.slice().sort((a, b) =>
-    (rank[a.status] ?? 0) - (rank[b.status] ?? 0) ||
-    (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }));
+  // The cycle on screen: what's still owed (with anything carried forward),
+  // payments waiting to post, and what's posted.
+  const open = openItems(billLogins, cycle);
+  const scheduled = scheduledAsOf(billLogins, cycle);
+  const paid = paidIn(billLogins, cycle);
+  const sumPay = (xs) => xs.reduce((t, x) => t + paymentTotal(x.payment), 0);
+  const allDone = open.length === 0 && scheduled.length === 0 && paid.length > 0;
+  const notSetUp = billLogins.filter((l) => !(l.plan || []).length).length;
 
   return (
     <div
@@ -516,17 +528,19 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
             accounts and the bills heading. Only the bill tiles scroll. */}
         {view === "budget" && (
           <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 14, paddingBottom: 10 }}>
-              <div style={{ display: "flex", gap: 4, padding: 4, borderRadius: 999, background: D.surface }}>
-                {[["15", "15th"], ["30", "30th"]].map(([id, lbl]) => (
-                  <button key={id} onClick={() => setPeriod(id)} aria-pressed={period === id} style={{
-                    flex: 1, border: "none", cursor: "pointer", borderRadius: 999, padding: "8px 0",
-                    fontFamily: FONT_BODY, fontSize: 14, fontWeight: 700,
-                    background: period === id ? D.text : "transparent", color: period === id ? D.bgBottom : D.muted,
-                  }}>{lbl}</button>
-                ))}
+              <div style={{ display: "flex", alignItems: "center", gap: 4, padding: 4, borderRadius: 999, background: D.surface }}>
+                <button onClick={() => setCycle(prevCycle(cycle))} aria-label="Previous pay cycle" style={navBtn}><ChevronLeft size={18} /></button>
+                <button onClick={() => setCycle(today)} style={{
+                  flex: 1, border: "none", background: "transparent", cursor: "pointer", color: D.text, padding: "6px 0",
+                  fontFamily: FONT_BODY, fontSize: 14, fontWeight: 700, display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.2,
+                }}>
+                  <span>{cycleLabel(cycle)} pay cycle</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: D.faint }}>{cycle === today ? "now" : cycle < today ? "earlier · tap for now" : "upcoming · tap for now"}</span>
+                </button>
+                <button onClick={() => setCycle(nextCycle(cycle))} aria-label="Next pay cycle" style={navBtn}><ChevronRight size={18} /></button>
               </div>
 
-              <Overview paid={sumOf("paid")} scheduled={sumOf("scheduled")} unpaid={sumOf("unpaid")} left={totalLeft} allDone={allDone} />
+              <Overview paid={sumPay(paid)} scheduled={sumPay(scheduled)} unpaid={open.reduce((t, x) => t + x.owed, 0)} left={totalLeft} allDone={allDone} />
 
               <div style={{ display: "flex", gap: 8 }}>
                 {state.accounts.map((acc) => {
@@ -534,7 +548,7 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
                   return (
                     <AccountTile key={acc.id} name={acc.name}
                       balance={raw === "" || raw === undefined ? 0 : Number(raw)}
-                      assigned={accountTotal(acc.id, period)}
+                      assigned={accountTotal(acc.id)}
                       onOpen={() => setSheet({ kind: "account", id: acc.id })} />
                   );
                 })}
@@ -548,10 +562,10 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
 
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
                 <h2 style={{ margin: 0, fontFamily: FONT_DISPLAY, fontSize: 13, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: D.muted }}>
-                  Bills · {unresolved.length} open
+                  To pay · {open.length}
                 </h2>
-                <button onClick={resetAllToUnpaid} style={{ border: "none", background: "transparent", color: D.faint, fontFamily: FONT_BODY, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                  <RotateCcw size={12} /> Reset all to unpaid
+                <button onClick={() => setSheet({ kind: "manage" })} style={{ border: "none", background: "transparent", color: D.faint, fontFamily: FONT_BODY, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                  <Settings2 size={12} /> Bills{notSetUp ? ` · ${notSetUp} to set up` : ""}
                 </button>
               </div>
 
@@ -565,16 +579,39 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
 
         {view === "budget" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {tiles.length === 0 ? (
+              {open.length === 0 ? (
                 <div style={{ textAlign: "center", color: D.muted, fontSize: 14, padding: "14px 8px" }}>
-                  No bills for the {period === "15" ? "15th" : "30th"} yet. Tap + to add one.
+                  {billLogins.some((l) => (l.plan || []).length) ? "Nothing left to pay this cycle." : "No bills on the budget yet. Tap + to add one."}
                 </div>
               ) : (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8 }}>
-                  {tiles.map((bill) => (
-                    <BillTile key={bill.id} bill={bill} onOpen={() => setSheet({ kind: "bill", id: bill.id })} />
+                  {open.map((item) => (
+                    <OpenBillTile key={item.bill.id + item.occ} item={item}
+                      onOpen={() => setSheet({ kind: "pay", id: item.bill.id, occ: item.occ })} />
                   ))}
                 </div>
+              )}
+
+              {scheduled.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <h2 style={{ margin: "4px 0 0", fontFamily: FONT_DISPLAY, fontSize: 13, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: D.muted }}>
+                    Payments scheduled · {scheduled.length}
+                  </h2>
+                  {scheduled.map(({ bill, payment }) => (
+                    <PaymentRow key={payment.id} bill={bill} payment={payment} accounts={state.accounts}
+                      action="Paid" onAction={() => setPaymentStatus(bill.id, payment.id, "paid")}
+                      onUndo={() => cancelPayment(bill.id, payment.id)} />
+                  ))}
+                </div>
+              )}
+
+              {paid.length > 0 && (
+                <Fold title="Paid" count={paid.length} open={paidOpen} onToggle={() => setPaidOpen((o) => !o)}>
+                  {paid.map(({ bill, payment }) => (
+                    <PaymentRow key={payment.id} bill={bill} payment={payment} accounts={state.accounts}
+                      onUndo={() => setPaymentStatus(bill.id, payment.id, "scheduled")} />
+                  ))}
+                </Fold>
               )}
 
               {STAGING && <ImportFromBackup budgetRef={budgetRef} onImported={() => setLoadAttempt((n) => n + 1)} />}
@@ -582,7 +619,7 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
         )}
 
         {view === "budget" && (
-          <button onClick={() => setSheet({ kind: "add" })} aria-label="Add a bill" style={{
+          <button onClick={() => setSheet({ kind: "setup" })} aria-label="Add a bill" style={{
             position: "fixed", right: 20, bottom: "calc(22px + env(safe-area-inset-bottom))", zIndex: 50,
             width: 58, height: 58, borderRadius: "50%", border: "none", cursor: "pointer",
             background: D.amber, color: D.onAmber, display: "grid", placeItems: "center",
@@ -953,52 +990,38 @@ export default function Budget({ onBack, budgetRef, title = "Family Budget" }) {
       )}
 
 
-      {confirmReset && (
-        <BudgetModal onClose={() => setConfirmReset(false)} icon={<AlertCircle size={22} />} tone="red" title="Reset all bills to Unpaid?">
-          <p style={{ margin: "0 0 16px", fontSize: 13.5, lineHeight: 1.55, color: theme.textMuted }}>
-            This resets every bill on both the 15th and the 30th back to Unpaid, clearing all Scheduled, No payment needed, and Payment complete statuses.
-          </p>
-          <button onClick={doResetAllToUnpaid} style={dangerButtonStyle}>Reset all to Unpaid</button>
-          <button onClick={() => setConfirmReset(false)} style={modalDismissStyle}>Cancel</button>
-        </BudgetModal>
-      )}
-
-      {/* Add-bill form, anchored to the very top of the screen so it opens
-          above the keyboard on mobile rather than being pushed behind it. */}
-      {sheet?.kind === "add" && (
-        <AddBillSheet period={period} accounts={state.accounts} loginNames={sortedLoginNames}
-          onClose={() => setSheet(null)}
-          onAdd={(b) => {
-            const amount = parseFloat(b.amount);
-            if (!b.name.trim() || !Number.isFinite(amount)) return;
-            setState((s) => ({
-              ...s,
-              bills: [...s.bills, {
-                id: uid(), name: b.name.trim(), amount, dueDate: b.dueDate === "30" ? "30" : "15",
-                bankId: b.bankId, status: "unpaid", paidAt: null,
-              }],
-            }));
-            if (b.dueDate !== period) setPeriod(b.dueDate);
-            setSheet(null);
-          }} />
-      )}
-      {sheet?.kind === "bill" && (() => {
-        const bill = state.bills.find((x) => x.id === sheet.id);
-        if (!bill) return null;
+      {sheet?.kind === "pay" && (() => {
+        const item = open.find((x) => x.bill.id === sheet.id && x.occ === sheet.occ);
+        if (!item) return null;
         return (
-          <BillSheet bill={bill} accounts={state.accounts} loginNames={sortedLoginNames}
-            loginUrl={billLoginUrl(bill.name)}
-            onStatus={(s) => setStatus(bill, s)}
-            onUpdate={(patch) => updateBill(bill.id, patch)}
-            onDelete={() => { deleteBill(bill.id); setSheet(null); }}
+          <PaySheet item={item} accounts={state.accounts} loginUrl={loginHref(item.bill)}
+            onPay={(splits, status) => { addPayment(item, splits, status); setSheet(null); }}
+            onSkip={() => { skipPayment(item); setSheet(null); }}
+            onEdit={() => setSheet({ kind: "setup", id: item.bill.id })}
             onClose={() => setSheet(null)} />
         );
       })()}
+      {sheet?.kind === "setup" && (() => {
+        const bill = sheet.id ? billLogins.find((l) => l.id === sheet.id) : null;
+        if (sheet.id && !bill) return null;
+        return (
+          <BillSetupSheet key={sheet.id || "new"} bill={bill} current={today} accounts={state.accounts}
+            onSave={(v) => { saveBill(bill, v); setSheet(null); }}
+            onRemove={() => { removeFromBudget(bill); setSheet(null); }}
+            onClose={() => setSheet(null)} />
+        );
+      })()}
+      {sheet?.kind === "manage" && (
+        <ManageBillsSheet bills={billLogins} current={today}
+          onPick={(b) => setSheet({ kind: "setup", id: b.id })}
+          onAdd={() => setSheet({ kind: "setup" })}
+          onClose={() => setSheet(null)} />
+      )}
       {sheet?.kind === "account" && (() => {
         const acc = state.accounts.find((a) => a.id === sheet.id);
         if (!acc) return null;
         return (
-          <AccountSheet account={acc} period={period} assigned={accountTotal(acc.id, period)}
+          <AccountSheet account={acc} period={period} assigned={accountTotal(acc.id)}
             canDelete
             onRename={(name) => updateAccountName(acc.id, name)}
             onBalance={(v) => updateAccountBalance(acc.id, v, period)}
@@ -1036,16 +1059,14 @@ function VaultField({ label, children }) {
   );
 }
 
+const navBtn = {
+  width: 38, height: 38, flexShrink: 0, border: "none", borderRadius: 999, cursor: "pointer",
+  background: "transparent", color: D.text, display: "grid", placeItems: "center",
+};
+
 const modalDismissStyle = {
   border: "none", background: "transparent", color: theme.textMuted,
   fontSize: 13, cursor: "pointer", padding: "8px 0", width: "100%",
-};
-
-const dangerButtonStyle = {
-  width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-  padding: 12, borderRadius: 14, fontSize: 13.5, fontWeight: 600, marginBottom: 8,
-  color: theme.accentInk, background: theme.accentRed, border: "none", cursor: "pointer",
-  boxShadow: `0 10px 26px -10px ${theme.accentRed}`,
 };
 
 // Raised-glass confirm dialog shared by the three Budget prompts.
